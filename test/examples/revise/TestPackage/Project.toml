@@ -1,0 +1,4 @@
+name = "TestPackage"
+uuid = "200836d7-13a8-492f-bcce-0f5c2fd59673"
+authors = ["MichaelHatherly <michaelhatherly@gmail.com>"]
+version = "0.1.0"

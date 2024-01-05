@@ -1,0 +1,6 @@
+Manifest.toml
+*.docx
+*.html
+*.ipynb
+*.pdf
+.DS_Store

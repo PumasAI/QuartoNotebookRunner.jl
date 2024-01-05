@@ -1,0 +1,16 @@
+---
+title: Plots integration
+---
+
+```{julia}
+Pkg.activate("Plots")
+Pkg.instantiate()
+```
+
+```{julia}
+import Plots
+```
+
+```{julia}
+Plots.plot(Plots.fakedata(50, 5), w = 3)
+```

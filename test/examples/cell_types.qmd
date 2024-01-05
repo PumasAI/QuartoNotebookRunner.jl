@@ -1,0 +1,21 @@
+---
+title: Cell types
+---
+
+Values:
+
+```{julia}
+1
+```
+
+Output streams:
+
+```{julia}
+println(1)
+```
+
+Errors:
+
+```{julia}
+div(1, 0)
+```

@@ -1,0 +1,17 @@
+---
+title: Cell Options
+---
+
+```{julia}
+a = 1
+```
+
+```{julia}
+#| eval: false
+a = 2
+```
+
+```{julia}
+#| eval: true
+a
+```

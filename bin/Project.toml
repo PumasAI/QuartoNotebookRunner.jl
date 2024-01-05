@@ -1,0 +1,5 @@
+[deps]
+JuliaFormatter = "98e50ef6-434e-11e9-1051-2b60c6c9e899"
+Logging = "56ddb016-857b-54e1-b83d-db4d58db5568"
+MacroTools = "1914dd2f-81c6-5fcd-8719-6d5c9610ff09"
+Pluto = "c3e4b0f8-55cb-11ea-2926-15256bba5781"

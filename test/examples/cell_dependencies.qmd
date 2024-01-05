@@ -1,0 +1,27 @@
+---
+title: Cell Dependencies
+---
+
+```{julia}
+a = 1
+```
+
+```{julia}
+b = a + 1
+```
+
+```{julia}
+d = c + a
+```
+
+```{julia}
+arr = []
+```
+
+```{julia}
+push!(arr, :item)
+```
+
+```{julia}
+join(arr, " ")
+```

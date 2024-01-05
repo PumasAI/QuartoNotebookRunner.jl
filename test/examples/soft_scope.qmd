@@ -1,0 +1,11 @@
+---
+title: Soft scope
+---
+
+```{julia}
+s = 0
+for i = 1:10
+    s += i
+end
+s
+```

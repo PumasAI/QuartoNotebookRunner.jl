@@ -1,0 +1,32 @@
+---
+title: stdout
+---
+
+Printing:
+
+```{julia}
+println(1)
+```
+
+```{julia}
+println("string")
+```
+
+```{julia}
+println(1)
+println("string")
+```
+
+Logging:
+
+```{julia}
+@info "info text" value=1
+```
+
+```{julia}
+@warn "warn text" value=2
+```
+
+```{julia}
+@error "error text" value=3
+```

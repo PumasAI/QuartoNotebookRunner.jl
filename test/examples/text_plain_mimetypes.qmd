@@ -1,0 +1,25 @@
+---
+title: text/plain Mimetypes
+---
+
+Numbers
+
+```{julia}
+1
+```
+
+Strings
+
+```{julia}
+"string"
+```
+
+Collections
+
+```{julia}
+ones(5)
+```
+
+```{julia}
+Dict(k => nth for (nth, k) in enumerate("collections"))
+```

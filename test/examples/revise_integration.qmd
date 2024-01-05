@@ -1,0 +1,66 @@
+---
+title: Revise integration
+---
+
+```{julia}
+Pkg.activate("revise")
+Pkg.develop(path = "revise/TestPackage")
+Pkg.instantiate()
+```
+
+```{julia}
+using Revise
+```
+
+```{julia}
+import TestPackage
+```
+
+```{julia}
+write(
+    "revise/TestPackage/src/TestPackage.jl",
+    """
+    module TestPackage
+
+    f() = 1
+
+    end # module TestPackage
+    """,
+)
+```
+
+```{julia}
+TestPackage.f()
+```
+
+```{julia}
+write(
+    "revise/TestPackage/src/TestPackage.jl",
+    """
+    module TestPackage
+
+    f() = 2
+
+    end # module TestPackage
+    """,
+)
+sleep(1) # Give Revise some time to pick up the file change event.
+```
+
+```{julia}
+TestPackage.f()
+```
+
+```{julia}
+# Reset the package code back to the original.
+write(
+    "revise/TestPackage/src/TestPackage.jl",
+    """
+    module TestPackage
+
+    f() = 1
+
+    end # module TestPackage
+    """,
+)
+```

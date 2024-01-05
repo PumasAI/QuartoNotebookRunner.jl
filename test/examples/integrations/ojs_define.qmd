@@ -1,0 +1,21 @@
+---
+title: ojs_define
+---
+
+```{julia}
+ojs_define
+```
+
+```{julia}
+Pkg.activate("ojs_define")
+Pkg.instantiate()
+```
+
+```{julia}
+import DataFrames
+import JSON
+```
+
+```{julia}
+ojs_define(; a = 1, b = "two")
+```

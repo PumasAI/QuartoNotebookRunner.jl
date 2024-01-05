@@ -1,0 +1,33 @@
+name: CompatHelper
+on:
+  schedule:
+    - cron: 0 0 * * *
+  workflow_dispatch:
+permissions:
+  contents: write
+  pull-requests: write
+jobs:
+  CompatHelper:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: julia-actions/setup-julia@58ad1cdde70774ab0693de31c3cd4e751b46aea2
+        with:
+          version: '1'
+      - name: "Install CompatHelper"
+        run: |
+          import Pkg
+          name = "CompatHelper"
+          uuid = "aa819f21-2bde-4658-8897-bab36330d9b7"
+          version = "3"
+          Pkg.add(; name, uuid, version)
+        shell: julia --color=yes {0}
+      - name: "Run CompatHelper"
+        run: |
+          import CompatHelper, Pkg
+          CompatHelper.main(
+            registries = [Pkg.RegistrySpec(uuid=ri.uuid) for ri in Pkg.Registry.reachable_registries()],
+            use_existing_registries = true
+          )
+        shell: julia --color=yes {0}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

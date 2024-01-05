@@ -1,0 +1,46 @@
+---
+title: Errors
+---
+
+```{julia}
+1 + ""
+```
+
+```{julia}
+error("an error")
+```
+
+```{julia}
+throw(ArgumentError("an argument error"))
+```
+
+```{julia}
+'  '
+```
+
+```{julia}
+)
+```
+
+```{julia}
+f(x) = x > 0 ? f(x - 1) : div(1, x)
+f(3)
+```
+
+```{julia}
+struct SomeType end
+
+SomeType() + 1
+```
+
+```{julia}
+struct ShowError end
+Base.show(io::IO, ::ShowError) = error("failed to show plain")
+Base.show(io::IO, ::MIME"text/html", ::ShowError) = error("failed to show html")
+Base.show(io::IO, ::MIME"text/latex", ::ShowError) = error("failed to show latex")
+Base.show(io::IO, ::MIME"image/svg+xml", ::ShowError) = error("failed to show svg")
+```
+
+```{julia}
+ShowError()
+```
