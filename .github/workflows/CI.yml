@@ -34,6 +34,9 @@ jobs:
           (needs.format.result != 'success')
 
   test:
+    permissions:
+      actions: write
+      contents: read
     runs-on: ${{ matrix.os }}
     timeout-minutes: 60
     strategy:
@@ -55,6 +58,7 @@ jobs:
         with:
           version: ${{ matrix.version }}
           arch: ${{ matrix.arch }}
+      - uses: julia-actions/cache@207a5a0786d0263d27c287c7bc6dd54fec8bed64
       - uses: julia-actions/julia-buildpkg@5484b0e27fa12452eb1deffe4fd40ff700c429b9
       - uses: julia-actions/julia-runtest@79a7e100883947123f8263c5f06e6c0ea3eb972f
         with:
