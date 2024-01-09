@@ -1,5 +1,8 @@
 # QuartoNotebookRunner
 
+[![CI](https://github.com/PumasAI/QuartoNotebookRunner.jl/actions/workflows/CI.yml/badge.svg)](https://github.com/PumasAI/QuartoNotebookRunner.jl/actions/workflows/CI.yml)
+[![codecov](https://codecov.io/gh/PumasAI/QuartoNotebookRunner.jl/graph/badge.svg?token=84nO9FG9oc)](https://codecov.io/gh/PumasAI/QuartoNotebookRunner.jl)
+
 Run [Quarto](https://quarto.org) notebooks containing Julia code and save the
 results to Jupyter notebooks.
 
