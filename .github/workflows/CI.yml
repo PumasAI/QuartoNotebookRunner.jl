@@ -48,8 +48,14 @@ jobs:
           - ubuntu-latest
           - macos-latest
           - windows-latest
-        arch:
-          - x64
+        # macOS 1.6 seems to consistently stall on `Plots` notebooks. Skip this
+        # combination and test on a slightly newer macOS version instead.
+        exclude:
+          - version: "1.6"
+            os: macos-latest
+        include:
+          - version: "1.7"
+            os: macos-latest
     steps:
       - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
         with:
@@ -57,7 +63,6 @@ jobs:
       - uses: julia-actions/setup-julia@58ad1cdde70774ab0693de31c3cd4e751b46aea2
         with:
           version: ${{ matrix.version }}
-          arch: ${{ matrix.arch }}
       - uses: julia-actions/cache@207a5a0786d0263d27c287c7bc6dd54fec8bed64
       - uses: julia-actions/julia-buildpkg@5484b0e27fa12452eb1deffe4fd40ff700c429b9
       - uses: julia-actions/julia-runtest@79a7e100883947123f8263c5f06e6c0ea3eb972f
