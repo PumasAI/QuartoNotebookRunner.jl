@@ -99,7 +99,10 @@ end
 
 function _check_output_dst(s::AbstractString)
     dir = dirname(s)
-    isdir(dir) || throw(ArgumentError("directory does not exist: $(dir)"))
+    if !isdir(dir)
+        _dir = dirname(joinpath(pwd(), s))
+        isdir(_dir) || throw(ArgumentError("directory does not exist: $(dir)"))
+    end
     return nothing
 end
 _check_output_dst(::Any) = nothing
