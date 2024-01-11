@@ -811,4 +811,24 @@ end
             )
         end
     end
+
+    @testset "relative paths in `output`" begin
+        content = read(joinpath(@__DIR__, "examples/stdout.qmd"), String)
+        mktempdir() do dir
+            cd(dir) do
+                server = QuartoNotebookRunner.Server()
+                write("notebook.qmd", content)
+                ipynb = "notebook.ipynb"
+                QuartoNotebookRunner.run!(server, "notebook.qmd"; output = ipynb)
+
+                json = JSON3.read(ipynb)
+
+                cells = json.cells
+                cell = cells[8]
+                @test contains(cell.outputs[1].text, "info text")
+
+                close!(server)
+            end
+        end
+    end
 end

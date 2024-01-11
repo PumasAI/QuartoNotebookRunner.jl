@@ -98,6 +98,7 @@ function evaluate!(
 end
 
 function _check_output_dst(s::AbstractString)
+    s = abspath(s)
     dir = dirname(s)
     isdir(dir) || throw(ArgumentError("directory does not exist: $(dir)"))
     return nothing
