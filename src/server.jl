@@ -184,7 +184,7 @@ function raw_markdown_chunks(path::String)
             )
         end
 
-        frontmatter = _recursive_merge(CommonMark.frontmatter(ast), default_frontmatter())
+        frontmatter = _recursive_merge(default_frontmatter(), CommonMark.frontmatter(ast))
 
         return raw_chunks, frontmatter
     else

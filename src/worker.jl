@@ -69,8 +69,10 @@ function worker_init(f::File)
             # Rerun the package loading hooks if the frontmatter has changed.
             if FRONTMATTER[] != frontmatter
                 FRONTMATTER[] = frontmatter
-                for hook in values(PACKAGE_LOADING_HOOKS)
-                    hook()
+                for (pkgid, hook) in PACKAGE_LOADING_HOOKS
+                    if haskey(Base.loaded_modules, pkgid)
+                        hook()
+                    end
                 end
             else
                 FRONTMATTER[] = frontmatter
@@ -291,12 +293,20 @@ function worker_init(f::File)
             return (; fig_width, fig_height, fig_format, fig_dpi)
         end
 
+        const PKG_VERSIONS = Dict{Base.PkgId,VersionNumber}()
         function _pkg_version(pkgid::Base.PkgId)
-            deps = Pkg.dependencies()
-            if haskey(deps, pkgid.uuid)
-                return deps[pkgid.uuid].version
+            # Cache the package versions since once a version of a package is
+            # loaded we don't really support loading a different version of it,
+            # so we can just cache the version number.
+            if haskey(PKG_VERSIONS, pkgid)
+                return PKG_VERSIONS[pkgid]
             else
-                return nothing
+                deps = Pkg.dependencies()
+                if haskey(deps, pkgid.uuid)
+                    return PKG_VERSIONS[pkgid] = deps[pkgid.uuid].version
+                else
+                    return nothing
+                end
             end
         end
 
@@ -344,8 +354,8 @@ function worker_init(f::File)
                         mod = get(Base.loaded_modules, pkgid, nothing)
                         try
                             Base.@invokelatest f(pkgid, mod)
-                        catch
-                            @error "hook failed" pkgid mod
+                        catch error
+                            @error "hook failed" pkgid mod error
                         end
                         return nothing
                     end
