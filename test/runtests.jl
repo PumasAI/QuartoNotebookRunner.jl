@@ -831,4 +831,35 @@ end
             end
         end
     end
+
+    @testset "package integration hooks" begin
+        env_dir = joinpath(@__DIR__, "examples/integrations/CairoMakie")
+        content = read(joinpath(@__DIR__, "examples/integrations/CairoMakie.qmd"), String)
+        mktempdir() do dir
+            cd(dir) do
+                server = QuartoNotebookRunner.Server()
+
+                cp(env_dir, joinpath(dir, "CairoMakie"))
+                write("CairoMakie.qmd", content)
+
+                json = QuartoNotebookRunner.run!(server, "CairoMakie.qmd")
+
+                image_png = json.cells[end].outputs[1].metadata["image/png"]
+                @test image_png.width == 768
+                @test image_png.height == 576
+
+                content = replace(content, "fig-width: 4" => "fig-width: 8")
+                content = replace(content, "fig-height: 3" => "fig-height: 6")
+                write("CairoMakie.qmd", content)
+
+                json = QuartoNotebookRunner.run!(server, "CairoMakie.qmd")
+
+                image_png = json.cells[end].outputs[1].metadata["image/png"]
+                @test image_png.width == 1536
+                @test image_png.height == 1152
+
+                close!(server)
+            end
+        end
+    end
 end
