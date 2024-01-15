@@ -44,6 +44,14 @@ function convert_notebook(path)
         """
         ---
         title: "$(title)"
+        format:
+        html:
+            embed-resources: true
+            self-contained-math: true
+        toc: true
+        fig-format: svg
+        fig-width: 8
+        fig-height: 6
         ---
         """,
     )
