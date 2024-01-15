@@ -3,6 +3,8 @@ import Logging
 import MacroTools
 import Pluto
 
+const ADMONITION_REGEX = r"!!! (note|warning|tip)"
+
 function convert_notebooks(dir)
     dir = abspath(dir)
     for (root, dirs, files) in walkdir(dir)
@@ -44,6 +46,14 @@ function convert_notebook(path)
         """
         ---
         title: "$(title)"
+        format:
+          html:
+            embed-resources: true
+            self-contained-math: true
+        toc: true
+        fig-format: svg
+        fig-width: 8
+        fig-height: 6
         ---
         """,
     )
@@ -55,6 +65,7 @@ function convert_notebook(path)
             if Meta.isexpr(ex, :toplevel)
                 if !isempty(ex.args) && MacroTools.@capture ex.args[end] @md_str(str_)
                     source = ex.args[end].args[end]
+                    source = contains(source, ADMONITION_REGEX) ? format_markdown(source) : source
                     println(buffer, source)
                 else
                     print_code(buffer, cell.code)
@@ -87,13 +98,48 @@ function print_code(buffer, code)
     println(buffer)
 end
 
+function format_markdown(text)
+    # Convert Pluto admonitions to Quarto callouts
+    replacements = Dict("note" => "callout-note", "warning" => "callout-caution", "tip" => "callout-tip")
+    lines = split(text, '\n')
+    new_text = ""
+    in_block = false
+
+    for line in lines
+        begin_block = match(ADMONITION_REGEX, line)
+        if begin_block !== nothing
+            if in_block
+                new_text = new_text[1:end-1] * ":::\n\n"
+            end
+            new_text *= ":::{.$(replacements[begin_block.captures[1]])}\n"
+            in_block = true
+        elseif in_block && !startswith(line, r"^[^\s]")
+            new_text *= replace(replace(String(line), r"^ {4,8}" => ""), r"^\t+" => "") * "\n"
+        elseif in_block
+            new_text = new_text[1:end-1] * ":::\n\n" * line * "\n"
+            in_block = false
+        else
+            new_text *= line * "\n"
+        end
+    end
+
+    if in_block
+        new_text = new_text[1:end-1] * ":::\n\n"
+    end
+
+    return new_text
+end
+
 function format_code(code)
-    # Drop `begin` and `end` if they start and end the code block.
+    # Drop `begin`/`let` and `end` if they start and end the code block.
     stripped = strip(code)
     if startswith(stripped, "begin") && endswith(stripped, "end")
         stripped = String(strip(stripped[7:end-3]))
-        return JuliaFormatter.format_text(stripped; indent = 2)
+        return JuliaFormatter.format_text(stripped; indent = 4)
+    elseif startswith(stripped, "let") && endswith(stripped, "end")
+        stripped = String(strip(stripped[5:end-3]))
+        return JuliaFormatter.format_text(stripped; indent = 4)
     else
-        return JuliaFormatter.format_text(String(stripped); indent = 2)
+        return JuliaFormatter.format_text(String(stripped); indent = 4)
     end
 end
