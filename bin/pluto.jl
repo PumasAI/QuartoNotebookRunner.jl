@@ -100,8 +100,8 @@ function format_code(code)
     stripped = strip(code)
     if startswith(stripped, "begin") && endswith(stripped, "end")
         stripped = String(strip(stripped[7:end-3]))
-        return JuliaFormatter.format_text(stripped; indent = 2)
+        return JuliaFormatter.format_text(stripped; indent = 4)
     else
-        return JuliaFormatter.format_text(String(stripped); indent = 2)
+        return JuliaFormatter.format_text(String(stripped); indent = 4)
     end
 end
