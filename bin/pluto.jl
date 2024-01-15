@@ -3,6 +3,8 @@ import Logging
 import MacroTools
 import Pluto
 
+const ADMONITION_REGEX = r"!!! (note|warning|tip)"
+
 function convert_notebooks(dir)
     dir = abspath(dir)
     for (root, dirs, files) in walkdir(dir)
@@ -63,6 +65,7 @@ function convert_notebook(path)
             if Meta.isexpr(ex, :toplevel)
                 if !isempty(ex.args) && MacroTools.@capture ex.args[end] @md_str(str_)
                     source = ex.args[end].args[end]
+                    source = contains(source, ADMONITION_REGEX) ? format_markdown(source) : source
                     println(buffer, source)
                 else
                     print_code(buffer, cell.code)
@@ -93,6 +96,38 @@ function print_code(buffer, code)
     println(buffer, format_code(code))
     println(buffer, "```")
     println(buffer)
+end
+
+function format_markdown(text)
+    # Convert Pluto admonitions to Quarto callouts
+    replacements = Dict("note" => "callout-note", "warning" => "callout-caution", "tip" => "callout-tip")
+    lines = split(text, '\n')
+    new_text = ""
+    in_block = false
+
+    for line in lines
+        begin_block = match(ADMONITION_REGEX, line)
+        if begin_block !== nothing
+            if in_block
+                new_text = new_text[1:end-1] * ":::\n\n"
+            end
+            new_text *= ":::{.$(replacements[begin_block.captures[1]])}\n"
+            in_block = true
+        elseif in_block && !startswith(line, r"^[^\s]")
+            new_text *= replace(replace(String(line), r"^ {4,8}" => ""), r"^\t+" => "") * "\n"
+        elseif in_block
+            new_text = new_text[1:end-1] * ":::\n\n" * line * "\n"
+            in_block = false
+        else
+            new_text *= line * "\n"
+        end
+    end
+
+    if in_block
+        new_text = new_text[1:end-1] * ":::\n\n"
+    end
+
+    return new_text
 end
 
 function format_code(code)
