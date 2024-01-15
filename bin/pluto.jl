@@ -96,10 +96,13 @@ function print_code(buffer, code)
 end
 
 function format_code(code)
-    # Drop `begin` and `end` if they start and end the code block.
+    # Drop `begin`/`let` and `end` if they start and end the code block.
     stripped = strip(code)
     if startswith(stripped, "begin") && endswith(stripped, "end")
         stripped = String(strip(stripped[7:end-3]))
+        return JuliaFormatter.format_text(stripped; indent = 4)
+    elseif startswith(stripped, "let") && endswith(stripped, "end")
+        stripped = String(strip(stripped[5:end-3]))
         return JuliaFormatter.format_text(stripped; indent = 4)
     else
         return JuliaFormatter.format_text(String(stripped); indent = 4)
