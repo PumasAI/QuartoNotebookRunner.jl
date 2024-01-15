@@ -47,7 +47,7 @@ function convert_notebook(path)
         ---
         title: "$(title)"
         format:
-        html:
+          html:
             embed-resources: true
             self-contained-math: true
         toc: true
