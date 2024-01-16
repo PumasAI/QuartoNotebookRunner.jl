@@ -176,6 +176,14 @@ function raw_markdown_chunks(path::String)
                 push!(raw_chunks, (type = :code, source, file = path, line, evaluate))
             end
         end
+        if terminal_line <= length(source_lines)
+            markdown = join(source_lines[terminal_line:end], "\n")
+            push!(
+                raw_chunks,
+                (type = :markdown, source = markdown, file = path, line = terminal_line),
+            )
+        end
+
         # The case where the notebook has no code cells.
         if isempty(raw_chunks) && !code_cells
             push!(
