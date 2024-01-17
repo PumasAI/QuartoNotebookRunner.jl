@@ -1,0 +1,11 @@
+---
+title: Trailing content
+---
+
+A code block:
+
+```{julia}
+1 + 1
+```
+
+And some trailing content.
