@@ -28,7 +28,7 @@ import Logging
 import Malt
 import PNGFiles
 import PrecompileTools
-import ProgressMeter
+import ProgressLogging
 import REPL
 import Random
 import Sockets
