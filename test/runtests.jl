@@ -904,6 +904,16 @@ end
                 @test 2 * metadata_100dpi.height == metadata_200dpi.height
                 @test 2 * metadata_100dpi.width == metadata_200dpi.width
 
+                # same logic for width and height only
+                metadata_single = png_metadata("""
+                    fig-width: 3
+                    fig-height: 2""")
+                metadata_double = png_metadata("""
+                    fig-width: 6
+                    fig-height: 4""")
+                @test 2 * metadata_single.height == metadata_double.height
+                @test 2 * metadata_single.width == metadata_double.width
+
                 close!(server)
             end
         end
