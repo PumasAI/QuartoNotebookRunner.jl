@@ -863,10 +863,11 @@ end
                     # handle Windows
                     content_unified = replace(content, "\r\n" => "\n")
                     _content =
-                        preamble === nothing ? content_unified : replace(content_unified, """
-                                                             fig-width: 4
-                                                             fig-height: 3
-                                                             fig-dpi: 150""" => preamble)
+                        preamble === nothing ? content_unified :
+                        replace(content_unified, """
+                    fig-width: 4
+                    fig-height: 3
+                    fig-dpi: 150""" => preamble)
 
                     write("CairoMakie.qmd", _content)
                     json = QuartoNotebookRunner.run!(server, "CairoMakie.qmd")
