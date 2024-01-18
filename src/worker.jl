@@ -365,11 +365,9 @@ function worker_init(f::File)
             else
                 size_kwargs = Dict{Symbol,Any}()
             end
-                
+
             if fm.fig_dpi !== nothing
-                dpi_kwargs = Dict{Symbol,Any}(
-                    :dpi => fm.fig_dpi,
-                )
+                dpi_kwargs = Dict{Symbol,Any}(:dpi => fm.fig_dpi)
             else
                 dpi_kwargs = Dict{Symbol,Any}()
             end
@@ -377,11 +375,7 @@ function worker_init(f::File)
             if (_pkg_version(pkgid) < v"1.28.1") && (fm.fig_format == "pdf")
                 Plots.gr(; size_kwargs..., fmt = :png, dpi_kwargs...)
             else
-                Plots.gr(; 
-                    size_kwargs...,
-                    fmt = fm.fig_format,
-                    dpi_kwargs...,
-                )
+                Plots.gr(; size_kwargs..., fmt = fm.fig_format, dpi_kwargs...)
             end
             return nothing
         end

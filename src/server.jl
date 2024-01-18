@@ -339,10 +339,7 @@ function raw_script_chunks(path::String)
 end
 
 function default_frontmatter()
-    Dict{String,Any}(
-        "fig-format" => "png",
-        "julia" => Dict{String,Any}("exeflags" => []),
-    )
+    Dict{String,Any}("fig-format" => "png", "julia" => Dict{String,Any}("exeflags" => []))
 end
 
 """

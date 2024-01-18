@@ -861,13 +861,10 @@ end
 
                 function png_metadata(preamble = nothing)
                     _content =
-                        preamble === nothing ?
-                        content :
-                        replace(content, """
-                            fig-width: 4
-                            fig-height: 3
-                            fig-dpi: 150""" => preamble
-                        )
+                        preamble === nothing ? content : replace(content, """
+                                                             fig-width: 4
+                                                             fig-height: 3
+                                                             fig-dpi: 150""" => preamble)
 
                     write("CairoMakie.qmd", _content)
                     json = QuartoNotebookRunner.run!(server, "CairoMakie.qmd")
@@ -881,22 +878,19 @@ end
                 metadata = png_metadata("""
                     fig-width: 8
                     fig-height: 6
-                    fig-dpi: 300"""
-                )
+                    fig-dpi: 300""")
                 @test metadata.width == 8 * 300
                 @test metadata.height == 6 * 300
 
                 metadata = png_metadata("""
                     fig-width: 5
-                    fig-dpi: 100"""
-                )
+                    fig-dpi: 100""")
                 @test metadata.width == 5 * 100
                 @test metadata.height == round(5 / 4 * 3 * 100)
 
                 metadata = png_metadata("""
                     fig-height: 5
-                    fig-dpi: 100"""
-                )
+                    fig-dpi: 100""")
                 @test metadata.height == 5 * 100
                 @test metadata.width == round(5 / 3 * 4 * 100)
 
@@ -904,11 +898,9 @@ end
                 # but for the dpi-only test we can check that doubling the
                 # dpi doubles image dimensions, whatever they are
                 metadata_100dpi = png_metadata("""
-                    fig-dpi: 96"""
-                )
+                    fig-dpi: 96""")
                 metadata_200dpi = png_metadata("""
-                    fig-dpi: 192"""
-                )
+                    fig-dpi: 192""")
                 @test 2 * metadata_100dpi.height == metadata_200dpi.height
                 @test 2 * metadata_100dpi.width == metadata_200dpi.width
 
