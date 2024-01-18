@@ -860,8 +860,10 @@ end
                 cp(env_dir, joinpath(dir, "CairoMakie"))
 
                 function png_metadata(preamble = nothing)
+                    # handle Windows
+                    content_unified = replace(content, "\r\n" => "\n")
                     _content =
-                        preamble === nothing ? content : replace(content, """
+                        preamble === nothing ? content_unified : replace(content_unified, """
                                                              fig-width: 4
                                                              fig-height: 3
                                                              fig-dpi: 150""" => preamble)
