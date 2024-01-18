@@ -485,7 +485,7 @@ end
             cells = json["cells"]
             cell = cells[6]
             @test cell["outputs"][1]["metadata"]["image/png"] ==
-                  Dict("width" => 768, "height" => 576)
+                  Dict("width" => 4 * 96, "height" => 3 * 96)
         end
         file(joinpath("integrations", "Plots")) do json
             cells = json["cells"]
@@ -862,18 +862,18 @@ end
                 json = QuartoNotebookRunner.run!(server, "CairoMakie.qmd")
 
                 image_png = json.cells[end].outputs[1].metadata["image/png"]
-                @test image_png.width == 768
-                @test image_png.height == 576
+                @test image_png.width == 4 * 96
+                @test image_png.height == 3 * 96
 
                 content = replace(content, "fig-width: 4" => "fig-width: 8")
-                content = replace(content, "fig-height: 3" => "fig-height: 6")
+                content = replace(content, "fig-height: 3" => "fig-height: 6\nfig-dpi: 300")
                 write("CairoMakie.qmd", content)
 
                 json = QuartoNotebookRunner.run!(server, "CairoMakie.qmd")
 
                 image_png = json.cells[end].outputs[1].metadata["image/png"]
-                @test image_png.width == 1536
-                @test image_png.height == 1152
+                @test image_png.width == 8 * 300
+                @test image_png.height == 6 * 300
 
                 close!(server)
             end

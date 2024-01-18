@@ -275,8 +275,8 @@ function worker_init(f::File)
         function _frontmatter()
             fm = FRONTMATTER[]
 
-            fig_width = fm["fig-width"]
-            fig_height = fm["fig-height"]
+            fig_width_inch = fm["fig-width"]
+            fig_height_inch = fm["fig-height"]
             fig_format = fm["fig-format"]
             fig_dpi = fm["fig-dpi"]
 
@@ -286,11 +286,7 @@ function worker_init(f::File)
                 fig_dpi = 96
             end
 
-            # convert inches to pixels
-            fig_width = fig_width * fig_dpi
-            fig_height = fig_height * fig_dpi
-
-            return (; fig_width, fig_height, fig_format, fig_dpi)
+            return (; fig_width_inch, fig_height_inch, fig_format, fig_dpi)
         end
 
         const PKG_VERSIONS = Dict{Base.PkgId,VersionNumber}()
@@ -312,31 +308,49 @@ function worker_init(f::File)
 
         function _CairoMakie_hook(pkgid::Base.PkgId, CairoMakie::Module)
             fm = _frontmatter()
+            px_per_unit = fm.fig_dpi / 96
+            pt_per_unit = 0.75 # this is the default in Makie, too, because 1 CSS px == 0.75 pt
             if fm.fig_format == "pdf"
-                CairoMakie.activate!(; type = "png")
+                CairoMakie.activate!(; type = "png", px_per_unit, pt_per_unit)
             else
-                CairoMakie.activate!(; type = fm.fig_format)
+                CairoMakie.activate!(; type = fm.fig_format, px_per_unit, pt_per_unit)
             end
         end
         _CairoMakie_hook(::Any...) = nothing
 
         function _Makie_hook(pkgid::Base.PkgId, Makie::Module)
             fm = _frontmatter()
+
+            # Convert inches to CSS pixels or device-independent pixels which Makie
+            # uses as the base unit for its plots when used with default settings.
+            fig_width = fm.fig_width_inch * 96
+            fig_height = fm.fig_height_inch * 96
+
             if _pkg_version(pkgid) < v"0.20"
-                Makie.update_theme!(; resolution = (fm.fig_width, fm.fig_height))
+                Makie.update_theme!(; resolution = (fig_width, fig_height))
             else
-                Makie.update_theme!(; size = (fm.fig_width, fm.fig_height))
+                Makie.update_theme!(; size = (fig_width, fig_height))
             end
         end
         _Makie_hook(::Any...) = nothing
 
         function _Plots_hook(pkgid::Base.PkgId, Plots::Module)
             fm = _frontmatter()
+            # Convert inches to CSS pixels or device-independent pixels.
+            # Empirically, an SVG is saved by Plots with width and height taken directly as CSS pixels (without unit specified)
+            # so the conversion with the 96 factor would be correct in that setting.
+            # However, with bitmap export they don't quite seem to follow that, where with 100dpi
+            # you get an image whose size (with rounding error) matches the numbers set for size while
+            # this should happen with 96. But we cannot solve that discrepancy here. So we just forward
+            # the values as given.
+            fig_width_px = fm.fig_width_inch * 96
+            fig_height_px = fm.fig_height_inch * 96
+
             if (_pkg_version(pkgid) < v"1.28.1") && (fm.fig_format == "pdf")
-                Plots.gr(size = (fm.fig_width, fm.fig_height), fmt = :png, dpi = fm.fig_dpi)
+                Plots.gr(size = (fig_width_px, fig_height_px), fmt = :png, dpi = fm.fig_dpi)
             else
                 Plots.gr(
-                    size = (fm.fig_width, fm.fig_height),
+                    size = (fig_width_px, fig_height_px),
                     fmt = fm.fig_format,
                     dpi = fm.fig_dpi,
                 )
