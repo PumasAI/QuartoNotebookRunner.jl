@@ -327,8 +327,12 @@ function worker_init(f::File)
             # only change Makie theme if sizes are set, if only one is set, pick an aspect ratio of 4/3
             # which might be more user-friendly than throwing an error
             if fm.fig_width_inch !== nothing || fm.fig_height_inch !== nothing
-                _width_inch = @something(fm.fig_width_inch, fm.fig_height_inch * 4 / 3)
-                _height_inch = @something(fm.fig_height_inch, fm.fig_width_inch / 4 * 3)
+                _width_inch =
+                    fm.fig_width_inch !== nothing ? fm.fig_width_inch :
+                    fm.fig_height_inch * 4 / 3
+                _height_inch =
+                    fm.fig_height_inch !== nothing ? fm.fig_height_inch :
+                    fm.fig_width_inch / 4 * 3
 
                 # Convert inches to CSS pixels or device-independent pixels which Makie
                 # uses as the base unit for its plots when used with default settings.
@@ -357,8 +361,12 @@ function worker_init(f::File)
             if fm.fig_width_inch !== nothing || fm.fig_height_inch !== nothing
                 # if only width or height is set, pick an aspect ratio of 4/3
                 # which might be more user-friendly than throwing an error
-                _width_inch = @something(fm.fig_width_inch, fm.fig_height_inch * 4 / 3)
-                _height_inch = @something(fm.fig_height_inch, fm.fig_width_inch / 4 * 3)
+                _width_inch =
+                    fm.fig_width_inch !== nothing ? fm.fig_width_inch :
+                    fm.fig_height_inch * 4 / 3
+                _height_inch =
+                    fm.fig_height_inch !== nothing ? fm.fig_height_inch :
+                    fm.fig_width_inch / 4 * 3
                 fig_width_px = _width_inch * 96
                 fig_height_px = _height_inch * 96
                 size_kwargs = Dict{Symbol,Any}(:size => (fig_width_px, fig_height_px))
