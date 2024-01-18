@@ -485,7 +485,7 @@ end
             cells = json["cells"]
             cell = cells[6]
             @test cell["outputs"][1]["metadata"]["image/png"] ==
-                  Dict("width" => 4 * 96, "height" => 3 * 96)
+                  Dict("width" => 4 * 150, "height" => 3 * 150)
         end
         file(joinpath("integrations", "Plots")) do json
             cells = json["cells"]
@@ -496,7 +496,8 @@ end
             @test !isempty(output["data"]["image/svg+xml"])
             @test !isempty(output["data"]["text/html"])
 
-            @test output["metadata"]["image/png"] == Dict("width" => 368, "height" => 276)
+            @test cell["outputs"][1]["metadata"]["image/png"] ==
+                  Dict("width" => 575, "height" => 432) # Plots does not seem to follow standard dpi rules so the values don't match Makie
         end
         file(joinpath("integrations", "ojs_define")) do json
             cells = json["cells"]
@@ -857,23 +858,59 @@ end
                 server = QuartoNotebookRunner.Server()
 
                 cp(env_dir, joinpath(dir, "CairoMakie"))
-                write("CairoMakie.qmd", content)
 
-                json = QuartoNotebookRunner.run!(server, "CairoMakie.qmd")
+                function png_metadata(preamble = nothing)
+                    _content =
+                        preamble === nothing ?
+                        content :
+                        replace(content, """
+                            fig-width: 4
+                            fig-height: 3
+                            fig-dpi: 150""" => preamble
+                        )
 
-                image_png = json.cells[end].outputs[1].metadata["image/png"]
-                @test image_png.width == 4 * 96
-                @test image_png.height == 3 * 96
+                    write("CairoMakie.qmd", _content)
+                    json = QuartoNotebookRunner.run!(server, "CairoMakie.qmd")
+                    return json.cells[end].outputs[1].metadata["image/png"]
+                end
 
-                content = replace(content, "fig-width: 4" => "fig-width: 8")
-                content = replace(content, "fig-height: 3" => "fig-height: 6\nfig-dpi: 300")
-                write("CairoMakie.qmd", content)
+                metadata = png_metadata()
+                @test metadata.width == 4 * 150
+                @test metadata.height == 3 * 150
 
-                json = QuartoNotebookRunner.run!(server, "CairoMakie.qmd")
+                metadata = png_metadata("""
+                    fig-width: 8
+                    fig-height: 6
+                    fig-dpi: 300"""
+                )
+                @test metadata.width == 8 * 300
+                @test metadata.height == 6 * 300
 
-                image_png = json.cells[end].outputs[1].metadata["image/png"]
-                @test image_png.width == 8 * 300
-                @test image_png.height == 6 * 300
+                metadata = png_metadata("""
+                    fig-width: 5
+                    fig-dpi: 100"""
+                )
+                @test metadata.width == 5 * 100
+                @test metadata.height == round(5 / 4 * 3 * 100)
+
+                metadata = png_metadata("""
+                    fig-height: 5
+                    fig-dpi: 100"""
+                )
+                @test metadata.height == 5 * 100
+                @test metadata.width == round(5 / 3 * 4 * 100)
+
+                # we don't want to rely on hardcoding Makie's own default size for our tests
+                # but for the dpi-only test we can check that doubling the
+                # dpi doubles image dimensions, whatever they are
+                metadata_100dpi = png_metadata("""
+                    fig-dpi: 96"""
+                )
+                metadata_200dpi = png_metadata("""
+                    fig-dpi: 192"""
+                )
+                @test 2 * metadata_100dpi.height == metadata_200dpi.height
+                @test 2 * metadata_100dpi.width == metadata_200dpi.width
 
                 close!(server)
             end

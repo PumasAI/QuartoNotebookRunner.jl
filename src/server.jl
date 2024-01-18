@@ -339,11 +339,7 @@ function raw_script_chunks(path::String)
 end
 
 function default_frontmatter()
-    # TODO: work out what the real defaults should be.
     Dict{String,Any}(
-        "fig-width" => 4,
-        "fig-height" => 3,
-        "fig-dpi" => 96,
         "fig-format" => "png",
         "julia" => Dict{String,Any}("exeflags" => []),
     )
