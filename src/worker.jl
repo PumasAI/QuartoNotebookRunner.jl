@@ -275,22 +275,16 @@ function worker_init(f::File)
         function _frontmatter()
             fm = FRONTMATTER[]
 
-            fig_width = fm["fig-width"]
-            fig_height = fm["fig-height"]
+            fig_width_inch = get(fm, "fig-width", nothing)
+            fig_height_inch = get(fm, "fig-height", nothing)
             fig_format = fm["fig-format"]
-            fig_dpi = fm["fig-dpi"]
+            fig_dpi = get(fm, "fig-dpi", nothing)
 
             if fig_format == "retina"
                 fig_format = "svg"
-            elseif fig_format == "pdf"
-                fig_dpi = 96
             end
 
-            # convert inches to pixels
-            fig_width = fig_width * fig_dpi
-            fig_height = fig_height * fig_dpi
-
-            return (; fig_width, fig_height, fig_format, fig_dpi)
+            return (; fig_width_inch, fig_height_inch, fig_format, fig_dpi)
         end
 
         const PKG_VERSIONS = Dict{Base.PkgId,VersionNumber}()
@@ -312,34 +306,84 @@ function worker_init(f::File)
 
         function _CairoMakie_hook(pkgid::Base.PkgId, CairoMakie::Module)
             fm = _frontmatter()
-            if fm.fig_format == "pdf"
-                CairoMakie.activate!(; type = "png")
+            if fm.fig_dpi !== nothing
+                kwargs = Dict{Symbol,Any}(
+                    :px_per_unit => fm.fig_dpi / 96,
+                    :pt_per_unit => 0.75, # this is the default in Makie, too, because 1 CSS px == 0.75 pt
+                )
             else
-                CairoMakie.activate!(; type = fm.fig_format)
+                kwargs = Dict{Symbol,Any}()
+            end
+            if fm.fig_format == "pdf"
+                CairoMakie.activate!(; type = "png", kwargs...)
+            else
+                CairoMakie.activate!(; type = fm.fig_format, kwargs...)
             end
         end
         _CairoMakie_hook(::Any...) = nothing
 
         function _Makie_hook(pkgid::Base.PkgId, Makie::Module)
             fm = _frontmatter()
-            if _pkg_version(pkgid) < v"0.20"
-                Makie.update_theme!(; resolution = (fm.fig_width, fm.fig_height))
-            else
-                Makie.update_theme!(; size = (fm.fig_width, fm.fig_height))
+            # only change Makie theme if sizes are set, if only one is set, pick an aspect ratio of 4/3
+            # which might be more user-friendly than throwing an error
+            if fm.fig_width_inch !== nothing || fm.fig_height_inch !== nothing
+                _width_inch =
+                    fm.fig_width_inch !== nothing ? fm.fig_width_inch :
+                    fm.fig_height_inch * 4 / 3
+                _height_inch =
+                    fm.fig_height_inch !== nothing ? fm.fig_height_inch :
+                    fm.fig_width_inch / 4 * 3
+
+                # Convert inches to CSS pixels or device-independent pixels which Makie
+                # uses as the base unit for its plots when used with default settings.
+                fig_width = _width_inch * 96
+                fig_height = _height_inch * 96
+
+                if _pkg_version(pkgid) < v"0.20"
+                    Makie.update_theme!(; resolution = (fig_width, fig_height))
+                else
+                    Makie.update_theme!(; size = (fig_width, fig_height))
+                end
             end
         end
         _Makie_hook(::Any...) = nothing
 
         function _Plots_hook(pkgid::Base.PkgId, Plots::Module)
             fm = _frontmatter()
-            if (_pkg_version(pkgid) < v"1.28.1") && (fm.fig_format == "pdf")
-                Plots.gr(size = (fm.fig_width, fm.fig_height), fmt = :png, dpi = fm.fig_dpi)
+            # Convert inches to CSS pixels or device-independent pixels.
+            # Empirically, an SVG is saved by Plots with width and height taken directly as CSS pixels (without unit specified)
+            # so the conversion with the 96 factor would be correct in that setting.
+            # However, with bitmap export they don't quite seem to follow that, where with 100dpi
+            # you get an image whose size (with rounding error) matches the numbers set for size while
+            # this should happen with 96. But we cannot solve that discrepancy here. So we just forward
+            # the values as given.
+
+            if fm.fig_width_inch !== nothing || fm.fig_height_inch !== nothing
+                # if only width or height is set, pick an aspect ratio of 4/3
+                # which might be more user-friendly than throwing an error
+                _width_inch =
+                    fm.fig_width_inch !== nothing ? fm.fig_width_inch :
+                    fm.fig_height_inch * 4 / 3
+                _height_inch =
+                    fm.fig_height_inch !== nothing ? fm.fig_height_inch :
+                    fm.fig_width_inch / 4 * 3
+                fig_width_px = _width_inch * 96
+                fig_height_px = _height_inch * 96
+                size_kwargs = Dict{Symbol,Any}(:size => (fig_width_px, fig_height_px))
             else
-                Plots.gr(
-                    size = (fm.fig_width, fm.fig_height),
-                    fmt = fm.fig_format,
-                    dpi = fm.fig_dpi,
-                )
+                size_kwargs = Dict{Symbol,Any}()
+            end
+
+            if fm.fig_dpi !== nothing
+                dpi_kwargs = Dict{Symbol,Any}(:dpi => fm.fig_dpi)
+            else
+                dpi_kwargs = Dict{Symbol,Any}()
+            end
+
+            if (_pkg_version(pkgid) < v"1.28.1") && (fm.fig_format == "pdf")
+                Plots.gr(; size_kwargs..., fmt = :png, dpi_kwargs...)
+            else
+                Plots.gr(; size_kwargs..., fmt = fm.fig_format, dpi_kwargs...)
             end
             return nothing
         end

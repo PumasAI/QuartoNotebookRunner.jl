@@ -2,6 +2,7 @@
 title: CairoMakie integration
 fig-width: 4
 fig-height: 3
+fig-dpi: 150
 ---
 
 ```{julia}
