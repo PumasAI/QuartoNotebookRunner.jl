@@ -342,6 +342,29 @@ function default_frontmatter()
     Dict{String,Any}("fig-format" => "png", "julia" => Dict{String,Any}("exeflags" => []))
 end
 
+# Convenience macro that outputs
+# ```julia
+# if showprogress
+#     ProgressLogging.@progress exprs...
+# else
+#     exprs[end]
+# end
+# ```
+# TODO: Upstream to ProgressLogging?
+macro maybe_progress(showprogress, exprs...)
+    if isempty(exprs)
+        throw(ArgumentError("at least one expression required"))
+    end
+    expr = quote
+        if $(showprogress)
+            $ProgressLogging.@progress $(exprs...)
+        else
+            $(exprs[end])
+        end
+    end
+    return esc(expr)
+end
+
 """
     evaluate_raw_cells!(f::File, chunks::Vector)
 
@@ -356,12 +379,8 @@ function evaluate_raw_cells!(
 )
     refresh!(f, frontmatter)
     cells = []
-    ProgressMeter.@showprogress enabled = showprogress desc = "Running $(relpath(f.path, pwd()))" for (
-        nth,
-        chunk,
-    ) in enumerate(
-        chunks,
-    )
+    @maybe_progress showprogress "Running $(relpath(f.path, pwd()))" for (nth, chunk) in
+                                                                         enumerate(chunks)
         if chunk.type === :code
 
             outputs = []
