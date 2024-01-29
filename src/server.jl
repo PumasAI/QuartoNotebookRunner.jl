@@ -71,13 +71,19 @@ function evaluate!(
     f::File,
     output::Union{AbstractString,IO,Nothing} = nothing;
     showprogress = true,
+    options::Union{String,Dict{String,Any}} = Dict{String,Any}(),
 )
     _check_output_dst(output)
 
+    options = _parsed_options(options)
     path = abspath(f.path)
     if isfile(path)
-        raw_chunks, frontmatter = raw_text_chunks(f)
-        cells = evaluate_raw_cells!(f, raw_chunks, frontmatter; showprogress)
+        raw_chunks, file_frontmatter = raw_text_chunks(f)
+        # TODO: retrieve `pandoc` options out of here as well so that we can adjust
+        # the output mimetypes in the worker process based on the format.
+        merged_frontmatter = get(options, "metadata", file_frontmatter)
+        merged_frontmatter = _recursive_merge(default_frontmatter(), merged_frontmatter)
+        cells = evaluate_raw_cells!(f, raw_chunks, merged_frontmatter; showprogress)
         data = (
             metadata = (
                 kernel_info = (name = "julia",),
@@ -96,6 +102,14 @@ function evaluate!(
         throw(ArgumentError("file does not exist: $(path)"))
     end
 end
+
+function _parsed_options(options::String)
+    isfile(options) || error("`options` is not a valid file: $(repr(options))")
+    open(options) do io
+        return JSON3.read(io, Any)
+    end
+end
+_parsed_options(options::Dict{String,Any}) = options
 
 function _check_output_dst(s::AbstractString)
     s = abspath(s)
@@ -592,12 +606,13 @@ function run!(
     file::AbstractString;
     output::Union{AbstractString,IO,Nothing} = nothing,
     showprogress::Bool = true,
+    options::Union{String,Dict{String,Any}} = Dict{String,Any}(),
 )
     file = get!(server.workers, file) do
         @debug "file not loaded, loading first." file
         loadfile!(server, file)
     end
-    return evaluate!(file, output; showprogress)
+    return evaluate!(file, output; showprogress, options)
 end
 
 """

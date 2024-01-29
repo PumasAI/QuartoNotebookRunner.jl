@@ -850,6 +850,42 @@ end
         end
     end
 
+    @testset "project frontmatter" begin
+        content = read(joinpath(@__DIR__, "examples/mimetypes.qmd"), String)
+        mktempdir() do dir
+            cd(dir) do
+                cp(joinpath(@__DIR__, "examples/mimetypes"), joinpath(dir, "mimetypes"))
+                server = QuartoNotebookRunner.Server()
+                write("mimetypes.qmd", content)
+                ipynb = "mimetypes.ipynb"
+                options = Dict{String,Any}("metadata" => Dict{String,Any}("fig-dpi" => 100))
+                QuartoNotebookRunner.run!(server, "mimetypes.qmd"; output = ipynb, options)
+                json = JSON3.read(ipynb)
+                cell = json.cells[6]
+                metadata = cell.outputs[1].metadata["image/png"]
+                @test metadata["width"] == 625
+                @test metadata["height"] == 469
+
+                options_file = "temp_options.json"
+                open(options_file, "w") do io
+                    JSON3.pretty(io, options)
+                end
+
+                QuartoNotebookRunner.run!(
+                    server,
+                    "mimetypes.qmd";
+                    output = ipynb,
+                    options = options_file,
+                )
+                json = JSON3.read(ipynb)
+                cell = json.cells[6]
+                metadata = cell.outputs[1].metadata["image/png"]
+                @test metadata["width"] == 625
+                @test metadata["height"] == 469
+            end
+        end
+    end
+
     @testset "package integration hooks" begin
         env_dir = joinpath(@__DIR__, "examples/integrations/CairoMakie")
         content = read(joinpath(@__DIR__, "examples/integrations/CairoMakie.qmd"), String)
