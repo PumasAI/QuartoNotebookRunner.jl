@@ -34,7 +34,7 @@ A description of the message types:
  -  `stop` - Stop the server. The server will return a response with a `message`
     field set to `Server stopped.`.
 """
-function serve(; port = get(ARGS, 1, rand(1024:65535)))
+function serve(; port = get(ARGS, 1, rand(1024:65535)), showprogress::Bool = true)
     getport(port::Integer) = port
     getport(port::AbstractString) = getport(tryparse(Int, port))
     getport(::Any) = throw(ArgumentError("Invalid port: $port"))
@@ -77,7 +77,10 @@ function serve(; port = get(ARGS, 1, rand(1024:65535)))
                             close(socket)
                             close(socket_server)
                         else
-                            _write_json(socket, _handle_response(notebook_server, json))
+                            _write_json(
+                                socket,
+                                _handle_response(notebook_server, json, showprogress),
+                            )
                         end
                     end
                 end
@@ -91,6 +94,7 @@ end
 function _handle_response(
     notebooks::Server,
     request::@NamedTuple{type::String, content::String},
+    showprogress::Bool,
 )
     @debug "debugging" request notebooks = collect(keys(notebooks.workers))
     type = request.type
@@ -121,7 +125,7 @@ function _handle_response(
 
     if type == "run"
         try
-            return (; notebook = run!(notebooks, file))
+            return (; notebook = run!(notebooks, file; showprogress))
         catch error
             return _log_error("Failed to run notebook: $file", error, catch_backtrace())
         end
