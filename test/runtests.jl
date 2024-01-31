@@ -86,6 +86,9 @@ end
         @test json["metadata"]["language_info"]["version"] == "$VERSION"
         @test json["metadata"]["language_info"]["codemirror_mode"] == "julia"
         @test json["metadata"]["kernel_info"]["name"] == "julia"
+        @test startswith(json["metadata"]["kernelspec"]["name"], "julia")
+        @test startswith(json["metadata"]["kernelspec"]["display_name"], "Julia")
+        @test json["metadata"]["kernelspec"]["language"] == "julia"
     end
     tests = let
         tests = Dict()
