@@ -14,7 +14,7 @@ Message schema:
 ```json
 {
     type: "run" | "close" | "stop"
-    content: string
+    content: string | { file: string, options: string | { ... } }
 }
 ```
 
@@ -93,12 +93,12 @@ end
 
 function _handle_response(
     notebooks::Server,
-    request::@NamedTuple{type::String, content::String},
+    request::@NamedTuple{type::String, content::Union{String,Dict{String,Any}}},
     showprogress::Bool,
 )
     @debug "debugging" request notebooks = collect(keys(notebooks.workers))
     type = request.type
-    file = request.content
+    file = _get_file(request.content)
 
     type in ("close", "run") || return _log_error("Unknown request type: $type")
 
@@ -124,8 +124,9 @@ function _handle_response(
     # Running:
 
     if type == "run"
+        options = _get_options(request.content)
         try
-            return (; notebook = run!(notebooks, file; showprogress))
+            return (; notebook = run!(notebooks, file; options, showprogress))
         catch error
             return _log_error("Failed to run notebook: $file", error, catch_backtrace())
         end
@@ -145,8 +146,23 @@ function _log_error(message)
 end
 
 # TODO: check what the message schema is for this.
-_read_json(data) = JSON3.read(data, @NamedTuple{type::String, content::String})
+_read_json(data) = JSON3.read(
+    data,
+    @NamedTuple{type::String, content::Union{String,Union{String,Dict{String,Any}}}}
+)
 _write_json(socket, data) = write(socket, JSON3.write(data), "\n")
+
+function _get_file(content::Dict)
+    if haskey(content, "file")
+        return content["file"]
+    else
+        error("No 'file' key in content: $(repr(content))")
+    end
+end
+_get_file(content::String) = content
+
+_get_options(content::Dict) = get(Dict{String,Any}, content, "options")
+_get_options(::String) = Dict{String,Any}()
 
 # Compat:
 
