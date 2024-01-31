@@ -50,7 +50,7 @@ end
             node = NodeJS_18_jll.node()
             client = joinpath(@__DIR__, "client.js")
             port = 4001
-            server = QuartoNotebookRunner.serve(; port)
+            server = QuartoNotebookRunner.serve(; port, showprogress = false)
             sleep(1)
             json(cmd) = JSON3.read(read(cmd, String), Any)
 
@@ -566,7 +566,12 @@ end
                 each = joinpath(examples, root, each)
 
                 buffer = IOBuffer()
-                QuartoNotebookRunner.run!(server, each, output = buffer)
+                QuartoNotebookRunner.run!(
+                    server,
+                    each;
+                    output = buffer,
+                    showprogress = false,
+                )
                 seekstart(buffer)
                 json = JSON3.read(buffer, Any)
 
@@ -579,7 +584,12 @@ end
                 end
 
                 ipynb = joinpath(examples, with_extension(each, "ipynb"))
-                QuartoNotebookRunner.run!(server, each; output = ipynb)
+                QuartoNotebookRunner.run!(
+                    server,
+                    each;
+                    output = ipynb,
+                    showprogress = false,
+                )
 
                 # No macOS ARM build, so just look for a local version that the dev
                 # should have installed. This avoids having to use rosetta2 to run
@@ -604,13 +614,14 @@ end
 
     # Switching exeflags within a running notebook causes it to restart so that
     # the new exeflags can be applied.
-    @testset "exeflags notebook restart" begin
-        content = read(joinpath(@__DIR__, "examples/stdout_exeflags.qmd"), String)
-        mktempdir() do dir
+    mktempdir() do dir
+        @testset "exeflags notebook restart" begin
+            content = read(joinpath(@__DIR__, "examples/stdout_exeflags.qmd"), String)
             cd(dir) do
                 server = QuartoNotebookRunner.Server()
                 write("notebook.qmd", content)
-                json = QuartoNotebookRunner.run!(server, "notebook.qmd")
+                json =
+                    QuartoNotebookRunner.run!(server, "notebook.qmd"; showprogress = false)
 
                 cells = json.cells
                 cell = cells[8]
@@ -618,7 +629,8 @@ end
 
                 content = replace(content, "--color=no" => "--color=yes")
                 write("notebook.qmd", content)
-                json = QuartoNotebookRunner.run!(server, "notebook.qmd")
+                json =
+                    QuartoNotebookRunner.run!(server, "notebook.qmd"; showprogress = false)
 
                 cells = json.cells
                 cell = cells[8]
@@ -627,14 +639,12 @@ end
                 close!(server)
             end
         end
-    end
 
-    @testset "Const redefinition" begin
-        # Ensure that when we update a running notebook and try to re-evaluate
-        # cells that contain const definitions that have changed, e.g. structs
-        # or consts that we still get the correct output and not redefinition
-        # errors.
-        mktempdir() do dir
+        @testset "Const redefinition" begin
+            # Ensure that when we update a running notebook and try to re-evaluate
+            # cells that contain const definitions that have changed, e.g. structs
+            # or consts that we still get the correct output and not redefinition
+            # errors.
             notebook = joinpath(dir, "notebook.qmd")
             write(
                 notebook,
@@ -658,7 +668,12 @@ end
             server = QuartoNotebookRunner.Server()
 
             buffer = IOBuffer()
-            QuartoNotebookRunner.run!(server, notebook; output = buffer)
+            QuartoNotebookRunner.run!(
+                server,
+                notebook;
+                output = buffer,
+                showprogress = false,
+            )
 
             seekstart(buffer)
             json = JSON3.read(buffer, Any)
@@ -703,7 +718,12 @@ end
             )
 
             buffer = IOBuffer()
-            QuartoNotebookRunner.run!(server, notebook; output = buffer)
+            QuartoNotebookRunner.run!(
+                server,
+                notebook;
+                output = buffer,
+                showprogress = false,
+            )
 
             seekstart(buffer)
             json = JSON3.read(buffer, Any)
@@ -728,68 +748,67 @@ end
                 "metadata" => Dict(),
             )
         end
-    end
 
-    @testset "render" begin
-        buffer = IOBuffer()
-        QuartoNotebookRunner.render(
-            joinpath(@__DIR__, "examples/cell_types.qmd");
-            output = buffer,
-        )
-        seekstart(buffer)
-        json = JSON3.read(buffer, Any)
+        @testset "render" begin
+            buffer = IOBuffer()
+            QuartoNotebookRunner.render(
+                joinpath(@__DIR__, "examples/cell_types.qmd");
+                output = buffer,
+                showprogress = false,
+            )
+            seekstart(buffer)
+            json = JSON3.read(buffer, Any)
 
-        @test JSONSchema.validate(schema, json) === nothing
-    end
+            @test JSONSchema.validate(schema, json) === nothing
+        end
 
-    @testset "Invalid cell option" begin
-        text = """
-               ```{julia}
-               #| valid: true
-               ```
-               """
-        @test QuartoNotebookRunner.extract_cell_options(
-            text;
-            file = "file.qmd",
-            line = 1,
-        ) == Dict("valid" => true)
+        @testset "Invalid cell option" begin
+            text = """
+                   ```{julia}
+                   #| valid: true
+                   ```
+                   """
+            @test QuartoNotebookRunner.extract_cell_options(
+                text;
+                file = "file.qmd",
+                line = 1,
+            ) == Dict("valid" => true)
 
-        text = """
-               ```{julia}
-               #| valid: true
-               #| invalid
-               ```
-               """
-        @test_throws_message "file.qmd:1" QuartoNotebookRunner.extract_cell_options(
-            text;
-            file = "file.qmd",
-            line = 1,
-        )
+            text = """
+                   ```{julia}
+                   #| valid: true
+                   #| invalid
+                   ```
+                   """
+            @test_throws_message "file.qmd:1" QuartoNotebookRunner.extract_cell_options(
+                text;
+                file = "file.qmd",
+                line = 1,
+            )
 
-        text = """
-               ```{julia}
-               a = 1
-               ```
-               """
-        @test QuartoNotebookRunner.extract_cell_options(
-            text;
-            file = "file.qmd",
-            line = 1,
-        ) == Dict()
+            text = """
+                   ```{julia}
+                   a = 1
+                   ```
+                   """
+            @test QuartoNotebookRunner.extract_cell_options(
+                text;
+                file = "file.qmd",
+                line = 1,
+            ) == Dict()
 
-        mktempdir() do dir
             notebook = joinpath(dir, "notebook.qmd")
             write(
                 notebook,
                 """
-                ---
-                title: "Invalid cell option"
-                ---
+                    ---
+                    title: "Invalid cell option"
+                    ---
 
-                ```{julia}
-                #| this is not yaml
-                ```
-                """,
+                    ```{julia}
+                    #| this is not yaml
+                    ```
+                    """,
             )
 
             server = QuartoNotebookRunner.Server()
@@ -799,12 +818,11 @@ end
                 server,
                 notebook;
                 output = buffer,
+                showprogress = false,
             )
         end
-    end
 
-    @testset "Invalid eval option" begin
-        mktempdir() do dir
+        @testset "Invalid eval option" begin
             notebook = joinpath(dir, "notebook.qmd")
             write(
                 notebook,
@@ -826,18 +844,22 @@ end
                 server,
                 notebook;
                 output = buffer,
+                showprogress = false,
             )
         end
-    end
 
-    @testset "relative paths in `output`" begin
-        content = read(joinpath(@__DIR__, "examples/stdout.qmd"), String)
-        mktempdir() do dir
+        @testset "relative paths in `output`" begin
+            content = read(joinpath(@__DIR__, "examples/stdout.qmd"), String)
             cd(dir) do
                 server = QuartoNotebookRunner.Server()
                 write("notebook.qmd", content)
                 ipynb = "notebook.ipynb"
-                QuartoNotebookRunner.run!(server, "notebook.qmd"; output = ipynb)
+                QuartoNotebookRunner.run!(
+                    server,
+                    "notebook.qmd";
+                    output = ipynb,
+                    showprogress = false,
+                )
 
                 json = JSON3.read(ipynb)
 
@@ -848,12 +870,11 @@ end
                 close!(server)
             end
         end
-    end
 
-    @testset "package integration hooks" begin
-        env_dir = joinpath(@__DIR__, "examples/integrations/CairoMakie")
-        content = read(joinpath(@__DIR__, "examples/integrations/CairoMakie.qmd"), String)
-        mktempdir() do dir
+        @testset "package integration hooks" begin
+            env_dir = joinpath(@__DIR__, "examples/integrations/CairoMakie")
+            content =
+                read(joinpath(@__DIR__, "examples/integrations/CairoMakie.qmd"), String)
             cd(dir) do
                 server = QuartoNotebookRunner.Server()
 
@@ -870,7 +891,11 @@ end
                     fig-dpi: 150""" => preamble)
 
                     write("CairoMakie.qmd", _content)
-                    json = QuartoNotebookRunner.run!(server, "CairoMakie.qmd")
+                    json = QuartoNotebookRunner.run!(
+                        server,
+                        "CairoMakie.qmd";
+                        showprogress = false,
+                    )
                     return json.cells[end].outputs[1].metadata["image/png"]
                 end
 
@@ -920,5 +945,7 @@ end
                 close!(server)
             end
         end
+        #=
+        =#
     end
 end
