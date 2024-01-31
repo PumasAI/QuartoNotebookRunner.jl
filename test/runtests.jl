@@ -877,31 +877,33 @@ end
                 cp(joinpath(@__DIR__, "examples/mimetypes"), joinpath(dir, "mimetypes"))
                 server = QuartoNotebookRunner.Server()
                 write("mimetypes.qmd", content)
-                ipynb = "mimetypes.ipynb"
                 options = Dict{String,Any}("metadata" => Dict{String,Any}("fig-dpi" => 100))
-                QuartoNotebookRunner.run!(server, "mimetypes.qmd"; output = ipynb, options)
-                json = JSON3.read(ipynb)
+                json = QuartoNotebookRunner.run!(
+                    server,
+                    "mimetypes.qmd";
+                    options,
+                    showprogress = false,
+                )
                 cell = json.cells[6]
                 metadata = cell.outputs[1].metadata["image/png"]
-                @test metadata["width"] == 625
-                @test metadata["height"] == 469
+                @test metadata.width == 625
+                @test metadata.height == 469
 
                 options_file = "temp_options.json"
                 open(options_file, "w") do io
                     JSON3.pretty(io, options)
                 end
 
-                QuartoNotebookRunner.run!(
+                json = QuartoNotebookRunner.run!(
                     server,
                     "mimetypes.qmd";
-                    output = ipynb,
                     options = options_file,
+                    showprogress = false,
                 )
-                json = JSON3.read(ipynb)
                 cell = json.cells[6]
                 metadata = cell.outputs[1].metadata["image/png"]
-                @test metadata["width"] == 625
-                @test metadata["height"] == 469
+                @test metadata.width == 625
+                @test metadata.height == 469
             end
         end
 
