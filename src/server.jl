@@ -86,6 +86,11 @@ function evaluate!(
         cells = evaluate_raw_cells!(f, raw_chunks, merged_frontmatter; showprogress)
         data = (
             metadata = (
+                kernelspec = (
+                    display_name = "Julia $(VERSION)",
+                    language = "julia",
+                    name = "julia-$(VERSION)",
+                ),
                 kernel_info = (name = "julia",),
                 language_info = (
                     name = "julia",
