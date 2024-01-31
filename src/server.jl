@@ -192,7 +192,10 @@ function raw_markdown_chunks(path::String)
                         "Cannot handle an `eval` code cell option with value $(repr(evaluate)), only true or false.",
                     )
                 end
-                push!(raw_chunks, (type = :code, source, file = path, line, evaluate))
+                push!(
+                    raw_chunks,
+                    (type = :code, source, file = path, line, evaluate, cell_options),
+                )
             end
         end
         if terminal_line <= length(source_lines)
@@ -300,7 +303,14 @@ function raw_script_chunks(path::String)
                 end
                 push!(
                     raw_chunks,
-                    (type = :code, source, file = path, line = start_line, evaluate),
+                    (;
+                        type = :code,
+                        source,
+                        file = path,
+                        line = start_line,
+                        evaluate,
+                        cell_options,
+                    ),
                 )
             elseif type == :markdown
                 try
@@ -407,7 +417,12 @@ function evaluate_raw_cells!(
             if chunk.evaluate
                 # Offset the line number by 1 to account for the triple backticks
                 # that are part of the markdown syntax for code blocks.
-                expr = :(render($chunk.source, $(chunk.file), $(chunk.line + 1)))
+                expr = :(render(
+                    $chunk.source,
+                    $(chunk.file),
+                    $(chunk.line + 1),
+                    $(chunk.cell_options),
+                ))
                 remote = Malt.remote_eval_fetch(f.worker, expr)
                 processed = process_results(remote.results)
 
@@ -546,6 +561,7 @@ function process_results(dict::Dict{String,@NamedTuple{error::Bool, data::Vector
     funcs = Dict(
         "application/json" => json_reader,
         "text/plain" => String,
+        "text/markdown" => String,
         "text/html" => String,
         "text/latex" => String,
         "image/svg+xml" => String,
