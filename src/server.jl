@@ -616,7 +616,7 @@ function run!(
 end
 
 """
-    render(file::AbstractString; output::Union{AbstractString,IO,Nothing} = nothing)
+    render(file::AbstractString; output::Union{AbstractString,IO,Nothing} = nothing, showprogress::Bool = true)
 
 Render the notebook in `file` and write the results to `output`. Uses a similar
 API to `run!` but does not keep the file loaded in a server and shuts down
@@ -624,9 +624,13 @@ immediately after rendering. This means that the user pays the full cost of
 initial startup each time they render a notebook. Prefer `run!` if you are going
 to be rendering the same notebook multiple times iteratively.
 """
-function render(file::AbstractString; output::Union{AbstractString,IO,Nothing} = nothing)
+function render(
+    file::AbstractString;
+    output::Union{AbstractString,IO,Nothing} = nothing,
+    showprogress::Bool = true,
+)
     server = Server()
-    run!(server, file; output = output)
+    run!(server, file; output, showprogress)
     close!(server, file)
 end
 
