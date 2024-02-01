@@ -880,7 +880,11 @@ end
                 cp(joinpath(@__DIR__, "examples/mimetypes"), joinpath(dir, "mimetypes"))
                 server = QuartoNotebookRunner.Server()
                 write("mimetypes.qmd", content)
-                options = Dict{String,Any}("metadata" => Dict{String,Any}("fig-dpi" => 100))
+                options = Dict{String,Any}(
+                    "format" => Dict{String,Any}(
+                        "execute" => Dict{String,Any}("fig-dpi" => 100),
+                    ),
+                )
                 json = QuartoNotebookRunner.run!(
                     server,
                     "mimetypes.qmd";

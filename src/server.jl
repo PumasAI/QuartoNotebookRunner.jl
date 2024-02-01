@@ -48,7 +48,7 @@ function init!(file::File)
 end
 
 function refresh!(file::File, frontmatter::Dict)
-    exeflags = frontmatter["julia"]["exeflags"]
+    exeflags = frontmatter["format"]["metadata"]["julia"]["exeflags"]
     if exeflags != file.exeflags
         Malt.stop(file.worker)
         file.worker = cd(() -> Malt.Worker(; exeflags), dirname(file.path))
@@ -79,10 +79,7 @@ function evaluate!(
     path = abspath(f.path)
     if isfile(path)
         raw_chunks, file_frontmatter = raw_text_chunks(f)
-        # TODO: retrieve `pandoc` options out of here as well so that we can adjust
-        # the output mimetypes in the worker process based on the format.
-        merged_frontmatter = get(options, "metadata", file_frontmatter)
-        merged_frontmatter = _recursive_merge(default_frontmatter(), merged_frontmatter)
+        merged_frontmatter = _extract_relevant_frontmatter(file_frontmatter, options)
         cells = evaluate_raw_cells!(f, raw_chunks, merged_frontmatter; showprogress)
         data = (
             metadata = (
@@ -106,6 +103,77 @@ function evaluate!(
     else
         throw(ArgumentError("file does not exist: $(path)"))
     end
+end
+
+function _extract_relevant_frontmatter(file_frontmatter::Dict, options::Dict)
+    file_frontmatter = _recursive_merge(default_frontmatter(), file_frontmatter)
+
+    fig_width_default = get(file_frontmatter, "fig-width", nothing)
+    fig_height_default = get(file_frontmatter, "fig-height", nothing)
+    fig_format_default = get(file_frontmatter, "fig-format", nothing)
+    fig_dpi_default = get(file_frontmatter, "fig-dpi", nothing)
+
+    pandoc_to_default = nothing
+
+    julia_default = get(file_frontmatter, "julia", nothing)
+
+    if isempty(options)
+        return _frontmatter_template(;
+            fig_width = fig_width_default,
+            fig_height = fig_height_default,
+            fig_format = fig_format_default,
+            fig_dpi = fig_dpi_default,
+            pandoc_to = pandoc_to_default,
+            julia = julia_default,
+        )
+    else
+        D = Dict{String,Any}
+
+        format = get(D, options, "format")
+        execute = get(D, format, "execute")
+        fig_width = get(execute, "fig-width", fig_width_default)
+        fig_height = get(execute, "fig-height", fig_height_default)
+        fig_format = get(execute, "fig-format", fig_format_default)
+        fig_dpi = get(execute, "fig-dpi", fig_dpi_default)
+
+        pandoc = get(D, format, "pandoc")
+        pandoc_to = get(pandoc, "to", pandoc_to_default)
+
+        metadata = get(D, format, "metadata")
+        julia = get(metadata, "julia", julia_default)
+
+        return _frontmatter_template(;
+            fig_width,
+            fig_height,
+            fig_format,
+            fig_dpi,
+            pandoc_to,
+            julia,
+        )
+    end
+end
+
+function _frontmatter_template(;
+    fig_width,
+    fig_height,
+    fig_format,
+    fig_dpi,
+    pandoc_to,
+    julia,
+)
+    D = Dict{String,Any}
+    return D(
+        "format" => D(
+            "execute" => D(
+                "fig-width" => fig_width,
+                "fig-height" => fig_height,
+                "fig-format" => fig_format,
+                "fig-dpi" => fig_dpi,
+            ),
+            "pandoc" => D("to" => pandoc_to),
+            "metadata" => D("julia" => julia),
+        ),
+    )
 end
 
 function _parsed_options(options::String)

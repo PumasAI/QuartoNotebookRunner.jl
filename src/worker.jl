@@ -221,21 +221,9 @@ function worker_init(f::File)
             return take!(buf)
         end
 
-        # TODO: where is this key?
-        function _to_format()
-            fm = FRONTMATTER[]
-            if haskey(fm, "pandoc")
-                pandoc = fm["pandoc"]
-                if isa(pandoc, Dict) && haskey(pandoc, "to")
-                    to = pandoc["to"]
-                    isa(to, String) && return to
-                end
-            end
-            return nothing
-        end
-
         function render_mimetypes(value, cell_options)
-            to_format = _to_format()
+            to_format = FRONTMATTER[]["format"]["pandoc"]["to"]
+
             result = Dict{String,@NamedTuple{error::Bool, data::Vector{UInt8}}}()
             # Some output formats that we want to write to need different
             # handling of valid MIME types. Currently `docx` and `typst`. When
@@ -374,10 +362,10 @@ function worker_init(f::File)
         function _frontmatter()
             fm = FRONTMATTER[]
 
-            fig_width_inch = get(fm, "fig-width", nothing)
-            fig_height_inch = get(fm, "fig-height", nothing)
-            fig_format = fm["fig-format"]
-            fig_dpi = get(fm, "fig-dpi", nothing)
+            fig_width_inch = fm["format"]["execute"]["fig-width"]
+            fig_height_inch = fm["format"]["execute"]["fig-height"]
+            fig_format = fm["format"]["execute"]["fig-format"]
+            fig_dpi = fm["format"]["execute"]["fig-dpi"]
 
             if fig_format == "retina"
                 fig_format = "svg"
