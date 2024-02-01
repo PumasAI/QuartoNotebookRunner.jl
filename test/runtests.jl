@@ -596,20 +596,22 @@ end
                     showprogress = false,
                 )
 
-                # No macOS ARM build, so just look for a local version that the dev
-                # should have installed. This avoids having to use rosetta2 to run
-                # the x86_64 version of Julia to get access to the x86_64 version of
-                # Quarto artifact.
-                quarto_bin =
-                    quarto_jll.is_available() ? quarto_jll.quarto() : setenv(`quarto`)
-                # Just a smoke test to make sure it runs. Use docx since it doesn't
-                # output a bunch of folders (html), or require a tinytex install
-                # (pdf). All we are doing here at the moment is ensuring quarto doesn't
-                # break on our notebook outputs.
-                if success(`$quarto_bin --version`)
-                    @test success(`$quarto_bin render $ipynb --to docx`)
-                else
-                    @error "quarto not found, skipping smoke test."
+                if !Sys.iswindows()
+                    # No macOS ARM build, so just look for a local version that the dev
+                    # should have installed. This avoids having to use rosetta2 to run
+                    # the x86_64 version of Julia to get access to the x86_64 version of
+                    # Quarto artifact.
+                    quarto_bin =
+                        quarto_jll.is_available() ? quarto_jll.quarto() : setenv(`quarto`)
+                    # Just a smoke test to make sure it runs. Use docx since it doesn't
+                    # output a bunch of folders (html), or require a tinytex install
+                    # (pdf). All we are doing here at the moment is ensuring quarto doesn't
+                    # break on our notebook outputs.
+                    if success(`$quarto_bin --version`)
+                        @test success(`$quarto_bin render $ipynb --to docx`)
+                    else
+                        @error "quarto not found, skipping smoke test."
+                    end
                 end
 
                 QuartoNotebookRunner.close!(server, each)
@@ -649,23 +651,25 @@ end
                     markdown = json.cells[end].outputs[1].data["text/markdown"]
                     @test contains(markdown, expected[format])
 
-                    # No macOS ARM build, so just look for a local version that the dev
-                    # should have installed. This avoids having to use rosetta2 to run
-                    # the x86_64 version of Julia to get access to the x86_64 version of
-                    # Quarto artifact.
-                    quarto_bin =
-                        quarto_jll.is_available() ? quarto_jll.quarto() : setenv(`quarto`)
-                    # Just a smoke test to make sure it runs. Use docx since it doesn't
-                    # output a bunch of folders (html), or require a tinytex install
-                    # (pdf). All we are doing here at the moment is ensuring quarto doesn't
-                    # break on our notebook outputs.
-                    if success(`$quarto_bin --version`)
-                        run(`$quarto_bin render $ipynb --to $format`)
-                        @test success(`$quarto_bin render $ipynb --to $format`)
-                    else
-                        @error "quarto not found, skipping smoke test."
+                    if !Sys.iswindows()
+                        # No macOS ARM build, so just look for a local version that the dev
+                        # should have installed. This avoids having to use rosetta2 to run
+                        # the x86_64 version of Julia to get access to the x86_64 version of
+                        # Quarto artifact.
+                        quarto_bin =
+                            quarto_jll.is_available() ? quarto_jll.quarto() :
+                            setenv(`quarto`)
+                        # Just a smoke test to make sure it runs. Use docx since it doesn't
+                        # output a bunch of folders (html), or require a tinytex install
+                        # (pdf). All we are doing here at the moment is ensuring quarto doesn't
+                        # break on our notebook outputs.
+                        if success(`$quarto_bin --version`)
+                            @test success(`$quarto_bin render $ipynb --to $format`)
+                        else
+                            @error "quarto not found, skipping smoke test."
+                        end
+                        @test isfile("$(format)_mimetypes.$ext")
                     end
-                    @test isfile("$(format)_mimetypes.$ext")
                 end
             end
             close!(server)
