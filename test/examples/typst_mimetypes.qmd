@@ -22,7 +22,7 @@ function Base.show(io::IO, ::MIME"QuartoNotebookRunner/typst", ::T)
     print(
         io,
         """
-        $(md ? "#" : "")[
+        $(md ? "#[" : "")
             #import "@preview/tablex:0.0.8": tablex, cellx, hlinex
 
             #tablex(
@@ -70,7 +70,7 @@ function Base.show(io::IO, ::MIME"QuartoNotebookRunner/typst", ::T)
                 cellx(colspan: 1, x: 3, y: 11, align: center + top)[1 (25%)],
                 hlinex(y: 12, stroke: 1pt),
             )
-        ]
+        $(md ? "]" : "")
         """,
     )
 end
@@ -81,7 +81,7 @@ T()
 ```
 
 ```{julia}
-# TODO: appears to not generate a caption.
+#| label: tbl-table-name
 #| tbl-cap: Caption
 T()
 ```

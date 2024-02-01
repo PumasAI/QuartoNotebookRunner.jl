@@ -389,6 +389,7 @@ T()
 ```
 
 ```{julia}
+#| label: tbl-table-name
 #| tbl-cap: Caption
 T()
 ```
