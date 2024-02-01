@@ -45,6 +45,10 @@ if get(ENV, "CI", "false") == "true"
 end
 
 @testset "QuartoNotebookRunner" begin
+
+    include("testsets/error_configuration/01.jl")
+    include("testsets/error_configuration/02.jl")
+
     @testset "socket server" begin
         cd(@__DIR__) do
             node = NodeJS_18_jll.node()

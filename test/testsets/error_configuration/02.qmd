@@ -1,0 +1,25 @@
+---
+title: Error configuration 2
+---
+
+Allow errors globally in this notebook.
+
+Disallow the following two cells to error.
+
+```{julia}
+#| error: false
+1 + ""
+```
+
+```{julia}
+#| error: false
+div(1, 0)
+```
+
+```{julia}
+1 + ""
+```
+
+```{julia}
+div(1, 0)
+```
