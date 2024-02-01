@@ -1,0 +1,87 @@
+---
+title: Typst MIME types
+keep-typ: true
+julia:
+    exeflags: ["--project=integrations/CairoMakie"]
+---
+
+```{julia}
+import CairoMakie
+```
+
+```{julia}
+CairoMakie.scatter(1:5, 1:5)
+```
+
+```{julia}
+struct T end
+
+function Base.show(io::IO, ::MIME"QuartoNotebookRunner/typst", ::T)
+    q = get(io, :QuartoNotebookRunner, nothing)
+    md = isnothing(q) ? true : isnothing(get(q.cell_options, "tbl-cap", nothing))
+    print(
+        io,
+        """
+        $(md ? "#[" : "")
+            #import "@preview/tablex:0.0.8": tablex, cellx, hlinex
+
+            #tablex(
+                columns: 4,
+                auto-vlines: false,
+                auto-hlines: false,
+                column-gutter: 0.25em,
+                hlinex(y: 0, stroke: 1pt),
+                cellx(colspan: 2, x: 2, y: 0, align: center + top)[#block([*Sex*])],
+                hlinex(y: 1, start: 2, end: 4, stroke: 0.75pt),
+                cellx(colspan: 1, x: 1, y: 1, align: center + top)[*Overall #linebreak() (n=10)*],
+                cellx(colspan: 1, x: 2, y: 1, align: center + top)[f #linebreak() (n=6)],
+                cellx(colspan: 1, x: 3, y: 1, align: center + top)[m #linebreak() (n=4)],
+                hlinex(y: 2, stroke: 0.75pt),
+                cellx(colspan: 1, x: 0, y: 2, align: left + top)[*Age (months)*],
+                cellx(colspan: 1, x: 0, y: 3, align: left + top)[#h(12.0pt)Mean (SD)],
+                cellx(colspan: 1, x: 1, y: 3, align: center + top)[45.6 (20.7)],
+                cellx(colspan: 1, x: 2, y: 3, align: center + top)[44.2 (19.1)],
+                cellx(colspan: 1, x: 3, y: 3, align: center + top)[47.8 (25.9)],
+                cellx(colspan: 1, x: 0, y: 4, align: left + top)[#h(12.0pt)Median [Min, Max]],
+                cellx(colspan: 1, x: 1, y: 4, align: center + top)[40.5 [24, 85]],
+                cellx(colspan: 1, x: 2, y: 4, align: center + top)[40.5 [24, 76]],
+                cellx(colspan: 1, x: 3, y: 4, align: center + top)[39.5 [27, 85]],
+                cellx(colspan: 1, x: 0, y: 5, align: left + top)[*Blood type*],
+                cellx(colspan: 1, x: 0, y: 6, align: left + top)[#h(12.0pt)0],
+                cellx(colspan: 1, x: 1, y: 6, align: center + top)[2 (20%)],
+                cellx(colspan: 1, x: 2, y: 6, align: center + top)[1 (16.7%)],
+                cellx(colspan: 1, x: 3, y: 6, align: center + top)[1 (25%)],
+                cellx(colspan: 1, x: 0, y: 7, align: left + top)[#h(12.0pt)A],
+                cellx(colspan: 1, x: 1, y: 7, align: center + top)[4 (40%)],
+                cellx(colspan: 1, x: 2, y: 7, align: center + top)[3 (50%)],
+                cellx(colspan: 1, x: 3, y: 7, align: center + top)[1 (25%)],
+                cellx(colspan: 1, x: 0, y: 8, align: left + top)[#h(12.0pt)B],
+                cellx(colspan: 1, x: 1, y: 8, align: center + top)[4 (40%)],
+                cellx(colspan: 1, x: 2, y: 8, align: center + top)[2 (33.3%)],
+                cellx(colspan: 1, x: 3, y: 8, align: center + top)[2 (50%)],
+                cellx(colspan: 1, x: 0, y: 9, align: left + top)[*Smoker*],
+                cellx(colspan: 1, x: 0, y: 10, align: left + top)[#h(12.0pt)false],
+                cellx(colspan: 1, x: 1, y: 10, align: center + top)[6 (60%)],
+                cellx(colspan: 1, x: 2, y: 10, align: center + top)[3 (50%)],
+                cellx(colspan: 1, x: 3, y: 10, align: center + top)[3 (75%)],
+                cellx(colspan: 1, x: 0, y: 11, align: left + top)[#h(12.0pt)true],
+                cellx(colspan: 1, x: 1, y: 11, align: center + top)[4 (40%)],
+                cellx(colspan: 1, x: 2, y: 11, align: center + top)[3 (50%)],
+                cellx(colspan: 1, x: 3, y: 11, align: center + top)[1 (25%)],
+                hlinex(y: 12, stroke: 1pt),
+            )
+        $(md ? "]" : "")
+        """,
+    )
+end
+```
+
+```{julia}
+T()
+```
+
+```{julia}
+#| label: tbl-table-name
+#| tbl-cap: Caption
+T()
+```

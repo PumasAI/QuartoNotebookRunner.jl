@@ -22,11 +22,11 @@ function worker_init(f::File)
 
         const PROJECT = Base.active_project()
         const WORKSPACE = Ref(Module(:Notebook))
-        const FRONTMATTER = Ref($(default_frontmatter()))
+        const OPTIONS = Ref(Dict{String,Any}())
 
         # Interface:
 
-        function refresh!(frontmatter = FRONTMATTER[])
+        function refresh!(options = OPTIONS[])
             # Current directory should always start out as the directory of the
             # notebook file, which is not necessarily right initially if the parent
             # process was started from a different directory to the notebook.
@@ -66,25 +66,30 @@ function worker_init(f::File)
             # can immediately activate a project environment if they want to.
             Core.eval(WORKSPACE[], :(import Main: Pkg, ojs_define))
 
-            # Rerun the package loading hooks if the frontmatter has changed.
-            if FRONTMATTER[] != frontmatter
-                FRONTMATTER[] = frontmatter
+            # Rerun the package loading hooks if the options have changed.
+            if OPTIONS[] != options
+                OPTIONS[] = options
                 for (pkgid, hook) in PACKAGE_LOADING_HOOKS
                     if haskey(Base.loaded_modules, pkgid)
                         hook()
                     end
                 end
             else
-                FRONTMATTER[] = frontmatter
+                OPTIONS[] = options
             end
 
             return nothing
         end
 
-        function render(code::AbstractString, file::AbstractString, line::Integer)
+        function render(
+            code::AbstractString,
+            file::AbstractString,
+            line::Integer,
+            cell_options::AbstractDict,
+        )
             captured =
                 Base.@invokelatest include_str(WORKSPACE[], code; file = file, line = line)
-            results = Base.@invokelatest render_mimetypes(captured.value)
+            results = Base.@invokelatest render_mimetypes(captured.value, cell_options)
             return (;
                 results,
                 output = captured.output,
@@ -174,7 +179,23 @@ function worker_init(f::File)
         end
 
         # passing our module removes Main.Notebook noise when printing types etc.
-        with_context(io::IO) = IOContext(io, :module => WORKSPACE[], :color => true)
+        function with_context(io::IO, cell_options = Dict{String,Any}())
+            return IOContext(
+                io,
+                :module => WORKSPACE[],
+                :color => true,
+                # This allows a `show` method implementation to check for
+                # metadata that may be of relevance to it's rendering. For
+                # example, if a `typst` table is rendered with a caption
+                # (available in the `cell_options`) then we need to adjust the
+                # syntax that is output via the `QuartoNotebookRunner/typst`
+                # show method to switch between `markdown` and `code` "mode".
+                #
+                # TODO: perhaps preprocess the metadata provided here rather
+                # than just passing it through as-is.
+                :QuartoNotebookRunner => (; cell_options, options = OPTIONS[]),
+            )
+        end
 
         function clean_bt_str(is_error::Bool, bt, err, prefix = "", mimetype = false)
             is_error || return UInt8[]
@@ -200,21 +221,60 @@ function worker_init(f::File)
             return take!(buf)
         end
 
-        function render_mimetypes(value)
+        function render_mimetypes(value, cell_options)
+            to_format = OPTIONS[]["format"]["pandoc"]["to"]
+
             result = Dict{String,@NamedTuple{error::Bool, data::Vector{UInt8}}}()
-            mimes = [
-                "text/plain",
-                "text/html",
-                "text/latex",
-                "image/svg+xml",
-                "image/png",
-                "application/json",
-            ]
+            # Some output formats that we want to write to need different
+            # handling of valid MIME types. Currently `docx` and `typst`. When
+            # we detect that the `to` format is one of these then we select a
+            # different set of MIME types to try and render the value as. The
+            # `QuartoNotebookRunner/*` MIME types are unique to this package and
+            # are how package authors can hook into the display system used here
+            # to allow their types to be rendered correctly in different
+            # outputs.
+            #
+            # NOTE: We may revise this approach at any point in time and these
+            # should be considered implementation details until officially
+            # documented.
+            mime_groups = Dict(
+                "docx" => [
+                    "QuartoNotebookRunner/openxml",
+                    "text/plain",
+                    "text/markdown",
+                    "text/latex",
+                    "image/svg+xml",
+                    "image/png",
+                ],
+                "typst" => [
+                    "QuartoNotebookRunner/typst",
+                    "text/plain",
+                    "text/markdown",
+                    "text/latex",
+                    "image/svg+xml",
+                    "image/png",
+                ],
+            )
+            mimes = get(mime_groups, to_format) do
+                [
+                    "text/plain",
+                    "text/markdown",
+                    "text/html",
+                    "text/latex",
+                    "image/svg+xml",
+                    "image/png",
+                    "application/json",
+                ]
+            end
             for mime in mimes
                 if showable(mime, value)
                     buffer = IOBuffer()
                     try
-                        Base.@invokelatest show(with_context(buffer), mime, value)
+                        Base.@invokelatest show(
+                            with_context(buffer, cell_options),
+                            mime,
+                            value,
+                        )
                     catch error
                         backtrace = catch_backtrace()
                         result[mime] = (;
@@ -229,19 +289,45 @@ function worker_init(f::File)
                         )
                         continue
                     end
+                    # See whether the current MIME type needs to be handled
+                    # specially and embedded in a raw markdown block and whether
+                    # we should skip attempting to render any other MIME types
+                    # to may match.
+                    skip_other_mimes, new_mime, new_buffer = _transform_output(mime, buffer)
                     # Only send back the bytes, we do the processing of the
                     # data on the parent process where we have access to
                     # whatever packages we need, e.g. working out the size
                     # of a PNG image or converting a JSON string to an
                     # actual JSON object that avoids double serializing it
                     # in the notebook output.
-                    result[mime] = (; error = false, data = take!(buffer))
+                    result[new_mime] = (; error = false, data = take!(new_buffer))
+                    skip_other_mimes && break
                 end
             end
             return result
         end
-        render_mimetypes(value::Nothing) =
+        render_mimetypes(value::Nothing, cell_options) =
             Dict{String,@NamedTuple{error::Bool, data::Vector{UInt8}}}()
+
+        # Our custom MIME types need special handling. They get rendered to
+        # `text/markdown` blocks with the original content wrapped in a raw
+        # markdown block. MIMEs that don't match just get passed through.
+        function _transform_output(mime::String, buffer::IO)
+            mapping = Dict(
+                "QuartoNotebookRunner/openxml" => (true, "text/markdown", "openxml"),
+                "QuartoNotebookRunner/typst" => (true, "text/markdown", "typst"),
+            )
+            if haskey(mapping, mime)
+                (skip_other_mimes, mime, raw) = mapping[mime]
+                io = IOBuffer()
+                println(io, "```{=$raw}")
+                println(io, rstrip(read(seekstart(buffer), String)))
+                println(io, "```")
+                return (skip_other_mimes, mime, io)
+            else
+                return (false, mime, buffer)
+            end
+        end
 
         # Integrations:
 
@@ -272,13 +358,13 @@ function worker_init(f::File)
             end
         end
 
-        function _frontmatter()
-            fm = FRONTMATTER[]
+        function _figure_metadata()
+            options = OPTIONS[]
 
-            fig_width_inch = get(fm, "fig-width", nothing)
-            fig_height_inch = get(fm, "fig-height", nothing)
-            fig_format = fm["fig-format"]
-            fig_dpi = get(fm, "fig-dpi", nothing)
+            fig_width_inch = options["format"]["execute"]["fig-width"]
+            fig_height_inch = options["format"]["execute"]["fig-height"]
+            fig_format = options["format"]["execute"]["fig-format"]
+            fig_dpi = options["format"]["execute"]["fig-dpi"]
 
             if fig_format == "retina"
                 fig_format = "svg"
@@ -305,7 +391,7 @@ function worker_init(f::File)
         end
 
         function _CairoMakie_hook(pkgid::Base.PkgId, CairoMakie::Module)
-            fm = _frontmatter()
+            fm = _figure_metadata()
             if fm.fig_dpi !== nothing
                 kwargs = Dict{Symbol,Any}(
                     :px_per_unit => fm.fig_dpi / 96,
@@ -323,7 +409,7 @@ function worker_init(f::File)
         _CairoMakie_hook(::Any...) = nothing
 
         function _Makie_hook(pkgid::Base.PkgId, Makie::Module)
-            fm = _frontmatter()
+            fm = _figure_metadata()
             # only change Makie theme if sizes are set, if only one is set, pick an aspect ratio of 4/3
             # which might be more user-friendly than throwing an error
             if fm.fig_width_inch !== nothing || fm.fig_height_inch !== nothing
@@ -349,7 +435,7 @@ function worker_init(f::File)
         _Makie_hook(::Any...) = nothing
 
         function _Plots_hook(pkgid::Base.PkgId, Plots::Module)
-            fm = _frontmatter()
+            fm = _figure_metadata()
             # Convert inches to CSS pixels or device-independent pixels.
             # Empirically, an SVG is saved by Plots with width and height taken directly as CSS pixels (without unit specified)
             # so the conversion with the 96 factor would be correct in that setting.

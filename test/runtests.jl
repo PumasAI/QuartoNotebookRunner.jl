@@ -76,7 +76,6 @@ end
     schema = JSONSchema.Schema(
         open(JSON3.read, joinpath(@__DIR__, "schema/nbformat.v4.schema.json")),
     )
-    server = QuartoNotebookRunner.Server()
     examples = joinpath(@__DIR__, "examples")
 
     function common_tests(json)
@@ -562,6 +561,7 @@ end
 
         tests
     end
+    server = QuartoNotebookRunner.Server()
     for (root, dirs, files) in walkdir(examples)
         for each in files
             _, ext = splitext(each)
@@ -583,7 +583,9 @@ end
                 # File-specific tests.
                 @testset "$(relpath(each, pwd()))" begin
                     common_tests(json)
-                    get(() -> _ -> @test(false), tests, each)(json)
+                    if haskey(tests, each)
+                        tests[each](json)
+                    end
                 end
 
                 ipynb = joinpath(examples, with_extension(each, "ipynb"))
@@ -594,30 +596,84 @@ end
                     showprogress = false,
                 )
 
-                # No macOS ARM build, so just look for a local version that the dev
-                # should have installed. This avoids having to use rosetta2 to run
-                # the x86_64 version of Julia to get access to the x86_64 version of
-                # Quarto artifact.
-                quarto_bin =
-                    quarto_jll.is_available() ? quarto_jll.quarto() : setenv(`quarto`)
-                # Just a smoke test to make sure it runs. Use docx since it doesn't
-                # output a bunch of folders (html), or require a tinytex install
-                # (pdf). All we are doing here at the moment is ensuring quarto doesn't
-                # break on our notebook outputs.
-                if success(`$quarto_bin --version`)
-                    @test success(`$quarto_bin render $ipynb --to docx`)
-                else
-                    @error "quarto not found, skipping smoke test."
+                if !Sys.iswindows()
+                    # No macOS ARM build, so just look for a local version that the dev
+                    # should have installed. This avoids having to use rosetta2 to run
+                    # the x86_64 version of Julia to get access to the x86_64 version of
+                    # Quarto artifact.
+                    quarto_bin =
+                        quarto_jll.is_available() ? quarto_jll.quarto() : setenv(`quarto`)
+                    # Just a smoke test to make sure it runs. Use docx since it doesn't
+                    # output a bunch of folders (html), or require a tinytex install
+                    # (pdf). All we are doing here at the moment is ensuring quarto doesn't
+                    # break on our notebook outputs.
+                    if success(`$quarto_bin --version`)
+                        @test success(`$quarto_bin render $ipynb --to docx`)
+                    else
+                        @error "quarto not found, skipping smoke test."
+                    end
                 end
 
                 QuartoNotebookRunner.close!(server, each)
             end
         end
     end
+    close!(server)
 
     # Switching exeflags within a running notebook causes it to restart so that
     # the new exeflags can be applied.
     mktempdir() do dir
+        @testset "non-standard mime types" begin
+            server = QuartoNotebookRunner.Server()
+            expected = Dict("typst" => "```{=typst}", "docx" => "```{=openxml}")
+
+            env = joinpath(dir, "integrations", "CairoMakie")
+            mkpath(env)
+            cp(joinpath(@__DIR__, "examples/integrations/CairoMakie"), env; force = true)
+
+            for (format, ext) in ("typst" => "pdf", "docx" => "docx")
+                cd(dir) do
+                    source = joinpath(@__DIR__, "examples/$(format)_mimetypes.qmd")
+                    content = read(source, String)
+                    write("$(format)_mimetypes.qmd", content)
+                    ipynb = "$(format)_mimetypes.ipynb"
+                    QuartoNotebookRunner.run!(
+                        server,
+                        "$(format)_mimetypes.qmd";
+                        output = ipynb,
+                        showprogress = false,
+                        options = Dict{String,Any}(
+                            "format" => Dict("pandoc" => Dict("to" => format)),
+                        ),
+                    )
+
+                    json = JSON3.read(ipynb)
+                    markdown = json.cells[end].outputs[1].data["text/markdown"]
+                    @test contains(markdown, expected[format])
+
+                    if !Sys.iswindows()
+                        # No macOS ARM build, so just look for a local version that the dev
+                        # should have installed. This avoids having to use rosetta2 to run
+                        # the x86_64 version of Julia to get access to the x86_64 version of
+                        # Quarto artifact.
+                        quarto_bin =
+                            quarto_jll.is_available() ? quarto_jll.quarto() :
+                            setenv(`quarto`)
+                        # Just a smoke test to make sure it runs. Use docx since it doesn't
+                        # output a bunch of folders (html), or require a tinytex install
+                        # (pdf). All we are doing here at the moment is ensuring quarto doesn't
+                        # break on our notebook outputs.
+                        if success(`$quarto_bin --version`)
+                            @test success(`$quarto_bin render $ipynb --to $format`)
+                        else
+                            @error "quarto not found, skipping smoke test."
+                        end
+                        @test isfile("$(format)_mimetypes.$ext")
+                    end
+                end
+            end
+            close!(server)
+        end
         @testset "exeflags notebook restart" begin
             content = read(joinpath(@__DIR__, "examples/stdout_exeflags.qmd"), String)
             cd(dir) do
@@ -750,6 +806,8 @@ end
                 "data" => Dict("text/plain" => "T(\"\")"),
                 "metadata" => Dict(),
             )
+
+            close!(server)
         end
 
         @testset "render" begin
@@ -823,6 +881,8 @@ end
                 output = buffer,
                 showprogress = false,
             )
+
+            close!(server)
         end
 
         @testset "Invalid eval option" begin
@@ -849,6 +909,8 @@ end
                 output = buffer,
                 showprogress = false,
             )
+
+            close!(server)
         end
 
         @testset "relative paths in `output`" begin
@@ -880,7 +942,11 @@ end
                 cp(joinpath(@__DIR__, "examples/mimetypes"), joinpath(dir, "mimetypes"))
                 server = QuartoNotebookRunner.Server()
                 write("mimetypes.qmd", content)
-                options = Dict{String,Any}("metadata" => Dict{String,Any}("fig-dpi" => 100))
+                options = Dict{String,Any}(
+                    "format" => Dict{String,Any}(
+                        "execute" => Dict{String,Any}("fig-dpi" => 100),
+                    ),
+                )
                 json = QuartoNotebookRunner.run!(
                     server,
                     "mimetypes.qmd";
@@ -907,6 +973,8 @@ end
                 metadata = cell.outputs[1].metadata["image/png"]
                 @test metadata.width == 625
                 @test metadata.height == 469
+
+                close!(server)
             end
         end
 

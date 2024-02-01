@@ -47,15 +47,15 @@ function init!(file::File)
     Malt.remote_eval_fetch(worker, worker_init(file))
 end
 
-function refresh!(file::File, frontmatter::Dict)
-    exeflags = frontmatter["julia"]["exeflags"]
+function refresh!(file::File, options::Dict)
+    exeflags = options["format"]["metadata"]["julia"]["exeflags"]
     if exeflags != file.exeflags
         Malt.stop(file.worker)
         file.worker = cd(() -> Malt.Worker(; exeflags), dirname(file.path))
         file.exeflags = exeflags
         init!(file)
     end
-    expr = :(refresh!($(frontmatter)))
+    expr = :(refresh!($(options)))
     Malt.remote_eval_fetch(file.worker, expr)
 end
 
@@ -79,11 +79,8 @@ function evaluate!(
     path = abspath(f.path)
     if isfile(path)
         raw_chunks, file_frontmatter = raw_text_chunks(f)
-        # TODO: retrieve `pandoc` options out of here as well so that we can adjust
-        # the output mimetypes in the worker process based on the format.
-        merged_frontmatter = get(options, "metadata", file_frontmatter)
-        merged_frontmatter = _recursive_merge(default_frontmatter(), merged_frontmatter)
-        cells = evaluate_raw_cells!(f, raw_chunks, merged_frontmatter; showprogress)
+        merged_options = _extract_relevant_options(file_frontmatter, options)
+        cells = evaluate_raw_cells!(f, raw_chunks, merged_options; showprogress)
         data = (
             metadata = (
                 kernelspec = (
@@ -106,6 +103,70 @@ function evaluate!(
     else
         throw(ArgumentError("file does not exist: $(path)"))
     end
+end
+
+function _extract_relevant_options(file_frontmatter::Dict, options::Dict)
+    file_frontmatter = _recursive_merge(default_frontmatter(), file_frontmatter)
+
+    fig_width_default = get(file_frontmatter, "fig-width", nothing)
+    fig_height_default = get(file_frontmatter, "fig-height", nothing)
+    fig_format_default = get(file_frontmatter, "fig-format", nothing)
+    fig_dpi_default = get(file_frontmatter, "fig-dpi", nothing)
+
+    pandoc_to_default = nothing
+
+    julia_default = get(file_frontmatter, "julia", nothing)
+
+    if isempty(options)
+        return _options_template(;
+            fig_width = fig_width_default,
+            fig_height = fig_height_default,
+            fig_format = fig_format_default,
+            fig_dpi = fig_dpi_default,
+            pandoc_to = pandoc_to_default,
+            julia = julia_default,
+        )
+    else
+        D = Dict{String,Any}
+
+        format = get(D, options, "format")
+        execute = get(D, format, "execute")
+        fig_width = get(execute, "fig-width", fig_width_default)
+        fig_height = get(execute, "fig-height", fig_height_default)
+        fig_format = get(execute, "fig-format", fig_format_default)
+        fig_dpi = get(execute, "fig-dpi", fig_dpi_default)
+
+        pandoc = get(D, format, "pandoc")
+        pandoc_to = get(pandoc, "to", pandoc_to_default)
+
+        metadata = get(D, format, "metadata")
+        julia = get(metadata, "julia", julia_default)
+
+        return _options_template(;
+            fig_width,
+            fig_height,
+            fig_format,
+            fig_dpi,
+            pandoc_to,
+            julia,
+        )
+    end
+end
+
+function _options_template(; fig_width, fig_height, fig_format, fig_dpi, pandoc_to, julia)
+    D = Dict{String,Any}
+    return D(
+        "format" => D(
+            "execute" => D(
+                "fig-width" => fig_width,
+                "fig-height" => fig_height,
+                "fig-format" => fig_format,
+                "fig-dpi" => fig_dpi,
+            ),
+            "pandoc" => D("to" => pandoc_to),
+            "metadata" => D("julia" => julia),
+        ),
+    )
 end
 
 function _parsed_options(options::String)
@@ -192,7 +253,10 @@ function raw_markdown_chunks(path::String)
                         "Cannot handle an `eval` code cell option with value $(repr(evaluate)), only true or false.",
                     )
                 end
-                push!(raw_chunks, (type = :code, source, file = path, line, evaluate))
+                push!(
+                    raw_chunks,
+                    (type = :code, source, file = path, line, evaluate, cell_options),
+                )
             end
         end
         if terminal_line <= length(source_lines)
@@ -300,7 +364,14 @@ function raw_script_chunks(path::String)
                 end
                 push!(
                     raw_chunks,
-                    (type = :code, source, file = path, line = start_line, evaluate),
+                    (;
+                        type = :code,
+                        source,
+                        file = path,
+                        line = start_line,
+                        evaluate,
+                        cell_options,
+                    ),
                 )
             elseif type == :markdown
                 try
@@ -390,13 +461,8 @@ end
 Evaluate the raw cells in `chunks` and return a vector of cells with the results
 in all available mimetypes.
 """
-function evaluate_raw_cells!(
-    f::File,
-    chunks::Vector,
-    frontmatter::Dict;
-    showprogress = true,
-)
-    refresh!(f, frontmatter)
+function evaluate_raw_cells!(f::File, chunks::Vector, options::Dict; showprogress = true)
+    refresh!(f, options)
     cells = []
     @maybe_progress showprogress "Running $(relpath(f.path, pwd()))" for (nth, chunk) in
                                                                          enumerate(chunks)
@@ -407,7 +473,12 @@ function evaluate_raw_cells!(
             if chunk.evaluate
                 # Offset the line number by 1 to account for the triple backticks
                 # that are part of the markdown syntax for code blocks.
-                expr = :(render($chunk.source, $(chunk.file), $(chunk.line + 1)))
+                expr = :(render(
+                    $chunk.source,
+                    $(chunk.file),
+                    $(chunk.line + 1),
+                    $(chunk.cell_options),
+                ))
                 remote = Malt.remote_eval_fetch(f.worker, expr)
                 processed = process_results(remote.results)
 
@@ -546,6 +617,7 @@ function process_results(dict::Dict{String,@NamedTuple{error::Bool, data::Vector
     funcs = Dict(
         "application/json" => json_reader,
         "text/plain" => String,
+        "text/markdown" => String,
         "text/html" => String,
         "text/latex" => String,
         "image/svg+xml" => String,
