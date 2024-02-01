@@ -253,6 +253,7 @@ function worker_init(f::File)
                 "docx" => [
                     "QuartoNotebookRunner/openxml",
                     "text/plain",
+                    "text/markdown",
                     "text/latex",
                     "text/html",
                     "image/svg+xml",
@@ -261,6 +262,7 @@ function worker_init(f::File)
                 "typst" => [
                     "QuartoNotebookRunner/typst",
                     "text/plain",
+                    "text/markdown",
                     "text/latex",
                     "image/svg+xml",
                     "image/png",
@@ -269,6 +271,7 @@ function worker_init(f::File)
             mimes = get(mime_groups, to_format) do
                 [
                     "text/plain",
+                    "text/markdown",
                     "text/html",
                     "text/latex",
                     "image/svg+xml",
