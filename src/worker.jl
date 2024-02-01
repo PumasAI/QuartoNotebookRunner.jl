@@ -22,11 +22,11 @@ function worker_init(f::File)
 
         const PROJECT = Base.active_project()
         const WORKSPACE = Ref(Module(:Notebook))
-        const FRONTMATTER = Ref($(default_frontmatter()))
+        const OPTIONS = Ref(Dict{String,Any}())
 
         # Interface:
 
-        function refresh!(frontmatter = FRONTMATTER[])
+        function refresh!(options = OPTIONS[])
             # Current directory should always start out as the directory of the
             # notebook file, which is not necessarily right initially if the parent
             # process was started from a different directory to the notebook.
@@ -66,16 +66,16 @@ function worker_init(f::File)
             # can immediately activate a project environment if they want to.
             Core.eval(WORKSPACE[], :(import Main: Pkg, ojs_define))
 
-            # Rerun the package loading hooks if the frontmatter has changed.
-            if FRONTMATTER[] != frontmatter
-                FRONTMATTER[] = frontmatter
+            # Rerun the package loading hooks if the options have changed.
+            if OPTIONS[] != options
+                OPTIONS[] = options
                 for (pkgid, hook) in PACKAGE_LOADING_HOOKS
                     if haskey(Base.loaded_modules, pkgid)
                         hook()
                     end
                 end
             else
-                FRONTMATTER[] = frontmatter
+                OPTIONS[] = options
             end
 
             return nothing
@@ -193,7 +193,7 @@ function worker_init(f::File)
                 #
                 # TODO: perhaps preprocess the metadata provided here rather
                 # than just passing it through as-is.
-                :QuartoNotebookRunner => (; cell_options, frontmatter = FRONTMATTER[]),
+                :QuartoNotebookRunner => (; cell_options, options = OPTIONS[]),
             )
         end
 
@@ -222,7 +222,7 @@ function worker_init(f::File)
         end
 
         function render_mimetypes(value, cell_options)
-            to_format = FRONTMATTER[]["format"]["pandoc"]["to"]
+            to_format = OPTIONS[]["format"]["pandoc"]["to"]
 
             result = Dict{String,@NamedTuple{error::Bool, data::Vector{UInt8}}}()
             # Some output formats that we want to write to need different
@@ -359,13 +359,13 @@ function worker_init(f::File)
             end
         end
 
-        function _frontmatter()
-            fm = FRONTMATTER[]
+        function _figure_metadata()
+            options = OPTIONS[]
 
-            fig_width_inch = fm["format"]["execute"]["fig-width"]
-            fig_height_inch = fm["format"]["execute"]["fig-height"]
-            fig_format = fm["format"]["execute"]["fig-format"]
-            fig_dpi = fm["format"]["execute"]["fig-dpi"]
+            fig_width_inch = options["format"]["execute"]["fig-width"]
+            fig_height_inch = options["format"]["execute"]["fig-height"]
+            fig_format = options["format"]["execute"]["fig-format"]
+            fig_dpi = options["format"]["execute"]["fig-dpi"]
 
             if fig_format == "retina"
                 fig_format = "svg"
@@ -392,7 +392,7 @@ function worker_init(f::File)
         end
 
         function _CairoMakie_hook(pkgid::Base.PkgId, CairoMakie::Module)
-            fm = _frontmatter()
+            fm = _figure_metadata()
             if fm.fig_dpi !== nothing
                 kwargs = Dict{Symbol,Any}(
                     :px_per_unit => fm.fig_dpi / 96,
@@ -410,7 +410,7 @@ function worker_init(f::File)
         _CairoMakie_hook(::Any...) = nothing
 
         function _Makie_hook(pkgid::Base.PkgId, Makie::Module)
-            fm = _frontmatter()
+            fm = _figure_metadata()
             # only change Makie theme if sizes are set, if only one is set, pick an aspect ratio of 4/3
             # which might be more user-friendly than throwing an error
             if fm.fig_width_inch !== nothing || fm.fig_height_inch !== nothing
@@ -436,7 +436,7 @@ function worker_init(f::File)
         _Makie_hook(::Any...) = nothing
 
         function _Plots_hook(pkgid::Base.PkgId, Plots::Module)
-            fm = _frontmatter()
+            fm = _figure_metadata()
             # Convert inches to CSS pixels or device-independent pixels.
             # Empirically, an SVG is saved by Plots with width and height taken directly as CSS pixels (without unit specified)
             # so the conversion with the 96 factor would be correct in that setting.

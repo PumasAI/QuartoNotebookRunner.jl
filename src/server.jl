@@ -47,15 +47,15 @@ function init!(file::File)
     Malt.remote_eval_fetch(worker, worker_init(file))
 end
 
-function refresh!(file::File, frontmatter::Dict)
-    exeflags = frontmatter["format"]["metadata"]["julia"]["exeflags"]
+function refresh!(file::File, options::Dict)
+    exeflags = options["format"]["metadata"]["julia"]["exeflags"]
     if exeflags != file.exeflags
         Malt.stop(file.worker)
         file.worker = cd(() -> Malt.Worker(; exeflags), dirname(file.path))
         file.exeflags = exeflags
         init!(file)
     end
-    expr = :(refresh!($(frontmatter)))
+    expr = :(refresh!($(options)))
     Malt.remote_eval_fetch(file.worker, expr)
 end
 
@@ -79,8 +79,8 @@ function evaluate!(
     path = abspath(f.path)
     if isfile(path)
         raw_chunks, file_frontmatter = raw_text_chunks(f)
-        merged_frontmatter = _extract_relevant_frontmatter(file_frontmatter, options)
-        cells = evaluate_raw_cells!(f, raw_chunks, merged_frontmatter; showprogress)
+        merged_options = _extract_relevant_options(file_frontmatter, options)
+        cells = evaluate_raw_cells!(f, raw_chunks, merged_options; showprogress)
         data = (
             metadata = (
                 kernelspec = (
@@ -105,7 +105,7 @@ function evaluate!(
     end
 end
 
-function _extract_relevant_frontmatter(file_frontmatter::Dict, options::Dict)
+function _extract_relevant_options(file_frontmatter::Dict, options::Dict)
     file_frontmatter = _recursive_merge(default_frontmatter(), file_frontmatter)
 
     fig_width_default = get(file_frontmatter, "fig-width", nothing)
@@ -118,7 +118,7 @@ function _extract_relevant_frontmatter(file_frontmatter::Dict, options::Dict)
     julia_default = get(file_frontmatter, "julia", nothing)
 
     if isempty(options)
-        return _frontmatter_template(;
+        return _options_template(;
             fig_width = fig_width_default,
             fig_height = fig_height_default,
             fig_format = fig_format_default,
@@ -142,7 +142,7 @@ function _extract_relevant_frontmatter(file_frontmatter::Dict, options::Dict)
         metadata = get(D, format, "metadata")
         julia = get(metadata, "julia", julia_default)
 
-        return _frontmatter_template(;
+        return _options_template(;
             fig_width,
             fig_height,
             fig_format,
@@ -153,14 +153,7 @@ function _extract_relevant_frontmatter(file_frontmatter::Dict, options::Dict)
     end
 end
 
-function _frontmatter_template(;
-    fig_width,
-    fig_height,
-    fig_format,
-    fig_dpi,
-    pandoc_to,
-    julia,
-)
+function _options_template(; fig_width, fig_height, fig_format, fig_dpi, pandoc_to, julia)
     D = Dict{String,Any}
     return D(
         "format" => D(
@@ -468,13 +461,8 @@ end
 Evaluate the raw cells in `chunks` and return a vector of cells with the results
 in all available mimetypes.
 """
-function evaluate_raw_cells!(
-    f::File,
-    chunks::Vector,
-    frontmatter::Dict;
-    showprogress = true,
-)
-    refresh!(f, frontmatter)
+function evaluate_raw_cells!(f::File, chunks::Vector, options::Dict; showprogress = true)
+    refresh!(f, options)
     cells = []
     @maybe_progress showprogress "Running $(relpath(f.path, pwd()))" for (nth, chunk) in
                                                                          enumerate(chunks)
