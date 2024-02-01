@@ -243,7 +243,6 @@ function worker_init(f::File)
                     "text/plain",
                     "text/markdown",
                     "text/latex",
-                    "text/html",
                     "image/svg+xml",
                     "image/png",
                 ],

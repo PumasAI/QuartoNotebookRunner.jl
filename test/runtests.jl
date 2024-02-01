@@ -583,7 +583,9 @@ end
                 # File-specific tests.
                 @testset "$(relpath(each, pwd()))" begin
                     common_tests(json)
-                    get(() -> _ -> @test(false), tests, each)(json)
+                    if haskey(tests, each)
+                        tests[each](json)
+                    end
                 end
 
                 ipynb = joinpath(examples, with_extension(each, "ipynb"))
@@ -989,4 +991,42 @@ end
             end
         end
     end
+
+    @testset "non-standard mime types" begin
+        server = QuartoNotebookRunner.Server()
+        expected = Dict("typst" => "```{=typst}", "docx" => "```{=openxml}")
+        for (format, ext) in ("typst" => "pdf", "docx" => "docx")
+            ipynb = joinpath(@__DIR__, "examples/$(format)_mimetypes.ipynb")
+            QuartoNotebookRunner.run!(
+                server,
+                joinpath(@__DIR__, "examples/$(format)_mimetypes.qmd");
+                output = ipynb,
+                showprogress = false,
+                options = Dict{String,Any}(
+                    "format" => Dict("pandoc" => Dict("to" => format)),
+                ),
+            )
+
+            json = JSON3.read(ipynb)
+            markdown = json.cells[end].outputs[1].data["text/markdown"]
+            @test contains(markdown, expected[format])
+
+            # No macOS ARM build, so just look for a local version that the dev
+            # should have installed. This avoids having to use rosetta2 to run
+            # the x86_64 version of Julia to get access to the x86_64 version of
+            # Quarto artifact.
+            quarto_bin = quarto_jll.is_available() ? quarto_jll.quarto() : setenv(`quarto`)
+            # Just a smoke test to make sure it runs. Use docx since it doesn't
+            # output a bunch of folders (html), or require a tinytex install
+            # (pdf). All we are doing here at the moment is ensuring quarto doesn't
+            # break on our notebook outputs.
+            if success(`$quarto_bin --version`)
+                @test success(`$quarto_bin render $ipynb --to $format`)
+            else
+                @error "quarto not found, skipping smoke test."
+            end
+            @test isfile(joinpath(@__DIR__, "examples/$(format)_mimetypes.$ext"))
+        end
+    end
+
 end

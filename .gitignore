@@ -3,4 +3,6 @@ Manifest.toml
 *.html
 *.ipynb
 *.pdf
+*.typ
+*.png
 .DS_Store
