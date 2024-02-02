@@ -1,0 +1,35 @@
+---
+title: Error configuration 1
+execute:
+    error: false
+---
+
+Disallow errors globally in this notebook.
+
+```{julia}
+1 + ""
+```
+
+```{julia}
+div(1, 0)
+```
+
+Allow the following cells to error.
+
+```{julia}
+#| error: true
+1 + ""
+```
+
+```{julia}
+#| error: true
+div(1, 0)
+```
+
+A `Base.show` error. These take a different code path internally.
+
+```{julia}
+struct T end
+Base.show(io::IO, ::T) = error("T failed to show.")
+T()
+```

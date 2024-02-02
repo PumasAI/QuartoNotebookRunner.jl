@@ -106,12 +106,15 @@ function evaluate!(
 end
 
 function _extract_relevant_options(file_frontmatter::Dict, options::Dict)
+    D = Dict{String,Any}
+
     file_frontmatter = _recursive_merge(default_frontmatter(), file_frontmatter)
 
     fig_width_default = get(file_frontmatter, "fig-width", nothing)
     fig_height_default = get(file_frontmatter, "fig-height", nothing)
     fig_format_default = get(file_frontmatter, "fig-format", nothing)
     fig_dpi_default = get(file_frontmatter, "fig-dpi", nothing)
+    error_default = get(get(D, file_frontmatter, "execute"), "error", true)
 
     pandoc_to_default = nothing
 
@@ -123,18 +126,18 @@ function _extract_relevant_options(file_frontmatter::Dict, options::Dict)
             fig_height = fig_height_default,
             fig_format = fig_format_default,
             fig_dpi = fig_dpi_default,
+            error = error_default,
             pandoc_to = pandoc_to_default,
             julia = julia_default,
         )
     else
-        D = Dict{String,Any}
-
         format = get(D, options, "format")
         execute = get(D, format, "execute")
         fig_width = get(execute, "fig-width", fig_width_default)
         fig_height = get(execute, "fig-height", fig_height_default)
         fig_format = get(execute, "fig-format", fig_format_default)
         fig_dpi = get(execute, "fig-dpi", fig_dpi_default)
+        error = get(execute, "error", error_default)
 
         pandoc = get(D, format, "pandoc")
         pandoc_to = get(pandoc, "to", pandoc_to_default)
@@ -147,13 +150,22 @@ function _extract_relevant_options(file_frontmatter::Dict, options::Dict)
             fig_height,
             fig_format,
             fig_dpi,
+            error,
             pandoc_to,
             julia,
         )
     end
 end
 
-function _options_template(; fig_width, fig_height, fig_format, fig_dpi, pandoc_to, julia)
+function _options_template(;
+    fig_width,
+    fig_height,
+    fig_format,
+    fig_dpi,
+    error,
+    pandoc_to,
+    julia,
+)
     D = Dict{String,Any}
     return D(
         "format" => D(
@@ -162,6 +174,7 @@ function _options_template(; fig_width, fig_height, fig_format, fig_dpi, pandoc_
                 "fig-height" => fig_height,
                 "fig-format" => fig_format,
                 "fig-dpi" => fig_dpi,
+                "error" => error,
             ),
             "pandoc" => D("to" => pandoc_to),
             "metadata" => D("julia" => julia),
@@ -429,7 +442,12 @@ function raw_script_chunks(path::String)
 end
 
 function default_frontmatter()
-    Dict{String,Any}("fig-format" => "png", "julia" => Dict{String,Any}("exeflags" => []))
+    D = Dict{String,Any}
+    return D(
+        "fig-format" => "png",
+        "julia" => D("exeflags" => []),
+        "execute" => D("error" => true),
+    )
 end
 
 # Convenience macro that outputs
@@ -464,8 +482,12 @@ in all available mimetypes.
 function evaluate_raw_cells!(f::File, chunks::Vector, options::Dict; showprogress = true)
     refresh!(f, options)
     cells = []
-    @maybe_progress showprogress "Running $(relpath(f.path, pwd()))" for (nth, chunk) in
-                                                                         enumerate(chunks)
+
+    has_error = false
+    allow_error_global = options["format"]["execute"]["error"]
+
+    header = "Running $(relpath(f.path, pwd()))"
+    @maybe_progress showprogress "$header" for (nth, chunk) in enumerate(chunks)
         if chunk.type === :code
 
             outputs = []
@@ -482,6 +504,10 @@ function evaluate_raw_cells!(f::File, chunks::Vector, options::Dict; showprogres
                 remote = Malt.remote_eval_fetch(f.worker, expr)
                 processed = process_results(remote.results)
 
+                # Should this notebook cell be allowed to throw an error? When
+                # not allowed, we log all errors don't generate an output.
+                allow_error_cell = get(chunk.cell_options, "error", allow_error_global)
+
                 if isnothing(remote.error)
                     push!(
                         outputs,
@@ -493,6 +519,9 @@ function evaluate_raw_cells!(f::File, chunks::Vector, options::Dict; showprogres
                         ),
                     )
                 else
+                    # These are errors arising from evaluation of the contents
+                    # of a code cell, not from the `show` output of the values,
+                    # which is handled separately below.
                     push!(
                         outputs,
                         (;
@@ -502,6 +531,12 @@ function evaluate_raw_cells!(f::File, chunks::Vector, options::Dict; showprogres
                             traceback = remote.backtrace,
                         ),
                     )
+                    if !allow_error_cell
+                        file = "$(chunk.file):$(chunk.line)"
+                        traceback = Text(join(remote.backtrace, "\n"))
+                        @error "stopping notebook evaluation due to unexpected cell error." file traceback
+                        has_error = true
+                    end
                 end
 
                 if !isempty(remote.output)
@@ -511,8 +546,20 @@ function evaluate_raw_cells!(f::File, chunks::Vector, options::Dict; showprogres
                     )
                 end
 
+                # These are errors arising from the `show` output of the values
+                # generated by cells, not from the cell evaluation itself. So if
+                # something throws an error here then the user's `show` method
+                # has a bug.
                 if !isempty(processed.errors)
                     append!(outputs, processed.errors)
+                    if !allow_error_cell
+                        for each_error in processed.errors
+                            file = "$(chunk.file):$(chunk.line)"
+                            traceback = Text(join(each_error.traceback, "\n"))
+                            @error "stopping notebook evaluation due to unexpected `show` error." file traceback
+                            has_error = true
+                        end
+                    end
                 end
             end
 
@@ -541,6 +588,10 @@ function evaluate_raw_cells!(f::File, chunks::Vector, options::Dict; showprogres
             throw(ArgumentError("unknown chunk type: $(chunk.type)"))
         end
     end
+    if has_error
+        error("Unexpected cell errors, see logs above.")
+    end
+
     return cells
 end
 
