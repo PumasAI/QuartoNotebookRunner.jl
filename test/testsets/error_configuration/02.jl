@@ -1,4 +1,4 @@
-using Logging, Test, QuartoNotebookRunner
+include("../../utilities/prelude.jl")
 
 @testset "error_configuration/02" begin
     server = Server()
