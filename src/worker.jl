@@ -87,9 +87,11 @@ function worker_init(f::File)
             line::Integer,
             cell_options::AbstractDict,
         )
-            captured =
-                Base.@invokelatest include_str(WORKSPACE[], code; file = file, line = line)
-            results = Base.@invokelatest render_mimetypes(captured.value, cell_options)
+            captured = Base.@invokelatest include_str(WORKSPACE[], code; file, line)
+            results = Base.@invokelatest render_mimetypes(
+                REPL.ends_with_semicolon(code) ? nothing : captured.value,
+                cell_options,
+            )
             return (;
                 results,
                 output = captured.output,
