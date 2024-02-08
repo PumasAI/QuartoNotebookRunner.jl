@@ -607,53 +607,35 @@ function process_cell_source(source::AbstractString)
 end
 
 function extract_cell_options(source::AbstractString; file::AbstractString, line::Integer)
-    function error_message(io::IO, msg::AbstractString)
-        print(io, " ")
-        printstyled(IOContext(io, :color => true), "← $msg"; color = :red, bold = true)
-    end
-
     prefix = "#| "
-    options = Dict{String,Any}()
-
-    msg = IOBuffer()
-    errors = false
-
+    yaml = IOBuffer()
+    none = true
     for line in eachline(IOBuffer(source))
-        print(msg, line)
         if startswith(line, prefix)
             _, rest = split(line, prefix; limit = 2)
-            rest = lstrip(rest)
-            if isempty(rest)
-                error_message(msg, "blank line")
-                errors = true
-            else
-                try
-                    option = YAML.load(rest)
-                    if isa(option, Dict)
-                        merge!(options, option)
-                    else
-                        error_message(msg, "invalid syntax")
-                        errors = true
-                    end
-                catch error
-                    error_message(msg, string(error))
-                    errors = true
-                end
-            end
+            println(yaml, rest)
+            none = false
         end
-        println(msg)
     end
-    if errors
-        error("""
-        Error parsing cell attributes:
+    if none
+        return Dict{String,Any}()
+    else
+        seekstart(yaml)
+        options = try
+            YAML.load(yaml)
+        catch
+            msg = """
+                  Error parsing cell attributes at $(file):$(line):
 
-        $(file):$(line)
-        ```{julia}
-        $(rstrip(String(take!(msg))))
-        ```
-        """)
+                  ```{julia}
+                  $source
+                  ```
+                  """
+            error(msg)
+        end
+        isa(options, Dict) || error("Cell attributes must be a dictionary.")
+        return options
     end
-    return options
 end
 
 """

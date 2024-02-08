@@ -30,6 +30,19 @@ end
 
             text = """
                    ```{julia}
+                   #| multiline:
+                   #|   - 1
+                   #|   - 2
+                   ```
+                   """
+            @test QuartoNotebookRunner.extract_cell_options(
+                text;
+                file = "file.qmd",
+                line = 1,
+            ) == Dict("multiline" => [1, 2])
+
+            text = """
+                   ```{julia}
                    #| valid: true
                    #| invalid
                    ```
@@ -68,7 +81,7 @@ end
             server = QuartoNotebookRunner.Server()
 
             buffer = IOBuffer()
-            @test_throws_message "Error parsing cell attributes" QuartoNotebookRunner.run!(
+            @test_throws_message "Cell attributes must be a dictionary." QuartoNotebookRunner.run!(
                 server,
                 notebook;
                 output = buffer,
