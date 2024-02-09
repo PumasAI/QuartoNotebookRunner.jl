@@ -85,7 +85,7 @@ function worker_init(f::File)
             code::AbstractString,
             file::AbstractString,
             line::Integer,
-            cell_options::AbstractDict,
+            cell_options::AbstractDict = Dict{String,Any}(),
         )
             captured = Base.@invokelatest include_str(WORKSPACE[], code; file, line)
             results = Base.@invokelatest render_mimetypes(

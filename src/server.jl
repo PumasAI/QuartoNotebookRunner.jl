@@ -575,13 +575,36 @@ function evaluate_raw_cells!(f::File, chunks::Vector, options::Dict; showprogres
                 ),
             )
         elseif chunk.type === :markdown
+            marker = "{julia} "
+            source = chunk.source
+            if contains(chunk.source, "`$marker")
+                parser = Parser()
+                for (node, enter) in parser(chunk.source)
+                    if enter && node.t isa CommonMark.Code
+                        if startswith(node.literal, marker)
+                            source_code = replace(node.literal, marker => "")
+                            expr = :(render($(source_code), $(chunk.file), $(chunk.line)))
+                            remote = Malt.remote_eval_fetch(f.worker, expr)
+                            if !isnothing(remote.error)
+                                error("Error rendering inline code: $(remote.error)")
+                            end
+                            processed = process_inline_results(remote.results)
+                            source = replace(
+                                source,
+                                "`$(node.literal)`" => "$processed";
+                                count = 1,
+                            )
+                        end
+                    end
+                end
+            end
             push!(
                 cells,
                 (;
                     id = string(nth),
                     cell_type = chunk.type,
                     metadata = (;),
-                    source = process_cell_source(chunk.source),
+                    source = process_cell_source(source),
                 ),
             )
         else
@@ -637,6 +660,24 @@ function extract_cell_options(source::AbstractString; file::AbstractString, line
         return options
     end
 end
+
+function process_inline_results(dict::Dict)
+    # A reduced set of mimetypes are available for inline use.
+    for (mime, func) in ["text/markdown" => String, "text/plain" => _escape_markdown]
+        if haskey(dict, mime)
+            payload = dict[mime]
+            if payload.error
+                error("Error rendering inline code: $(String(payload.data))")
+            else
+                return func(payload.data)
+            end
+        end
+    end
+    error("No valid mimetypes found in inline code results.")
+end
+
+_escape_markdown(s::AbstractString) = replace(s, r"([\\`*_{}[\]()#+\-.!|])" => s"\\\1")
+_escape_markdown(bytes::Vector{UInt8}) = _escape_markdown(String(bytes))
 
 """
     process_results(dict::Dict{String,Vector{UInt8}})
