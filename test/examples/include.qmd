@@ -1,0 +1,7 @@
+---
+title: "`include`ing files"
+---
+
+```{julia}
+include("script.jl")
+```
