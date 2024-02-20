@@ -24,6 +24,29 @@ function worker_init(f::File)
         const WORKSPACE = Ref(Module(:Notebook))
         const OPTIONS = Ref(Dict{String,Any}())
 
+        # Written as an `eval` call to avoid restriction of the `baremodule`
+        # expression requiring being written as a top-level expression since this
+        # entire file is wrapped in a `quote` block.
+        Core.eval(
+            Main,
+            :(
+                baremodule NotebookInclude
+
+                import Base, Core, Main
+
+                # As defined by `MainInclude` to replicate the behaviour of
+                # the `Main` module in the REPL.
+                function include(fname::Base.AbstractString)
+                    isa(fname, Base.String) ||
+                        (fname = Base.convert(Base.String, fname)::Base.String)
+                    Base._include(Base.identity, Main.WORKSPACE[], fname)
+                end
+                eval(x) = Core.eval(Main.WORKSPACE[], x)
+
+                end
+            ),
+        )
+
         # Interface:
 
         function refresh!(options = OPTIONS[])
@@ -65,6 +88,8 @@ function worker_init(f::File)
             # Ensure that `Pkg` is always available in the notebook so that users
             # can immediately activate a project environment if they want to.
             Core.eval(WORKSPACE[], :(import Main: Pkg, ojs_define))
+            # Custom `include` and `eval` implementation to match behaviour of the REPL.
+            Core.eval(WORKSPACE[], :(import Main.NotebookInclude: include, eval))
 
             # Rerun the package loading hooks if the options have changed.
             if OPTIONS[] != options
