@@ -9,6 +9,8 @@ function handle() {
     const run = (file) => toJSON({ type: 'run', content: file });
     const close = (file) => toJSON({ type: 'close', content: file || '' });
     const stop = () => toJSON({ type: 'stop', content: '' });
+    const isopen = (file) => toJSON({ type: 'isopen', content: file });
+    const isready = () => toJSON({ type: 'isready', content: '' });
 
     const notebook = (arg) => {
         if (arg) {
@@ -27,6 +29,10 @@ function handle() {
             return close(notebook(arg));
         case 'stop':
             return stop();
+        case 'isopen':
+            return isopen(notebook(arg));
+        case 'isready':
+            return isready();
         default:
             throw new Error('Invalid command.');
     }
