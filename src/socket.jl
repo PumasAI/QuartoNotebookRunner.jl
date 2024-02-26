@@ -13,7 +13,7 @@ Message schema:
 
 ```json
 {
-    type: "run" | "close" | "stop"
+    type: "run" | "close" | "stop" | "isopen" | "isready"
     content: string | { file: string, options: string | { ... } }
 }
 ```
@@ -33,6 +33,14 @@ A description of the message types:
 
  -  `stop` - Stop the server. The server will return a response with a `message`
     field set to `Server stopped.`.
+
+ -  `isopen` - Check if a notebook specified by the absolute path in `content`
+    has already been `run` and therefore has a worker open in the background.
+    If so return `true` else `false`. If `true` then you should be able to call
+    `close` for that file without an error.
+
+ -  `isready` - Returns `true` if the server is ready to accept commands. Should
+    never return `false`.
 """
 function serve(; port = get(ARGS, 1, rand(1024:65535)), showprogress::Bool = true)
     getport(port::Integer) = port
@@ -76,6 +84,8 @@ function serve(; port = get(ARGS, 1, rand(1024:65535)), showprogress::Bool = tru
                             _write_json(socket, (; message = "Server stopped."))
                             close(socket)
                             close(socket_server)
+                        elseif json.type == "isready"
+                            _write_json(socket, true)
                         else
                             _write_json(
                                 socket,
@@ -98,9 +108,10 @@ function _handle_response(
 )
     @debug "debugging" request notebooks = collect(keys(notebooks.workers))
     type = request.type
-    file = _get_file(request.content)
 
-    type in ("close", "run") || return _log_error("Unknown request type: $type")
+    type in ("close", "run", "isopen") || return _log_error("Unknown request type: $type")
+
+    file = _get_file(request.content)
 
     # Closing:
 
@@ -130,6 +141,10 @@ function _handle_response(
         catch error
             return _log_error("Failed to run notebook: $file", error, catch_backtrace())
         end
+    end
+
+    if type == "isopen"
+        return haskey(notebooks.workers, file)
     end
 
     # Shouldn't get to this point.
