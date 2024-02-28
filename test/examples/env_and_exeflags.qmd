@@ -1,0 +1,13 @@
+---
+title: env
+julia:
+    env: ["FOO=BAR"]
+---
+
+```{julia}
+ENV["FOO"]
+```
+
+```{julia}
+printstyled("red"; color = :red)
+```
