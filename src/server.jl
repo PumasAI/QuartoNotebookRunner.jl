@@ -520,6 +520,28 @@ function evaluate_raw_cells!(f::File, chunks::Vector, options::Dict; showprogres
                 allow_error_cell = get(chunk.cell_options, "error", allow_error_global)
 
                 if isnothing(remote.error)
+                    for display_result in remote.display_results
+                        processed_display = process_results(display_result)
+                        push!(
+                            outputs,
+                            (;
+                                output_type = "display_data",
+                                processed_display.data,
+                                processed_display.metadata,
+                            ),
+                        )
+                        if !isempty(processed_display.errors)
+                            append!(outputs, processed_display.errors)
+                            if !allow_error_cell
+                                for each_error in processed_display.errors
+                                    file = "$(chunk.file):$(chunk.line)"
+                                    traceback = Text(join(each_error.traceback, "\n"))
+                                    @error "stopping notebook evaluation due to unexpected `show` error." file traceback
+                                    has_error = true
+                                end
+                            end
+                        end
+                    end
                     push!(
                         outputs,
                         (;
