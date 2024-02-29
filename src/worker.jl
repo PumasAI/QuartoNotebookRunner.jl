@@ -38,7 +38,7 @@ function worker_init(f::File)
         end
 
         function Base.display(d::InlineDisplay, x)
-            push!(d.queue, @invokelatest render_mimetypes(x, d.cell_options))
+            push!(d.queue, Base.@invokelatest render_mimetypes(x, d.cell_options))
             return nothing
         end
         Base.displayable(::InlineDisplay, m::MIME) = true
