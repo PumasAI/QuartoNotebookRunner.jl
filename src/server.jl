@@ -4,18 +4,21 @@ mutable struct File
     worker::Malt.Worker
     path::String
     exeflags::Vector{String}
+    env::Vector{String}
 
-    function File(path::String)
+    function File(path::String, options::Union{String,Dict{String,Any}})
         if isfile(path)
             _, ext = splitext(path)
             if ext in (".jl", ".qmd")
                 path = isabspath(path) ? path : abspath(path)
 
-                _, frontmatter = raw_text_chunks(path)
-                exeflags = frontmatter["julia"]["exeflags"]
+                options = _parsed_options(options)
+                _, file_frontmatter = raw_text_chunks(path)
+                merged_options = _extract_relevant_options(file_frontmatter, options)
+                exeflags, env = _exeflags_and_env(merged_options)
 
-                worker = cd(() -> Malt.Worker(; exeflags), dirname(path))
-                file = new(worker, path, exeflags)
+                worker = cd(() -> Malt.Worker(; exeflags, env), dirname(path))
+                file = new(worker, path, exeflags, env)
                 init!(file)
                 return file
             else
@@ -29,6 +32,12 @@ mutable struct File
             throw(ArgumentError("file does not exist: $path"))
         end
     end
+end
+
+function _exeflags_and_env(options)
+    exeflags = options["format"]["metadata"]["julia"]["exeflags"]
+    env = String.(options["format"]["metadata"]["julia"]["env"])
+    return exeflags, env
 end
 
 struct Server
@@ -48,10 +57,10 @@ function init!(file::File)
 end
 
 function refresh!(file::File, options::Dict)
-    exeflags = options["format"]["metadata"]["julia"]["exeflags"]
-    if exeflags != file.exeflags
+    exeflags, env = _exeflags_and_env(options)
+    if exeflags != file.exeflags || env != file.env
         Malt.stop(file.worker)
-        file.worker = cd(() -> Malt.Worker(; exeflags), dirname(file.path))
+        file.worker = cd(() -> Malt.Worker(; exeflags, env), dirname(file.path))
         file.exeflags = exeflags
         init!(file)
     end
@@ -443,9 +452,11 @@ end
 
 function default_frontmatter()
     D = Dict{String,Any}
+    exeflags = JSON3.read(get(ENV, "QUARTONOTEBOOKRUNNER_EXEFLAGS", "[]"), Vector{String})
+    env = JSON3.read(get(ENV, "QUARTONOTEBOOKRUNNER_ENV", "[]"), Vector{String})
     return D(
         "fig-format" => "png",
-        "julia" => D("exeflags" => []),
+        "julia" => D("exeflags" => exeflags, "env" => env),
         "execute" => D("error" => true),
     )
 end
@@ -746,8 +757,8 @@ is_julia_toplevel(node) =
     node.t.info == "{julia}" &&
     node.parent.t isa CommonMark.Document
 
-function loadfile!(server::Server, path::String)
-    file = File(path)
+function loadfile!(server::Server, path::String, options::Union{String,Dict{String,Any}})
+    file = File(path, options)
     server.workers[path] = file
     return file
 end
@@ -761,7 +772,7 @@ function run!(
 )
     file = get!(server.workers, file) do
         @debug "file not loaded, loading first." file
-        loadfile!(server, file)
+        loadfile!(server, file, options)
     end
     return evaluate!(file, output; showprogress, options)
 end
