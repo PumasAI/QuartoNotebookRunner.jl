@@ -522,14 +522,16 @@ function evaluate_raw_cells!(f::File, chunks::Vector, options::Dict; showprogres
                 if isnothing(remote.error)
                     for display_result in remote.display_results
                         processed_display = process_results(display_result)
-                        push!(
-                            outputs,
-                            (;
-                                output_type = "display_data",
-                                processed_display.data,
-                                processed_display.metadata,
-                            ),
-                        )
+                        if !isempty(processed_display.data)
+                            push!(
+                                outputs,
+                                (;
+                                    output_type = "display_data",
+                                    processed_display.data,
+                                    processed_display.metadata,
+                                ),
+                            )
+                        end
                         if !isempty(processed_display.errors)
                             append!(outputs, processed_display.errors)
                             if !allow_error_cell
@@ -542,15 +544,17 @@ function evaluate_raw_cells!(f::File, chunks::Vector, options::Dict; showprogres
                             end
                         end
                     end
-                    push!(
-                        outputs,
-                        (;
-                            output_type = "execute_result",
-                            execution_count = 1,
-                            processed.data,
-                            processed.metadata,
-                        ),
-                    )
+                    if !isempty(processed.data)
+                        push!(
+                            outputs,
+                            (;
+                                output_type = "execute_result",
+                                execution_count = 1,
+                                processed.data,
+                                processed.metadata,
+                            ),
+                        )
+                    end
                 else
                     # These are errors arising from evaluation of the contents
                     # of a code cell, not from the `show` output of the values,

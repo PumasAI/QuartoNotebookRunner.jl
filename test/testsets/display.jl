@@ -6,7 +6,7 @@ test_example(joinpath(@__DIR__, "../examples/display.qmd")) do json
 
     cell = cells[4]
     outputs = cell["outputs"]
-    @test length(outputs) == 3
+    @test length(outputs) == 2
 
     @test outputs[1]["output_type"] == "display_data"
     @test haskey(outputs[1]["data"], "image/png")

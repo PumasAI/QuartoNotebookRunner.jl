@@ -10,11 +10,10 @@ test_example(joinpath(@__DIR__, "../examples/stdout.qmd")) do json
     cell = json["cells"][2]
     @test cell["cell_type"] == "code"
     @test cell["execution_count"] == 1
+    @test length(cell["outputs"]) == 1
     @test cell["outputs"][1]["output_type"] == "stream"
     @test cell["outputs"][1]["name"] == "stdout"
     @test contains(cell["outputs"][1]["text"], "1")
-    @test cell["outputs"][2]["output_type"] == "execute_result"
-    @test isempty(cell["outputs"][2]["data"])
 
     cell = json["cells"][3]
     @test cell["cell_type"] == "markdown"

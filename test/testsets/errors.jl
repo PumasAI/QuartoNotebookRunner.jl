@@ -48,29 +48,27 @@ test_example(joinpath(@__DIR__, "../examples/errors.qmd")) do json
     cell = cells[18]
 
     outputs = cell["outputs"]
-    @test length(outputs) == 5
-    @test outputs[1]["output_type"] == "execute_result"
-    @test isempty(outputs[1]["data"])
+    @test length(outputs) == 4
 
-    output = outputs[2]
+    output = outputs[1]
     @test output["output_type"] == "error"
     @test output["ename"] == "text/plain showerror"
     @test length(output["traceback"]) == 11
     @test contains(output["traceback"][end], "multimedia.jl")
 
-    output = outputs[3]
+    output = outputs[2]
     @test output["output_type"] == "error"
     @test output["ename"] == "text/html showerror"
     @test length(output["traceback"]) == 9
     @test contains(output["traceback"][end], "multimedia.jl")
 
-    output = outputs[4]
+    output = outputs[3]
     @test output["output_type"] == "error"
     @test output["ename"] == "text/latex showerror"
     @test length(output["traceback"]) == 9
     @test contains(output["traceback"][end], "multimedia.jl")
 
-    output = outputs[5]
+    output = outputs[4]
     @test output["output_type"] == "error"
     @test output["ename"] == "image/svg+xml showerror"
     @test length(output["traceback"]) == 9

@@ -39,12 +39,7 @@ include("../utilities/prelude.jl")
         cells = json["cells"]
 
         cell = cells[2]
-        @test only(cell["outputs"]) == Dict(
-            "output_type" => "execute_result",
-            "execution_count" => 1,
-            "data" => Dict(),
-            "metadata" => Dict(),
-        )
+        @test isempty(cell["outputs"])
 
         cell = cells[4]
         @test only(cell["outputs"]) == Dict(
@@ -84,12 +79,7 @@ include("../utilities/prelude.jl")
         cells = json["cells"]
 
         cell = cells[2]
-        @test only(cell["outputs"]) == Dict(
-            "output_type" => "execute_result",
-            "execution_count" => 1,
-            "data" => Dict(),
-            "metadata" => Dict(),
-        )
+        @test isempty(cell["outputs"])
 
         cell = cells[4]
         @test only(cell["outputs"]) == Dict(
