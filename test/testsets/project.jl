@@ -24,8 +24,7 @@ test_example(joinpath(@__DIR__, "../examples/project.qmd")) do json
 
     cell = json["cells"][10]
     @test cell["cell_type"] == "code"
-    @test cell["outputs"][1]["output_type"] == "execute_result"
-    @test isempty(cell["outputs"][1]["data"])
+    @test isempty(cell["outputs"])
 
     cell = json["cells"][12]
     @test cell["cell_type"] == "code"

@@ -22,7 +22,7 @@ include("../utilities/prelude.jl")
         json = run!(server, path; showprogress = false)
 
         cell = json.cells[2]
-        @test isempty(cell.outputs[1].data)
+        @test isempty(cell.outputs)
 
         cell = json.cells[4]
         @test cell.outputs[1].data["text/plain"] == "1"

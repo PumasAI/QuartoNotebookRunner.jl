@@ -21,8 +21,7 @@ test_example(joinpath(@__DIR__, "../examples/project_exeflags.qmd")) do json
 
     cell = cells[8]
     @test cell["cell_type"] == "code"
-    @test cell["outputs"][1]["output_type"] == "execute_result"
-    @test isempty(cell["outputs"][1]["data"])
+    @test isempty(cell["outputs"])
 
     cell = cells[10]
     @test cell["cell_type"] == "code"
