@@ -74,6 +74,8 @@ jobs:
         with:
           verbose: true
           files: lcov.info
+          token: ${{ secrets.CODECOV_TOKEN }}
+          fail_ci_if_error: false
 
   format:
     runs-on: ubuntu-latest
