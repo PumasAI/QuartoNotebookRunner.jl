@@ -65,5 +65,6 @@ if !@isdefined(SCHEMA)
             end
             QuartoNotebookRunner.close!(server, each)
         end
+        GC.gc()
     end
 end
