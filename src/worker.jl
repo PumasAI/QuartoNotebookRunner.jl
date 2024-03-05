@@ -357,7 +357,7 @@ function worker_init(f::File)
                     "text/latex",
                     "image/svg+xml",
                     "image/png",
-                    "application/json",
+                    # "application/json",
                 ]
             end
             for mime in mimes
