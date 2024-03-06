@@ -243,6 +243,7 @@ function worker_init(f::File)
                 io,
                 :module => WORKSPACE[],
                 :color => true,
+                :limit => true,
                 # This allows a `show` method implementation to check for
                 # metadata that may be of relevance to it's rendering. For
                 # example, if a `typst` table is rendered with a caption
