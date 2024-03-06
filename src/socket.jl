@@ -152,7 +152,7 @@ function _handle_response(
 end
 
 function _log_error(message, error, backtrace)
-    @error message exception=(error, backtrace)
+    @error message exception = (error, backtrace)
     return (; error = message)
 end
 function _log_error(message)
