@@ -153,11 +153,11 @@ end
 
 function _log_error(message, error, backtrace)
     @error message error backtrace
-    return (; error = message)
+    return (; error = message, juliaError = sprint(Base.showerror, error, backtrace))
 end
 function _log_error(message)
     @error message
-    return (; error = message)
+    return (; error = message, juliaError = sprint(Base.showerror, error, backtrace))
 end
 
 # TODO: check what the message schema is for this.
