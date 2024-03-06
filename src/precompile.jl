@@ -27,11 +27,14 @@ PrecompileTools.@setup_workload begin
             sock
         end
 
-        println(sock, """{"type":"isready","content":{}}""")
+        JSON3.write(sock, Dict(:type => "isready", :content => Dict()))
+        println(sock)
         @assert readline(sock) == "true"
-        println(sock, """{"type":"isopen","content":"$(@__FILE__)"}""")
+        JSON3.write(sock, Dict(:type => "isopen", :content => @__FILE__)) # just to have any absolute file path that exists
+        println(sock)
         @assert readline(sock) == "false"
-        println(sock, """{"type":"stop","content":{}}""")
+        JSON3.write(sock, Dict(:type => "stop", :content => Dict()))
+        println(sock)
         wait(server)
     end
 end
