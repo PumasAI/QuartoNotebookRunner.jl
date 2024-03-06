@@ -9,7 +9,6 @@ else
         for nth in (4, 6)
             cell = cells[nth]
             outputs = cell["outputs"]
-            JSON3.pretty(outputs)
             @test length(outputs) == 1
             data = outputs[1]["data"]
             @test haskey(data, "image/png")
