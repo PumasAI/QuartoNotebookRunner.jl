@@ -280,7 +280,42 @@ function worker_init(f::File)
             return take!(buf)
         end
 
+        # TODO: bit of a hack, a better way of doing this all would be with a
+        # local package that defines package extensions which we load into the
+        # worker processes by adjusting the `LOAD_PATH`.
+        const MIMETYPE_WRAPPERS = IdDict()
+        function _mimetype_wrapper(value::T) where {T}
+            key = getfield(parentmodule(T), nameof(T))
+            return get(MIMETYPE_WRAPPERS, key, identity)(value)
+        end
+        function _register_wrapper(from, to)
+            if haskey(MIMETYPE_WRAPPERS, from)
+                previous_to = MIMETYPE_WRAPPERS[from]
+                if previous_to !== to
+                    error(
+                        "attempted to overwrite existing wrapper for $from: $previous_to -> $to",
+                    )
+                end
+            else
+                MIMETYPE_WRAPPERS[from] = to
+            end
+            return nothing
+        end
+
+        abstract type WrapperType end
+
+        # Required methods to avoid `show` method ambiguity errors.
+        Base.show(io::IO, w::WrapperType) = Base.show(io, w.value)
+        Base.show(io::IO, m::MIME, w::WrapperType) = Base.show(io, m, w.value)
+        Base.show(io::IO, m::MIME"text/plain", w::WrapperType) = Base.show(io, m, w.value)
+        Base.showable(mime::MIME, w::WrapperType) = Base.showable(mime, w.value)
+
         function render_mimetypes(value, cell_options)
+            # Intercept objects prior to rendering so that we can wrap specific
+            # types in our own `WrapperType` to customised rendering instead of
+            # what the package defines itself.
+            value = _mimetype_wrapper(value)
+
             to_format = OPTIONS[]["format"]["pandoc"]["to"]
 
             result = Dict{String,@NamedTuple{error::Bool, data::Vector{UInt8}}}()
@@ -534,6 +569,50 @@ function worker_init(f::File)
         end
         _Plots_hook(::Any...) = nothing
 
+        # PlotlyBase.jl integrations:
+
+        function _PlotlyBase_hook(pkgid::Base.PkgId, PlotlyBase::Module)
+            _register_wrapper(PlotlyBase.Plot, PlotlyBasePlot)
+            return nothing
+        end
+        _PlotlyBase_hook(::Any...) = nothing
+
+        struct PlotlyBasePlot <: WrapperType
+            value::Any
+        end
+
+        function Base.show(io::IO, mime::MIME"text/html", wrapper::PlotlyBasePlot)
+            T = typeof(wrapper.value)
+            PlotlyBase = parentmodule(T)
+            # We want to embed only the minimum markup needed to render the
+            # plotlyjs plots, otherwise a full HTML page is generated for every
+            # plot which does not render correctly in our context.
+            PlotlyBase.to_html(
+                io,
+                wrapper.value;
+                include_plotlyjs = "require",
+                full_html = false,
+            )
+        end
+
+        # PlotlyJS.jl integrations:
+
+        function _PlotlyJS_hook(pkgid::Base.PkgId, PlotlyJS::Module)
+            _register_wrapper(PlotlyJS.SyncPlot, PlotlyJSSyncPlot)
+            return nothing
+        end
+        _PlotlyJS_hook(::Any...) = nothing
+
+        struct PlotlyJSSyncPlot <: WrapperType
+            value::Any
+        end
+
+        function Base.show(io::IO, mime::MIME"text/html", wrapper::PlotlyJSSyncPlot)
+            return Base.show(io, mime, PlotlyBasePlot(wrapper.value.plot))
+        end
+
+        # Loading hooks:
+
         const PACKAGE_LOADING_HOOKS = Dict{Base.PkgId,Function}()
         if isdefined(Base, :package_callbacks)
             let
@@ -564,6 +643,16 @@ function worker_init(f::File)
                     "Plots",
                     "91a5bcdd-55d7-5caf-9e0b-520d859cae80",
                 ),
+                package_loading_hook!(
+                    _PlotlyBase_hook,
+                    "PlotlyBase",
+                    "a03496cd-edff-5a9b-9e67-9cda94a718b5",
+                )
+                package_loading_hook!(
+                    _PlotlyJS_hook,
+                    "PlotlyJS",
+                    "f0f68f2c-4968-5e81-91da-67840de0976a",
+                )
                 push!(
                     Base.package_callbacks,
                     function (pkgid)
