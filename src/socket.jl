@@ -48,9 +48,10 @@ function serve(; port = get(ARGS, 1, rand(1024:65535)), showprogress::Bool = tru
     getport(::Any) = throw(ArgumentError("Invalid port: $port"))
 
     port = getport(port)
-    @info "Starting notebook server." port
+    @debug "Starting notebook server." port
 
     notebook_server = Server()
+    closed_by_client = false
     task = Threads.@spawn begin
         socket_server = Sockets.listen(port)
         while isopen(socket_server)
@@ -58,7 +59,9 @@ function serve(; port = get(ARGS, 1, rand(1024:65535)), showprogress::Bool = tru
             try
                 socket = Sockets.accept(socket_server)
             catch error
-                @error "Failed to accept connection" error
+                if !closed_by_client
+                    @error "Failed to accept connection" error
+                end
                 break
             end
             if !isnothing(socket)
@@ -83,6 +86,10 @@ function serve(; port = get(ARGS, 1, rand(1024:65535)), showprogress::Bool = tru
                             close!(notebook_server)
                             _write_json(socket, (; message = "Server stopped."))
                             close(socket)
+                            # close(socket_server) will cause an exception on the
+                            # Sockets.accept line so we use this flag to swallow the
+                            # error if that happened on purpose
+                            closed_by_client = true
                             close(socket_server)
                         elseif json.type == "isready"
                             _write_json(socket, true)
@@ -96,7 +103,7 @@ function serve(; port = get(ARGS, 1, rand(1024:65535)), showprogress::Bool = tru
                 end
             end
         end
-        @info "Server closed."
+        @debug "Server closed."
     end
     return errormonitor(task)
 end
