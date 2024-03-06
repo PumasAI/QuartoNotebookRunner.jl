@@ -159,7 +159,7 @@ function _handle_response(
 end
 
 function _log_error(message, error, backtrace)
-    @error message error backtrace
+    @error message exception = (error, backtrace)
     return (; error = message, juliaError = sprint(Base.showerror, error, backtrace))
 end
 function _log_error(message)

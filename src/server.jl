@@ -35,8 +35,8 @@ mutable struct File
 end
 
 function _exeflags_and_env(options)
-    exeflags = options["format"]["metadata"]["julia"]["exeflags"]
-    env = String.(options["format"]["metadata"]["julia"]["env"])
+    exeflags = map(String, options["format"]["metadata"]["julia"]["exeflags"])
+    env = map(String, options["format"]["metadata"]["julia"]["env"])
     return exeflags, env
 end
 
@@ -152,7 +152,9 @@ function _extract_relevant_options(file_frontmatter::Dict, options::Dict)
         pandoc_to = get(pandoc, "to", pandoc_to_default)
 
         metadata = get(D, format, "metadata")
-        julia = get(metadata, "julia", julia_default)
+        julia = get(metadata, "julia", Dict())
+        julia_merged = _recursive_merge(julia_default, julia)
+
 
         return _options_template(;
             fig_width,
@@ -161,7 +163,7 @@ function _extract_relevant_options(file_frontmatter::Dict, options::Dict)
             fig_dpi,
             error,
             pandoc_to,
-            julia,
+            julia = julia_merged,
         )
     end
 end
@@ -306,7 +308,6 @@ function raw_markdown_chunks(path::String)
 end
 
 _recursive_merge(x::AbstractDict...) = merge(_recursive_merge, x...)
-_recursive_merge(x::AbstractVector...) = cat(x...; dims = 1)
 _recursive_merge(x...) = x[end]
 
 """
