@@ -306,7 +306,6 @@ function raw_markdown_chunks(path::String)
 end
 
 _recursive_merge(x::AbstractDict...) = merge(_recursive_merge, x...)
-_recursive_merge(x::AbstractVector...) = cat(x...; dims = 1)
 _recursive_merge(x...) = x[end]
 
 """
