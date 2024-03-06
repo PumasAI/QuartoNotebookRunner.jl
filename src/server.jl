@@ -35,8 +35,8 @@ mutable struct File
 end
 
 function _exeflags_and_env(options)
-    exeflags = options["format"]["metadata"]["julia"]["exeflags"]
-    env = String.(options["format"]["metadata"]["julia"]["env"])
+    exeflags = get(options["format"]["metadata"]["julia"], "exeflags", String[])
+    env = get(options["format"]["metadata"]["julia"], "env", String[])
     return exeflags, env
 end
 
