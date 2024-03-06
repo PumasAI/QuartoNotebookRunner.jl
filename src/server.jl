@@ -152,7 +152,9 @@ function _extract_relevant_options(file_frontmatter::Dict, options::Dict)
         pandoc_to = get(pandoc, "to", pandoc_to_default)
 
         metadata = get(D, format, "metadata")
-        julia = get(metadata, "julia", julia_default)
+        julia = get(metadata, "julia", Dict())
+        julia_merged = _recursive_merge(julia_default, julia)
+
 
         return _options_template(;
             fig_width,
@@ -161,7 +163,7 @@ function _extract_relevant_options(file_frontmatter::Dict, options::Dict)
             fig_dpi,
             error,
             pandoc_to,
-            julia,
+            julia = julia_merged,
         )
     end
 end
