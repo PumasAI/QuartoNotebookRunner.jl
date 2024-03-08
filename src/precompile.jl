@@ -7,32 +7,17 @@ PrecompileTools.@setup_workload begin
         raw_text_chunks(script)
         process_results(results)
 
-        # find port to connect on
-        port, _server = Sockets.listenany(8000)
-        close(_server)
-        server = QuartoNotebookRunner.serve(; port)
-
-        sock = let
-            connected = false
-            for i = 1:20
-                try
-                    sock = Sockets.connect(port)
-                    connected = true
-                    break
-                catch
-                    sleep(0.1)
-                end
-            end
-            connected || error("Connection could not be established.")
-            sock
-        end
+        server = QuartoNotebookRunner.serve()
+        sock = Sockets.connect(server.port)
 
         JSON3.write(sock, Dict(:type => "isready", :content => Dict()))
         println(sock)
         @assert readline(sock) == "true"
-        JSON3.write(sock, Dict(:type => "isopen", :content => @__FILE__)) # just to have any absolute file path that exists
+
+        JSON3.write(sock, Dict(:type => "isopen", :content => @__FILE__)) # just to have any absolute file path that exists but is not open
         println(sock)
         @assert readline(sock) == "false"
+
         JSON3.write(sock, Dict(:type => "stop", :content => Dict()))
         println(sock)
         wait(server)
