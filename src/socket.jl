@@ -1,13 +1,22 @@
 # TCP socket server for running Quarto notebooks from external processes.
 
+struct SocketServer
+    tcpserver::Sockets.TCPServer
+    notebookserver::Server
+    port::Int
+    task::Task
+end
+
+Base.wait(s::SocketServer) = wait(s.task)
+
 """
-    serve(; port)
+    serve(; port = nothing)
 
 Start a socket server for running Quarto notebooks from external processes.
-Call `wait` on the returned task to block until the server is closed.
+Call `wait(server)` on the returned server to block until the server is closed.
 
-The port can be specified as an integer or string. If unspecified, and no
-arg-1 is provided, a random port will be chosen.
+The port can be specified as `nothing`, an integer or string. If it's `nothing`,
+a random port will be chosen.
 
 Message schema:
 
@@ -42,9 +51,10 @@ A description of the message types:
  -  `isready` - Returns `true` if the server is ready to accept commands. Should
     never return `false`.
 """
-function serve(; port = get(ARGS, 1, rand(1024:65535)), showprogress::Bool = true)
+function serve(; port = nothing, showprogress::Bool = true)
     getport(port::Integer) = port
     getport(port::AbstractString) = getport(tryparse(Int, port))
+    getport(port::Nothing) = port
     getport(::Any) = throw(ArgumentError("Invalid port: $port"))
 
     port = getport(port)
@@ -52,8 +62,14 @@ function serve(; port = get(ARGS, 1, rand(1024:65535)), showprogress::Bool = tru
 
     notebook_server = Server()
     closed_by_client = false
-    task = Threads.@spawn begin
+
+    if port === nothing
+        port, socket_server = Sockets.listenany(8000)
+    else
         socket_server = Sockets.listen(port)
+    end
+
+    task = Threads.@spawn begin
         while isopen(socket_server)
             socket = nothing
             try
@@ -105,7 +121,10 @@ function serve(; port = get(ARGS, 1, rand(1024:65535)), showprogress::Bool = tru
         end
         @debug "Server closed."
     end
-    return errormonitor(task)
+
+    errormonitor(task)
+
+    return SocketServer(socket_server, notebook_server, port, task)
 end
 
 function _handle_response(
