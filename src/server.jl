@@ -814,14 +814,20 @@ Executes `f(file)` while the worker lock corresponding to the `file`
 at `path` is attained. All actions on a `File` should be wrapped in this
 so that no two tasks can mutate the `File` at the same time.
 """
-function borrow_file!(f, server, path; optionally_create = false, options = Dict{String,Any}())
+function borrow_file!(
+    f,
+    server,
+    path;
+    optionally_create = false,
+    options = Dict{String,Any}(),
+)
     # first prohibit mutation of the workers lock dict
     # but we don't want to lock the server until `f` is done executing
     # so multiple tasks can retrieve `workerlock` at the same time
     # but only one can unlock it at a time
 
     checkpath(path)
-    
+
     prelocked, workerlock = lock(server.lock) do
         if haskey(server.workerlocks, path)
             return false, server.workerlocks[path]
@@ -839,10 +845,11 @@ function borrow_file!(f, server, path; optionally_create = false, options = Dict
     if prelocked
         # we know nothing can have happened to the file because we just created its
         # entry, so we can initialize the file, and delete the entry in case that fails
-        file = try 
+        file = try
             _file = File(path, options)
             lock(server.lock) do
-                haskey(server.workers, path) && error("File existed even though it shouldn't for path $path")
+                haskey(server.workers, path) &&
+                    error("File existed even though it shouldn't for path $path")
                 server.workers[path] = _file
             end
         catch err
@@ -871,7 +878,9 @@ function borrow_file!(f, server, path; optionally_create = false, options = Dict
             if current_lock !== workerlock
                 return borrow_file!(f, server, path; optionally_create)
             else
-                file === nothing && error("No `File` existed for path $path even though there was an active lock for it. This must be a bug if all accesses to files have been wrapped in `borrow_file!`.")
+                file === nothing && error(
+                    "No `File` existed for path $path even though there was an active lock for it. This must be a bug if all accesses to files have been wrapped in `borrow_file!`.",
+                )
                 result = f(file)
                 return result
             end
