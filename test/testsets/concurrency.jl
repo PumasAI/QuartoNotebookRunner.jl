@@ -3,7 +3,7 @@
     file = joinpath(@__DIR__, "..", "examples", "soft_scope.qmd")
 
     @test_nowarn @sync begin
-        for i in 1:20
+        for i = 1:20
             Threads.@spawn begin
                 run!(s, file)
                 try
