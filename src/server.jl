@@ -6,6 +6,8 @@ mutable struct File
     exeflags::Vector{String}
     env::Vector{String}
     lock::ReentrantLock
+    timeout::Float64
+    timeout_timer::Union{Nothing,Timer}
 
     function File(path::String, options::Union{String,Dict{String,Any}})
         if isfile(path)
@@ -17,9 +19,10 @@ mutable struct File
                 _, file_frontmatter = raw_text_chunks(path)
                 merged_options = _extract_relevant_options(file_frontmatter, options)
                 exeflags, env = _exeflags_and_env(merged_options)
+                timeout = _extract_timeout(merged_options)
 
                 worker = cd(() -> Malt.Worker(; exeflags, env), dirname(path))
-                file = new(worker, path, exeflags, env, ReentrantLock())
+                file = new(worker, path, exeflags, env, ReentrantLock(), timeout, nothing)
                 init!(file)
                 return file
             else
@@ -32,6 +35,31 @@ mutable struct File
         else
             throw(ArgumentError("file does not exist: $path"))
         end
+    end
+end
+
+function _extract_timeout(merged_options)
+    daemon = merged_options["format"]["execute"]["daemon"]
+    if daemon === true
+        300.0 # match quarto's default timeout of 300 seconds
+    elseif daemon === false
+        0.0
+    elseif daemon isa Real
+        f = Float64(daemon)
+        if f < 0
+            throw(
+                ArgumentError(
+                    "Invalid execute.daemon value $f, must be a bool or a non-negative number (in seconds).",
+                ),
+            )
+        end
+        f
+    else
+        throw(
+            ArgumentError(
+                "Invalid execute.daemon value $daemon, must be a bool or a non-negative number (in seconds).",
+            ),
+        )
     end
 end
 
@@ -125,6 +153,7 @@ function _extract_relevant_options(file_frontmatter::Dict, options::Dict)
     fig_format_default = get(file_frontmatter, "fig-format", nothing)
     fig_dpi_default = get(file_frontmatter, "fig-dpi", nothing)
     error_default = get(get(D, file_frontmatter, "execute"), "error", true)
+    daemon_default = get(get(D, file_frontmatter, "execute"), "daemon", 10.0)
 
     pandoc_to_default = nothing
 
@@ -139,6 +168,7 @@ function _extract_relevant_options(file_frontmatter::Dict, options::Dict)
             error = error_default,
             pandoc_to = pandoc_to_default,
             julia = julia_default,
+            daemon = daemon_default,
         )
     else
         format = get(D, options, "format")
@@ -148,6 +178,7 @@ function _extract_relevant_options(file_frontmatter::Dict, options::Dict)
         fig_format = get(execute, "fig-format", fig_format_default)
         fig_dpi = get(execute, "fig-dpi", fig_dpi_default)
         error = get(execute, "error", error_default)
+        daemon = get(execute, "daemon", daemon_default)
 
         pandoc = get(D, format, "pandoc")
         pandoc_to = get(pandoc, "to", pandoc_to_default)
@@ -165,6 +196,7 @@ function _extract_relevant_options(file_frontmatter::Dict, options::Dict)
             error,
             pandoc_to,
             julia = julia_merged,
+            daemon,
         )
     end
 end
@@ -177,6 +209,7 @@ function _options_template(;
     error,
     pandoc_to,
     julia,
+    daemon,
 )
     D = Dict{String,Any}
     return D(
@@ -187,6 +220,7 @@ function _options_template(;
                 "fig-format" => fig_format,
                 "fig-dpi" => fig_dpi,
                 "error" => error,
+                "daemon" => daemon,
             ),
             "pandoc" => D("to" => pandoc_to),
             "metadata" => D("julia" => julia),
@@ -793,7 +827,20 @@ function run!(
     options::Union{String,Dict{String,Any}} = Dict{String,Any}(),
 )
     borrow_file!(server, path; optionally_create = true) do file
-        return evaluate!(file, output; showprogress, options)
+        if file.timeout_timer !== nothing
+            close(file.timeout_timer)
+            file.timeout_timer = nothing
+        end
+        result = evaluate!(file, output; showprogress, options)
+        if file.timeout > 0
+            file.timeout_timer = Timer(file.timeout) do _
+                close!(server, file.path)
+                @debug "File at $(file.path) timed out after $(file.timeout) seconds of inactivity."
+            end
+        else
+            close!(server, file.path)
+        end
+        return result
     end
 end
 
@@ -888,13 +935,32 @@ function close!(server::Server)
     end
 end
 
+"""
+    close!(server::Server, path::String)
+
+Closes the `File` at `path`. Returns `true` if the
+file was closed and `false` if it did not exist, which
+can happen if it was closed by a timeout, for example.
+"""
 function close!(server::Server, path::String)
-    borrow_file!(server, path) do file
-        Malt.stop(file.worker)
-        lock(server.lock) do
-            pop!(server.workers, file.path)
+    try
+        borrow_file!(server, path) do file
+            if file.timeout_timer !== nothing
+                close(file.timeout_timer)
+            end
+            Malt.stop(file.worker)
+            lock(server.lock) do
+                pop!(server.workers, file.path)
+            end
+            GC.gc()
         end
-        GC.gc()
+        return true
+    catch err
+        if !(err isa NoFileEntryError)
+            rethrow(err)
+        else
+            false
+        end
     end
 end
 
