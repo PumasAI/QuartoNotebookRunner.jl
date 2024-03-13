@@ -153,7 +153,7 @@ function _extract_relevant_options(file_frontmatter::Dict, options::Dict)
     fig_format_default = get(file_frontmatter, "fig-format", nothing)
     fig_dpi_default = get(file_frontmatter, "fig-dpi", nothing)
     error_default = get(get(D, file_frontmatter, "execute"), "error", true)
-    daemon_default = get(get(D, file_frontmatter, "execute"), "daemon", 10.0)
+    daemon_default = get(get(D, file_frontmatter, "execute"), "daemon", true)
 
     pandoc_to_default = nothing
 
