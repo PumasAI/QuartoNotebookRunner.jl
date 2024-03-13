@@ -10,13 +10,18 @@ end
 Base.wait(s::SocketServer) = wait(s.task)
 
 """
-    serve(; port = nothing)
+    serve(; port = nothing, showprogress::Bool = true, timeout::Union{Nothing,Real} = nothing)
 
 Start a socket server for running Quarto notebooks from external processes.
 Call `wait(server)` on the returned server to block until the server is closed.
 
 The port can be specified as `nothing`, an integer or string. If it's `nothing`,
 a random port will be chosen.
+
+When `timeout` is not `nothing`, a timer is setup which closes the server after
+`timeout` seconds of inactivity. The timer is halted when a message arrives and
+reset after the last active command has been processed fully (so the server will not time
+out while rendering a long-running notebook, for example).
 
 Message schema:
 
@@ -51,17 +56,25 @@ A description of the message types:
  -  `isready` - Returns `true` if the server is ready to accept commands. Should
     never return `false`.
 """
-function serve(; port = nothing, showprogress::Bool = true)
+function serve(;
+    port = nothing,
+    showprogress::Bool = true,
+    timeout::Union{Nothing,Real} = nothing,
+)
     getport(port::Integer) = port
     getport(port::AbstractString) = getport(tryparse(Int, port))
     getport(port::Nothing) = port
     getport(::Any) = throw(ArgumentError("Invalid port: $port"))
 
+    timeout !== nothing &&
+        timeout < 0 &&
+        throw(ArgumentError("Non-negative timeout value $timeout"))
+
     port = getport(port)
     @debug "Starting notebook server." port
 
     notebook_server = Server()
-    closed_by_client = false
+    closed_deliberately = Ref(false)
 
     if port === nothing
         port, socket_server = Sockets.listenany(8000)
@@ -69,13 +82,53 @@ function serve(; port = nothing, showprogress::Bool = true)
         socket_server = Sockets.listen(port)
     end
 
+    timer_lock = ReentrantLock()
+    timer_refcount = Ref(1)
+    timer = Ref{Union{Timer,Nothing}}(nothing)
+
+    resume_timeout_if_idle!() =
+        lock(timer_lock) do
+            timeout === nothing && return
+
+            # only continue if all but one calls to `suspend_timeout!` had their corresponding
+            # `resume_timeout_if_idle!` called already, which means that now no other
+            # command is active and we can close down
+            timer_refcount[] -= 1
+            timer_refcount[] == 0 || return
+
+            if timer[] !== nothing
+                close(timer[])
+            end
+            timer[] = Timer(timeout) do _
+                @debug "Server timed out after $timeout seconds of inactivity."
+                # close(socket_server) will cause an exception on the
+                # Sockets.accept line so we use this flag to swallow the
+                # error if that happened on purpose
+                closed_deliberately[] = true
+                close!(notebook_server)
+                close(socket_server)
+            end
+        end
+    suspend_timeout!() =
+        lock(timer_lock) do
+            timeout === nothing && return
+
+            timer_refcount[] += 1
+            if timer[] !== nothing
+                close(timer[])
+            end
+            timer[] = nothing
+        end
+
+    resume_timeout_if_idle!()
+
     task = Threads.@spawn begin
         while isopen(socket_server)
             socket = nothing
             try
                 socket = Sockets.accept(socket_server)
             catch error
-                if !closed_by_client
+                if !closed_deliberately[]
                     @error "Failed to accept connection" error
                 end
                 break
@@ -97,23 +150,32 @@ function serve(; port = nothing, showprogress::Bool = true)
                             continue
                         end
                         @debug "Received request" json
-                        if json.type == "stop"
-                            @debug "Closing connection."
-                            close!(notebook_server)
-                            _write_json(socket, (; message = "Server stopped."))
-                            close(socket)
-                            # close(socket_server) will cause an exception on the
-                            # Sockets.accept line so we use this flag to swallow the
-                            # error if that happened on purpose
-                            closed_by_client = true
-                            close(socket_server)
-                        elseif json.type == "isready"
-                            _write_json(socket, true)
-                        else
-                            _write_json(
-                                socket,
-                                _handle_response(notebook_server, json, showprogress),
-                            )
+
+                        suspend_timeout!()
+
+                        try
+                            if json.type == "stop"
+                                @debug "Closing connection."
+                                close!(notebook_server)
+                                _write_json(socket, (; message = "Server stopped."))
+                                close(socket)
+                                # close(socket_server) will cause an exception on the
+                                # Sockets.accept line so we use this flag to swallow the
+                                # error if that happened on purpose
+                                closed_deliberately[] = true
+                                close(socket_server)
+                            elseif json.type == "isready"
+                                _write_json(socket, true)
+                            else
+                                _write_json(
+                                    socket,
+                                    _handle_response(notebook_server, json, showprogress),
+                                )
+                            end
+                        finally
+                            # when a message has been processed completely, start timer
+                            # if no other command is currently running
+                            resume_timeout_if_idle!()
                         end
                     end
                 end
