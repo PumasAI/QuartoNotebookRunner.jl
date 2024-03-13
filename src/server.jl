@@ -5,6 +5,7 @@ mutable struct File
     path::String
     exeflags::Vector{String}
     env::Vector{String}
+    lock::ReentrantLock
 
     function File(path::String, options::Union{String,Dict{String,Any}})
         if isfile(path)
@@ -18,7 +19,7 @@ mutable struct File
                 exeflags, env = _exeflags_and_env(merged_options)
 
                 worker = cd(() -> Malt.Worker(; exeflags, env), dirname(path))
-                file = new(worker, path, exeflags, env)
+                file = new(worker, path, exeflags, env, ReentrantLock())
                 init!(file)
                 return file
             else
@@ -42,11 +43,10 @@ end
 
 struct Server
     workers::Dict{String,File}
-    lock::ReentrantLock # should be locked for mutation/lookup of the workers dict, not for evaling on the workers. use worker lock for that
-    workerlocks::Dict{String,ReentrantLock}
+    lock::ReentrantLock # should be locked for mutation/lookup of the workers dict, not for evaling on the workers. use worker locks for that
     function Server()
         workers = Dict{String,File}()
-        return new(workers, ReentrantLock(), Dict{String,ReentrantLock}())
+        return new(workers, ReentrantLock())
     end
 end
 
@@ -785,12 +785,6 @@ is_julia_toplevel(node) =
     node.t.info == "{julia}" &&
     node.parent.t isa CommonMark.Document
 
-function checkpath(path)
-    isabspath(path) || error("Path must be absolute: $path")
-    isfile(path) || error("No file at $path")
-    return
-end
-
 function run!(
     server::Server,
     path::AbstractString;
@@ -826,63 +820,45 @@ function borrow_file!(
     # so multiple tasks can retrieve `workerlock` at the same time
     # but only one can unlock it at a time
 
-    checkpath(path)
+    apath = abspath(path)
 
-    prelocked, workerlock = lock(server.lock) do
-        if haskey(server.workerlocks, path)
-            return false, server.workerlocks[path]
+    prelocked, file = lock(server.lock) do
+        if haskey(server.workers, apath)
+            return false, server.workers[apath]
         else
             if optionally_create
-                lck = server.workerlocks[path] = ReentrantLock()
-                lock(lck) # don't let anything get to the fresh file before us
-                return true, lck
+                # it's not ideal to create the `File` under server.lock but it takes a second or
+                # so on my machine to init it, so for practical purposes it should be ok
+                file = server.workers[apath] = File(apath, options)
+                lock(file.lock) # don't let anything get to the fresh file before us
+                return true, file
             else
-                throw(NoFileEntryError(path))
+                throw(NoFileEntryError(apath))
             end
         end
     end
 
     if prelocked
-        # we know nothing can have happened to the file because we just created its
-        # entry, so we can initialize the file, and delete the entry in case that fails
-        file = try
-            _file = File(path, options)
-            lock(server.lock) do
-                haskey(server.workers, path) &&
-                    error("File existed even though it shouldn't for path $path")
-                server.workers[path] = _file
-            end
-        catch err
-            lock(server.lock) do
-                # clean up
-                delete!(server.workerlocks, path)
-            end
-            rethrow(err)
-        end
         return try
             f(file)
         finally
-            unlock(workerlock)
+            unlock(file.lock)
         end
     else
-        # we will now try to attain a previously existing lock. once we have attained
-        # it though, it could be that it is a stale lock from a file that has been
-        # removed in the meantime, or removed and reopened with a new lock. So if
-        # no lock exists or it doesn't match what we have, we recurse into `borrow_file!`.
+        # we will now try to attain the lock of a previously existing file. once we have attained
+        # it though, it could be that the file is stale because it has been
+        # removed and possibly reopened in the meantime. So if
+        # no file exists or it doesn't match the one we have, we recurse into `borrow_file!`.
         # This could in principle go on forever but is very unlikely to with a small number of
         # concurrent users.
-        lock(workerlock) do
-            current_lock, file = lock(server.lock) do
-                get(server.workerlocks, path, nothing), get(server.workers, path, nothing)
+        lock(file.lock) do
+            current_file = lock(server.lock) do
+                get(server.workers, apath, nothing)
             end
-            if current_lock !== workerlock
-                return borrow_file!(f, server, path; optionally_create)
+            if file !== current_file
+                return borrow_file!(f, server, apath; optionally_create)
             else
-                file === nothing && error(
-                    "No `File` existed for path $path even though there was an active lock for it. This must be a bug if all accesses to files have been wrapped in `borrow_file!`.",
-                )
-                result = f(file)
-                return result
+                return f(file)
             end
         end
     end
@@ -919,7 +895,6 @@ function close!(server::Server, path::String)
     borrow_file!(server, path) do file
         Malt.stop(file.worker)
         lock(server.lock) do
-            delete!(server.workerlocks, path)
             delete!(server.workers, path)
         end
         GC.gc()
