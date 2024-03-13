@@ -6,15 +6,8 @@
         for i = 1:20
             Threads.@spawn begin
                 run!(s, file)
-                try
-                    # files may be closed already by another task, that's ok
-                    close!(s, file)
-                catch e
-                    if !(e isa QuartoNotebookRunner.NoFileEntryError)
-                        # unexpected
-                        rethrow(e)
-                    end
-                end
+                # files may be closed already by another task, that's ok
+                close!(s, file)
             end
         end
     end
