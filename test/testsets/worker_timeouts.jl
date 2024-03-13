@@ -1,6 +1,6 @@
 include("../utilities/prelude.jl")
 
-@testset begin
+@testset "Worker timeouts" begin
     s = Server()
     base_file = joinpath(@__DIR__, "..", "examples", "timeout.qmd")
     run!(s, base_file)
