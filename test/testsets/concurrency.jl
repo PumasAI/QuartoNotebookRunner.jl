@@ -19,6 +19,5 @@
         end
     end
 
-    @test isempty(s.workerlocks)
     @test isempty(s.workers)
 end

@@ -892,7 +892,7 @@ function close!(server::Server, path::String)
     borrow_file!(server, path) do file
         Malt.stop(file.worker)
         lock(server.lock) do
-            delete!(server.workers, path)
+            pop!(server.workers, file.path)
         end
         GC.gc()
     end
