@@ -2,7 +2,7 @@ include("../utilities/prelude.jl")
 
 using Sockets
 
-@testset begin
+@testset "Socket timeout" begin
     server = QuartoNotebookRunner.serve(; timeout = 1)
     sock = Sockets.connect(server.port)
 
