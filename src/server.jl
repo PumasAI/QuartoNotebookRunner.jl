@@ -817,11 +817,6 @@ function borrow_file!(
     optionally_create = false,
     options = Dict{String,Any}(),
 )
-    # first prohibit mutation of the workers lock dict
-    # but we don't want to lock the server until `f` is done executing
-    # so multiple tasks can retrieve `workerlock` at the same time
-    # but only one can unlock it at a time
-
     apath = abspath(path)
 
     prelocked, file = lock(server.lock) do
