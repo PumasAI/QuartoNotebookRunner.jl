@@ -804,9 +804,11 @@ end
 """
     borrow_file!(f, server, path; optionally_create = false, options = Dict{String,Any}())
 
-Executes `f(file)` while the worker lock corresponding to the `file`
-at `path` is attained. All actions on a `File` should be wrapped in this
+Executes `f(file)` while the `file`'s `ReentrantLock` is locked.
+All actions on a `Server`'s `File` should be wrapped in this
 so that no two tasks can mutate the `File` at the same time.
+When `optionally_create` is `true`, the `File` will be created on the server
+if it doesn't exist, in which case it is passed `options`.
 """
 function borrow_file!(
     f,
