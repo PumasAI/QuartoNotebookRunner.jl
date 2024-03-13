@@ -5,6 +5,7 @@ mutable struct File
     path::String
     exeflags::Vector{String}
     env::Vector{String}
+    lock::ReentrantLock
 
     function File(path::String, options::Union{String,Dict{String,Any}})
         if isfile(path)
@@ -18,7 +19,7 @@ mutable struct File
                 exeflags, env = _exeflags_and_env(merged_options)
 
                 worker = cd(() -> Malt.Worker(; exeflags, env), dirname(path))
-                file = new(worker, path, exeflags, env)
+                file = new(worker, path, exeflags, env, ReentrantLock())
                 init!(file)
                 return file
             else
@@ -42,10 +43,10 @@ end
 
 struct Server
     workers::Dict{String,File}
-
+    lock::ReentrantLock # should be locked for mutation/lookup of the workers dict, not for evaling on the workers. use worker locks for that
     function Server()
         workers = Dict{String,File}()
-        return new(workers)
+        return new(workers, ReentrantLock())
     end
 end
 
@@ -58,7 +59,7 @@ end
 
 function refresh!(file::File, options::Dict)
     exeflags, env = _exeflags_and_env(options)
-    if exeflags != file.exeflags || env != file.env
+    if exeflags != file.exeflags || env != file.env || !Malt.isrunning(file.worker) # the worker might have been killed on another task
         Malt.stop(file.worker)
         file.worker = cd(() -> Malt.Worker(; exeflags, env), dirname(file.path))
         file.exeflags = exeflags
@@ -784,24 +785,80 @@ is_julia_toplevel(node) =
     node.t.info == "{julia}" &&
     node.parent.t isa CommonMark.Document
 
-function loadfile!(server::Server, path::String, options::Union{String,Dict{String,Any}})
-    file = File(path, options)
-    server.workers[path] = file
-    return file
-end
-
 function run!(
     server::Server,
-    file::AbstractString;
+    path::AbstractString;
     output::Union{AbstractString,IO,Nothing} = nothing,
     showprogress::Bool = true,
     options::Union{String,Dict{String,Any}} = Dict{String,Any}(),
 )
-    file = get!(server.workers, file) do
-        @debug "file not loaded, loading first." file
-        loadfile!(server, file, options)
+    borrow_file!(server, path; optionally_create = true) do file
+        return evaluate!(file, output; showprogress, options)
     end
-    return evaluate!(file, output; showprogress, options)
+end
+
+struct NoFileEntryError <: Exception
+    path::String
+end
+
+"""
+    borrow_file!(f, server, path; optionally_create = false, options = Dict{String,Any}())
+
+Executes `f(file)` while the `file`'s `ReentrantLock` is locked.
+All actions on a `Server`'s `File` should be wrapped in this
+so that no two tasks can mutate the `File` at the same time.
+When `optionally_create` is `true`, the `File` will be created on the server
+if it doesn't exist, in which case it is passed `options`.
+"""
+function borrow_file!(
+    f,
+    server,
+    path;
+    optionally_create = false,
+    options = Dict{String,Any}(),
+)
+    apath = abspath(path)
+
+    prelocked, file = lock(server.lock) do
+        if haskey(server.workers, apath)
+            return false, server.workers[apath]
+        else
+            if optionally_create
+                # it's not ideal to create the `File` under server.lock but it takes a second or
+                # so on my machine to init it, so for practical purposes it should be ok
+                file = server.workers[apath] = File(apath, options)
+                lock(file.lock) # don't let anything get to the fresh file before us
+                return true, file
+            else
+                throw(NoFileEntryError(apath))
+            end
+        end
+    end
+
+    if prelocked
+        return try
+            f(file)
+        finally
+            unlock(file.lock)
+        end
+    else
+        # we will now try to attain the lock of a previously existing file. once we have attained
+        # it though, it could be that the file is stale because it has been
+        # removed and possibly reopened in the meantime. So if
+        # no file exists or it doesn't match the one we have, we recurse into `borrow_file!`.
+        # This could in principle go on forever but is very unlikely to with a small number of
+        # concurrent users.
+        lock(file.lock) do
+            current_file = lock(server.lock) do
+                get(server.workers, apath, nothing)
+            end
+            if file !== current_file
+                return borrow_file!(f, server, apath; optionally_create)
+            else
+                return f(file)
+            end
+        end
+    end
 end
 
 """
@@ -824,15 +881,21 @@ function render(
 end
 
 function close!(server::Server)
-    for path in keys(server.workers)
-        close!(server, path)
+    lock(server.lock) do
+        for path in keys(server.workers)
+            close!(server, path)
+        end
     end
 end
 
 function close!(server::Server, path::String)
-    Malt.stop(server.workers[path].worker)
-    delete!(server.workers, path)
-    GC.gc()
+    borrow_file!(server, path) do file
+        Malt.stop(file.worker)
+        lock(server.lock) do
+            pop!(server.workers, file.path)
+        end
+        GC.gc()
+    end
 end
 
 json_reader(str) = JSON3.read(str, Any)
