@@ -141,8 +141,6 @@ function serve(;
                         @debug "Connection closed."
                         break
                     else
-                        suspend_timeout!()
-
                         json = try
                             _read_json(data)
                         catch error
@@ -152,28 +150,33 @@ function serve(;
                             continue
                         end
                         @debug "Received request" json
-                        if json.type == "stop"
-                            @debug "Closing connection."
-                            close!(notebook_server)
-                            _write_json(socket, (; message = "Server stopped."))
-                            close(socket)
-                            # close(socket_server) will cause an exception on the
-                            # Sockets.accept line so we use this flag to swallow the
-                            # error if that happened on purpose
-                            closed_deliberately[] = true
-                            close(socket_server)
-                        elseif json.type == "isready"
-                            _write_json(socket, true)
-                        else
-                            _write_json(
-                                socket,
-                                _handle_response(notebook_server, json, showprogress),
-                            )
-                        end
 
-                        # when a message has been processed completely, start timer
-                        # if no other command is currently running
-                        resume_timeout_if_idle!()
+                        suspend_timeout!()
+
+                        try
+                            if json.type == "stop"
+                                @debug "Closing connection."
+                                close!(notebook_server)
+                                _write_json(socket, (; message = "Server stopped."))
+                                close(socket)
+                                # close(socket_server) will cause an exception on the
+                                # Sockets.accept line so we use this flag to swallow the
+                                # error if that happened on purpose
+                                closed_deliberately[] = true
+                                close(socket_server)
+                            elseif json.type == "isready"
+                                _write_json(socket, true)
+                            else
+                                _write_json(
+                                    socket,
+                                    _handle_response(notebook_server, json, showprogress),
+                                )
+                            end
+                        finally
+                            # when a message has been processed completely, start timer
+                            # if no other command is currently running
+                            resume_timeout_if_idle!()
+                        end
                     end
                 end
             end
