@@ -1,11 +1,19 @@
 const net = require('net');
 const path = require('path');
 const process = require('process');
+const crypto = require('crypto');
 
 const port = Number(process.argv[2]);
+const key = process.argv[3];
 
 function handle() {
-    const toJSON = (obj) => JSON.stringify(obj) + '\n';
+    const toJSON = (obj) => {
+        payload = JSON.stringify(obj);
+        const hmac = crypto.createHmac('sha256', key);
+        hmac.update(payload);
+        const hmac_b64 = hmac.digest('base64');
+        return JSON.stringify({hmac: hmac_b64, payload}) + '\n';
+    }
     const run = (file) => toJSON({ type: 'run', content: file });
     const close = (file) => toJSON({ type: 'close', content: file || '' });
     const stop = () => toJSON({ type: 'stop', content: '' });
@@ -19,8 +27,8 @@ function handle() {
         throw new Error('No notebook specified.');
     }
 
-    const type = process.argv[3];
-    const arg = process.argv[4];
+    const type = process.argv[4];
+    const arg = process.argv[5];
 
     switch (type) {
         case 'run':
