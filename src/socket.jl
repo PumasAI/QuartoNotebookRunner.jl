@@ -275,7 +275,9 @@ struct HMACMismatchError <: Exception end
 
 # TODO: check what the message schema is for this.
 function _read_json(key::Base.UUID, data)
-    (; hmac, payload) = JSON3.read(data, @NamedTuple{hmac::String, payload::String})
+    obj = JSON3.read(data, @NamedTuple{hmac::String, payload::String})
+    hmac = obj.hmac
+    payload = obj.payload
 
     hmac_vec_client = Base64.base64decode(hmac)
     hmac_vec_server = SHA.hmac_sha256(Vector{UInt8}(string(key)), payload)
