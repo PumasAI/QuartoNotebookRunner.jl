@@ -281,7 +281,7 @@ function _read_json(key::Base.UUID, data)
 
     hmac_vec_client = Base64.base64decode(hmac)
     hmac_vec_server = SHA.hmac_sha256(Vector{UInt8}(string(key)), payload)
-    if hmac_vec_client != hmac_vec_server
+    if n_inequal_constant_time(hmac_vec_client, hmac_vec_server) != 0
         throw(HMACMismatchError())
     end
 
@@ -289,6 +289,12 @@ function _read_json(key::Base.UUID, data)
         payload,
         @NamedTuple{type::String, content::Union{String,Union{String,Dict{String,Any}}}}
     )
+end
+
+# https://codahale.com/a-lesson-in-timing-attacks/
+@noinline function n_inequal_constant_time(v1::Vector{UInt8}, v2::Vector{UInt8})
+    length(v1) != length(v2) && return 1
+    return sum(((a, b),) -> a != b, zip(v1, v2))
 end
 
 """
