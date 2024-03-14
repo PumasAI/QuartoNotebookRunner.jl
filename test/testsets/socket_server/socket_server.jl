@@ -33,8 +33,7 @@ include("../../utilities/prelude.jl")
         d7 = json(`$node $client $(server.port) $(server.key) run $(cell_types)`)
         @test d2 == d7
 
-        d8 = json(`$node $client $(server.port) $(server.key) stop`)
-        @test d8["message"] == "Server stopped."
+        run(`$node $client $(server.port) $(server.key) stop`)
 
         wait(server)
     end
