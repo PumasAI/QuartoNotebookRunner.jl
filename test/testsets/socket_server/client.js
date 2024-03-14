@@ -60,3 +60,11 @@ client.on('data', function (data) {
 client.on('close', function () {
     debug && console.log('Connection closed');
 });
+client.on('error', function (err) {
+    const type = process.argv[4];
+    if (type == 'stop' && err.code == 'ECONNRESET'){
+        debug && console.log('Connection was reset after sending the stop command.')
+    } else {
+        throw err;
+    }
+});
