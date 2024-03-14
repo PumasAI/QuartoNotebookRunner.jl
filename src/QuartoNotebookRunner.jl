@@ -32,6 +32,7 @@ import ProgressLogging
 import REPL
 import Random
 import Sockets
+import SHA
 import TOML
 import YAML
 

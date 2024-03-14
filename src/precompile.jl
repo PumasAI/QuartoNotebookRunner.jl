@@ -10,16 +10,25 @@ PrecompileTools.@setup_workload begin
         server = QuartoNotebookRunner.serve()
         sock = Sockets.connect(server.port)
 
-        JSON3.write(sock, Dict(:type => "isready", :content => Dict()))
-        println(sock)
+        QuartoNotebookRunner._write_hmac_json(
+            sock,
+            server.key,
+            Dict(:type => "isready", :content => Dict()),
+        )
         @assert readline(sock) == "true"
 
-        JSON3.write(sock, Dict(:type => "isopen", :content => @__FILE__)) # just to have any absolute file path that exists but is not open
-        println(sock)
+        QuartoNotebookRunner._write_hmac_json(
+            sock,
+            server.key,
+            Dict(:type => "isopen", :content => @__FILE__),
+        ) # just to have any absolute file path that exists but is not open
         @assert readline(sock) == "false"
 
-        JSON3.write(sock, Dict(:type => "stop", :content => Dict()))
-        println(sock)
+        QuartoNotebookRunner._write_hmac_json(
+            sock,
+            server.key,
+            Dict(:type => "stop", :content => Dict()),
+        )
         wait(server)
     end
 end

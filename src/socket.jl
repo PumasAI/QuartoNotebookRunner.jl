@@ -5,6 +5,7 @@ struct SocketServer
     notebookserver::Server
     port::Int
     task::Task
+    key::Base.UUID
 end
 
 Base.wait(s::SocketServer) = wait(s.task)
@@ -24,6 +25,22 @@ reset after the last active command has been processed fully (so the server will
 out while rendering a long-running notebook, for example).
 
 Message schema:
+
+Messages are composed of a payload string which needs to be valid JSON, and
+need to be signed with the base64 encoded HMAC256 digest of this JSON string,
+using the UUID `server.key` as the key. Upon receiving a message, the server
+will verify that `hmac == base64(hmac256(payload, key))` before processing it
+further.
+
+```json
+{
+    hmac: string,
+    payload: string
+}
+```
+
+The JSON-decoded `payload` string gives the actual server command and
+should match the following schema:
 
 ```json
 {
@@ -72,6 +89,8 @@ function serve(;
 
     port = getport(port)
     @debug "Starting notebook server." port
+
+    key = Base.UUID(rand(UInt128))
 
     notebook_server = Server()
     closed_deliberately = Ref(false)
@@ -142,9 +161,13 @@ function serve(;
                         break
                     else
                         json = try
-                            _read_json(data)
+                            _read_json(key, data)
                         catch error
-                            msg = "Failed to parse json message."
+                            msg = if error isa HMACMismatchError
+                                "Incorrect HMAC digest"
+                            else
+                                "Failed to parse json message."
+                            end
                             @error msg error
                             _write_json(socket, (; error = msg))
                             continue
@@ -186,7 +209,7 @@ function serve(;
 
     errormonitor(task)
 
-    return SocketServer(socket_server, notebook_server, port, task)
+    return SocketServer(socket_server, notebook_server, port, task, key)
 end
 
 function _handle_response(
@@ -248,11 +271,37 @@ function _log_error(message)
     return (; error = message, juliaError = sprint(Base.showerror, error, backtrace))
 end
 
+struct HMACMismatchError <: Exception end
+
 # TODO: check what the message schema is for this.
-_read_json(data) = JSON3.read(
-    data,
-    @NamedTuple{type::String, content::Union{String,Union{String,Dict{String,Any}}}}
-)
+function _read_json(key::Base.UUID, data)
+    (; hmac, payload) = JSON3.read(data, @NamedTuple{hmac::String, payload::String})
+
+    hmac_vec_client = Base64.base64decode(hmac)
+    hmac_vec_server = SHA.hmac_sha256(Vector{UInt8}(string(key)), payload)
+    if hmac_vec_client != hmac_vec_server
+        throw(HMACMismatchError())
+    end
+
+    return JSON3.read(
+        payload,
+        @NamedTuple{type::String, content::Union{String,Union{String,Dict{String,Any}}}}
+    )
+end
+
+"""
+    _write_hmac_json(socket, key::Base.UUID, data)
+
+Internal utility function to store the json representation of `data` as `payload`,
+compute the base64 hmac256 digest from it and then write out the json string `{hmac, payload}`.
+"""
+function _write_hmac_json(socket, key::Base.UUID, data)
+    payload = JSON3.write(data)
+    hmac = SHA.hmac_sha256(Vector{UInt8}(string(key)), payload)
+    hmac_b64 = Base64.base64encode(hmac)
+    write(socket, JSON3.write((; hmac = hmac_b64, payload)), "\n")
+end
+
 _write_json(socket, data) = write(socket, JSON3.write(data), "\n")
 
 function _get_file(content::Dict)
