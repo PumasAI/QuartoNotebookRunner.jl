@@ -72,10 +72,17 @@ end
 struct Server
     workers::Dict{String,File}
     lock::ReentrantLock # should be locked for mutation/lookup of the workers dict, not for evaling on the workers. use worker locks for that
+    on_change::Base.RefValue{Union{Nothing,Function}} # an optional callback function n_workers::Int -> nothing that gets called with the server.lock locked when workers are added or removed
     function Server()
         workers = Dict{String,File}()
-        return new(workers, ReentrantLock())
+        return new(workers, ReentrantLock(), Ref{Union{Nothing,Function}}(nothing))
     end
+end
+
+function on_change(s::Server)
+    o = s.on_change[]
+    o !== nothing && o(length(s.workers))
+    return
 end
 
 # Implementation.
@@ -875,6 +882,7 @@ function borrow_file!(
                 # so on my machine to init it, so for practical purposes it should be ok
                 file = server.workers[apath] = File(apath, options)
                 lock(file.lock) # don't let anything get to the fresh file before us
+                on_change(server)
                 return true, file
             else
                 throw(NoFileEntryError(apath))
@@ -951,6 +959,7 @@ function close!(server::Server, path::String)
             Malt.stop(file.worker)
             lock(server.lock) do
                 pop!(server.workers, file.path)
+                on_change(server)
             end
             GC.gc()
         end
