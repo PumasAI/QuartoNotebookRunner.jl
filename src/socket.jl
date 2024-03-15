@@ -101,45 +101,50 @@ function serve(;
         socket_server = Sockets.listen(port)
     end
 
-    timer_lock = ReentrantLock()
-    timer_refcount = Ref(1)
     timer = Ref{Union{Timer,Nothing}}(nothing)
 
-    resume_timeout_if_idle!() =
-        lock(timer_lock) do
-            timeout === nothing && return
-
-            # only continue if all but one calls to `suspend_timeout!` had their corresponding
-            # `resume_timeout_if_idle!` called already, which means that now no other
-            # command is active and we can close down
-            timer_refcount[] -= 1
-            timer_refcount[] == 0 || return
-
-            if timer[] !== nothing
-                close(timer[])
-            end
-            timer[] = Timer(timeout) do _
-                @debug "Server timed out after $timeout seconds of inactivity."
-                # close(socket_server) will cause an exception on the
-                # Sockets.accept line so we use this flag to swallow the
-                # error if that happened on purpose
+    function set_timer!()
+        @debug "Timer set up"
+        timer[] = Timer(timeout) do _
+            @debug "Server timed out after $timeout seconds of inactivity."
+            # close(socket_server) will cause an exception on the
+            # Sockets.accept line so we use this flag to swallow the
+            # error if that happened on purpose
+            lock(notebook_server.lock) do
+                if !isempty(notebook_server.workers)
+                    @debug "Timeout fired but workers were not empty at attaining server lock, not shutting down server."
+                    return
+                end
                 closed_deliberately[] = true
                 close!(notebook_server)
                 close(socket_server)
             end
         end
-    suspend_timeout!() =
-        lock(timer_lock) do
+    end
+
+    # this function is called under server.lock so we don't need further synchronization
+    notebook_server.on_change[] =
+        n_workers::Int -> begin
             timeout === nothing && return
 
-            timer_refcount[] += 1
-            if timer[] !== nothing
-                close(timer[])
+            if n_workers == 0
+                if timer[] !== nothing
+                    error(
+                        "Timer was already set even though the number of workers just changed to zero. This must be a bug.",
+                    )
+                end
+                set_timer!()
+            else
+                if timer[] !== nothing
+                    @debug "Closing active timer"
+                    close(timer[])
+                    timer[] = nothing
+                end
             end
-            timer[] = nothing
+            return
         end
 
-    resume_timeout_if_idle!()
+    timeout !== nothing && set_timer!()
 
     task = Threads.@spawn begin
         while isopen(socket_server)
@@ -174,31 +179,23 @@ function serve(;
                         end
                         @debug "Received request" json
 
-                        suspend_timeout!()
-
-                        try
-                            if json.type == "stop"
-                                @debug "Closing connection."
-                                close!(notebook_server)
-                                _write_json(socket, (; message = "Server stopped."))
-                                close(socket)
-                                # close(socket_server) will cause an exception on the
-                                # Sockets.accept line so we use this flag to swallow the
-                                # error if that happened on purpose
-                                closed_deliberately[] = true
-                                close(socket_server)
-                            elseif json.type == "isready"
-                                _write_json(socket, true)
-                            else
-                                _write_json(
-                                    socket,
-                                    _handle_response(notebook_server, json, showprogress),
-                                )
-                            end
-                        finally
-                            # when a message has been processed completely, start timer
-                            # if no other command is currently running
-                            resume_timeout_if_idle!()
+                        if json.type == "stop"
+                            @debug "Closing connection."
+                            close!(notebook_server)
+                            _write_json(socket, (; message = "Server stopped."))
+                            close(socket)
+                            # close(socket_server) will cause an exception on the
+                            # Sockets.accept line so we use this flag to swallow the
+                            # error if that happened on purpose
+                            closed_deliberately[] = true
+                            close(socket_server)
+                        elseif json.type == "isready"
+                            _write_json(socket, true)
+                        else
+                            _write_json(
+                                socket,
+                                _handle_response(notebook_server, json, showprogress),
+                            )
                         end
                     end
                 end
