@@ -72,16 +72,15 @@ end
 struct Server
     workers::Dict{String,File}
     lock::ReentrantLock # should be locked for mutation/lookup of the workers dict, not for evaling on the workers. use worker locks for that
-    on_change::Base.RefValue{Union{Nothing,Function}} # an optional callback function n_workers::Int -> nothing that gets called with the server.lock locked when workers are added or removed
+    on_change::Base.RefValue{Function} # an optional callback function n_workers::Int -> nothing that gets called with the server.lock locked when workers are added or removed
     function Server()
         workers = Dict{String,File}()
-        return new(workers, ReentrantLock(), Ref{Union{Nothing,Function}}(nothing))
+        return new(workers, ReentrantLock(), Ref{Function}(identity))
     end
 end
 
 function on_change(s::Server)
-    o = s.on_change[]
-    o !== nothing && o(length(s.workers))
+    s.on_change[](length(s.workers))
     return
 end
 
