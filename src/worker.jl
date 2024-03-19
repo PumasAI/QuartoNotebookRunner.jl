@@ -141,30 +141,70 @@ function worker_init(f::File)
             line::Integer,
             cell_options::AbstractDict = Dict{String,Any}(),
         )
-            captured, display_results = with_inline_display(cell_options) do
+            return _render_thunk(code, cell_options) do
                 Base.@invokelatest include_str(WORKSPACE[], code; file, line)
             end
-            results = Base.@invokelatest render_mimetypes(
-                REPL.ends_with_semicolon(code) ? nothing : captured.value,
-                cell_options,
-            )
-            return (;
-                results,
-                display_results,
-                output = captured.output,
-                error = captured.error ? string(typeof(captured.value)) : nothing,
-                backtrace = collect(
-                    eachline(
-                        IOBuffer(
-                            clean_bt_str(
-                                captured.error,
-                                captured.backtrace,
-                                captured.value,
+        end
+
+        # Recursively render cell thunks. This might be an `include_str` call,
+        # which is the starting point for a source cell, or it may be a
+        # user-provided thunk that comes from a source cell with `multiple` set
+        # to `true`.
+        function _render_thunk(
+            thunk::Base.Callable,
+            code::AbstractString,
+            cell_options::AbstractDict = Dict{String,Any}(),
+        )
+            captured, display_results = with_inline_display(thunk, cell_options)
+            if get(cell_options, "multiple", false) === true
+                return collect(
+                    # A cell expansion with `multiple` might itself also contain
+                    # cells that expand to multiple cells, so we need to flatten
+                    # the results to a single list of cells before passing back
+                    # to the server. Cell expansion is recursive.
+                    Base.Iterators.flatten(
+                        map(captured.value) do cell
+                            wrapped = function ()
+                                return IOCapture.capture(
+                                    cell.thunk;
+                                    rethrow = InterruptException,
+                                    color = true,
+                                )
+                            end
+                            # **The recursive call:**
+                            return Base.@invokelatest _render_thunk(
+                                wrapped,
+                                get(cell, :code, ""),
+                                get(Dict{String,Any}, cell, :options),
+                            )
+                        end,
+                    ),
+                )
+            else
+                results = Base.@invokelatest render_mimetypes(
+                    REPL.ends_with_semicolon(code) ? nothing : captured.value,
+                    cell_options,
+                )
+                return [(;
+                    code,
+                    cell_options,
+                    results,
+                    display_results,
+                    output = captured.output,
+                    error = captured.error ? string(typeof(captured.value)) : nothing,
+                    backtrace = collect(
+                        eachline(
+                            IOBuffer(
+                                clean_bt_str(
+                                    captured.error,
+                                    captured.backtrace,
+                                    captured.value,
+                                ),
                             ),
                         ),
                     ),
-                ),
-            )
+                )]
+            end
         end
 
         # Utilities:
