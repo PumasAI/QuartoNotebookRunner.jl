@@ -543,8 +543,6 @@ function evaluate_raw_cells!(f::File, chunks::Vector, options::Dict; showprogres
     @maybe_progress showprogress "$header" for (nth, chunk) in enumerate(chunks)
         if chunk.type === :code
 
-            outputs = []
-
             if chunk.evaluate
                 # Offset the line number by 1 to account for the triple backticks
                 # that are part of the markdown syntax for code blocks.
@@ -555,104 +553,133 @@ function evaluate_raw_cells!(f::File, chunks::Vector, options::Dict; showprogres
                     $(chunk.cell_options),
                 ))
                 remote = Malt.remote_eval_fetch(f.worker, expr)
-                processed = process_results(remote.results)
 
-                # Should this notebook cell be allowed to throw an error? When
-                # not allowed, we log all errors don't generate an output.
-                allow_error_cell = get(chunk.cell_options, "error", allow_error_global)
+                remote_vec = remote isa Vector ? remote : [remote]
 
-                if isnothing(remote.error)
-                    for display_result in remote.display_results
-                        processed_display = process_results(display_result)
-                        if !isempty(processed_display.data)
-                            push!(
-                                outputs,
-                                (;
-                                    output_type = "display_data",
-                                    processed_display.data,
-                                    processed_display.metadata,
-                                ),
-                            )
-                        end
-                        if !isempty(processed_display.errors)
-                            append!(outputs, processed_display.errors)
-                            if !allow_error_cell
-                                for each_error in processed_display.errors
-                                    file = "$(chunk.file):$(chunk.line)"
-                                    traceback = Text(join(each_error.traceback, "\n"))
-                                    @error "stopping notebook evaluation due to unexpected `show` error." file traceback
-                                    has_error = true
+                for (j, remote) in enumerate(remote_vec)
+
+                    outputs = []
+
+                    processed = process_results(remote.results)
+
+                    # Should this notebook cell be allowed to throw an error? When
+                    # not allowed, we log all errors don't generate an output.
+                    allow_error_cell = get(chunk.cell_options, "error", allow_error_global)
+
+                    if isnothing(remote.error)
+                        for display_result in remote.display_results
+                            processed_display = process_results(display_result)
+                            if !isempty(processed_display.data)
+                                push!(
+                                    outputs,
+                                    (;
+                                        output_type = "display_data",
+                                        processed_display.data,
+                                        processed_display.metadata,
+                                    ),
+                                )
+                            end
+                            if !isempty(processed_display.errors)
+                                append!(outputs, processed_display.errors)
+                                if !allow_error_cell
+                                    for each_error in processed_display.errors
+                                        file = "$(chunk.file):$(chunk.line)"
+                                        traceback = Text(join(each_error.traceback, "\n"))
+                                        @error "stopping notebook evaluation due to unexpected `show` error." file traceback
+                                        has_error = true
+                                    end
                                 end
                             end
                         end
-                    end
-                    if !isempty(processed.data)
+                        if !isempty(processed.data)
+                            push!(
+                                outputs,
+                                (;
+                                    output_type = "execute_result",
+                                    execution_count = 1,
+                                    processed.data,
+                                    processed.metadata,
+                                ),
+                            )
+                        end
+                    else
+                        # These are errors arising from evaluation of the contents
+                        # of a code cell, not from the `show` output of the values,
+                        # which is handled separately below.
                         push!(
                             outputs,
                             (;
-                                output_type = "execute_result",
-                                execution_count = 1,
-                                processed.data,
-                                processed.metadata,
+                                output_type = "error",
+                                ename = remote.error,
+                                evalue = get(processed.data, "text/plain", ""),
+                                traceback = remote.backtrace,
                             ),
                         )
-                    end
-                else
-                    # These are errors arising from evaluation of the contents
-                    # of a code cell, not from the `show` output of the values,
-                    # which is handled separately below.
-                    push!(
-                        outputs,
-                        (;
-                            output_type = "error",
-                            ename = remote.error,
-                            evalue = get(processed.data, "text/plain", ""),
-                            traceback = remote.backtrace,
-                        ),
-                    )
-                    if !allow_error_cell
-                        file = "$(chunk.file):$(chunk.line)"
-                        traceback = Text(join(remote.backtrace, "\n"))
-                        @error "stopping notebook evaluation due to unexpected cell error." file traceback
-                        has_error = true
-                    end
-                end
-
-                if !isempty(remote.output)
-                    pushfirst!(
-                        outputs,
-                        (; output_type = "stream", name = "stdout", text = remote.output),
-                    )
-                end
-
-                # These are errors arising from the `show` output of the values
-                # generated by cells, not from the cell evaluation itself. So if
-                # something throws an error here then the user's `show` method
-                # has a bug.
-                if !isempty(processed.errors)
-                    append!(outputs, processed.errors)
-                    if !allow_error_cell
-                        for each_error in processed.errors
+                        if !allow_error_cell
                             file = "$(chunk.file):$(chunk.line)"
-                            traceback = Text(join(each_error.traceback, "\n"))
-                            @error "stopping notebook evaluation due to unexpected `show` error." file traceback
+                            traceback = Text(join(remote.backtrace, "\n"))
+                            @error "stopping notebook evaluation due to unexpected cell error." file traceback
                             has_error = true
                         end
                     end
+
+                    if !isempty(remote.output)
+                        pushfirst!(
+                            outputs,
+                            (; output_type = "stream", name = "stdout", text = remote.output),
+                        )
+                    end
+
+                    # These are errors arising from the `show` output of the values
+                    # generated by cells, not from the cell evaluation itself. So if
+                    # something throws an error here then the user's `show` method
+                    # has a bug.
+                    if !isempty(processed.errors)
+                        append!(outputs, processed.errors)
+                        if !allow_error_cell
+                            for each_error in processed.errors
+                                file = "$(chunk.file):$(chunk.line)"
+                                traceback = Text(join(each_error.traceback, "\n"))
+                                @error "stopping notebook evaluation due to unexpected `show` error." file traceback
+                                has_error = true
+                            end
+                        end
+                    end
+
+                    source = if j == 1
+                        process_cell_source(chunk.source)
+                    else
+                        options = merge(remote.options, Dict(:echo => false))
+                        process_cell_source(replace(YAML.write(options), r"^"m => "#| "))
+                    end
+
+                    push!(
+                        cells,
+                        (;
+                            id = string(nth, "_", j),
+                            cell_type = chunk.type,
+                            metadata = (;),
+                            source,
+                            outputs,
+                            execution_count = 1,
+                        ),
+                    )
                 end
+            else
+                push!(
+                    cells,
+                    (;
+                        id = string(nth),
+                        cell_type = chunk.type,
+                        metadata = (;),
+                        source = process_cell_source(chunk.source),
+                        outputs = [],
+                        execution_count = 0,
+                    ),
+                )
             end
 
-            push!(
-                cells,
-                (;
-                    id = string(nth),
-                    cell_type = chunk.type,
-                    metadata = (;),
-                    source = process_cell_source(chunk.source),
-                    outputs,
-                    execution_count = chunk.evaluate ? 1 : 0,
-                ),
-            )
+            
         elseif chunk.type === :markdown
             marker = "{julia} "
             source = chunk.source

@@ -141,30 +141,92 @@ function worker_init(f::File)
             line::Integer,
             cell_options::AbstractDict = Dict{String,Any}(),
         )
-            captured, display_results = with_inline_display(cell_options) do
-                Base.@invokelatest include_str(WORKSPACE[], code; file, line)
-            end
-            results = Base.@invokelatest render_mimetypes(
-                REPL.ends_with_semicolon(code) ? nothing : captured.value,
-                cell_options,
-            )
-            return (;
-                results,
-                display_results,
-                output = captured.output,
-                error = captured.error ? string(typeof(captured.value)) : nothing,
-                backtrace = collect(
-                    eachline(
-                        IOBuffer(
-                            clean_bt_str(
-                                captured.error,
-                                captured.backtrace,
-                                captured.value,
+            
+            if get(cell_options, "multiple", false)
+                captured, display_results = with_inline_display(cell_options) do
+                    Base.@invokelatest include_str(WORKSPACE[], code; file, line)
+                end
+
+                results_vec = []
+
+                closure = function (el)
+                    @info el
+                    ks = keys(el)
+                    s = setdiff(ks, [:output, :src, :options])
+                    if !isempty(s)
+                        error("Invalid keys found on return object with multiple=true set: $s")
+                    end
+
+                    results = if haskey(el, :output)
+                        Base.@invokelatest render_mimetypes(
+                            el.output,
+                            cell_options,
+                        )
+                    else
+                        Dict{String,@NamedTuple{error::Bool, data::Vector{UInt8}}}()
+                    end
+
+                    src = if haskey(el, :src)
+                        el.src::String
+                    else
+                        nothing
+                    end
+
+                    options = if haskey(el, :options)
+                        el.options::Dict
+                    else
+                        Dict()
+                    end
+
+                    push!(results_vec, (;
+                        results,
+                        src,
+                        options,
+                        display_results,
+                        output = "",
+                        error = nothing,
+                        backtrace = collect(
+                            eachline(
+                                IOBuffer(
+                                    clean_bt_str(
+                                        captured.error,
+                                        captured.backtrace,
+                                        captured.value,
+                                    ),
+                                ),
+                            ),
+                        ),
+                    ))
+                end
+
+                Base.@invokelatest foreach(closure, captured.value)
+                return results_vec                
+            else
+                captured, display_results = with_inline_display(cell_options) do
+                    Base.@invokelatest include_str(WORKSPACE[], code; file, line)
+                end
+                results = Base.@invokelatest render_mimetypes(
+                    REPL.ends_with_semicolon(code) ? nothing : captured.value,
+                    cell_options,
+                )
+                return (;
+                    results,
+                    display_results,
+                    output = captured.output,
+                    error = captured.error ? string(typeof(captured.value)) : nothing,
+                    backtrace = collect(
+                        eachline(
+                            IOBuffer(
+                                clean_bt_str(
+                                    captured.error,
+                                    captured.backtrace,
+                                    captured.value,
+                                ),
                             ),
                         ),
                     ),
-                ),
-            )
+                )
+            end
         end
 
         # Utilities:
