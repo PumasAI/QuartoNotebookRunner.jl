@@ -1,0 +1,25 @@
+---
+title: Project
+---
+
+Non-global project environment.
+
+```{julia}
+@isdefined(Example)
+```
+
+```{julia}
+Pkg.instantiate()
+```
+
+```{julia}
+Pkg.status()
+```
+
+```{julia}
+using Example
+```
+
+```{julia}
+isa(Example, Module)
+```
