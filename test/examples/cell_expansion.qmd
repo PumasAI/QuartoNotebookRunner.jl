@@ -1,0 +1,49 @@
+---
+title: Cell Expansion
+---
+
+```{julia}
+#| echo: false
+#| multiple: true
+[(;
+    thunk = function ()
+        println("print call")
+        display("display call")
+        "return value"
+    end,
+    code = """
+    # Fake code goes here.
+    """,
+    options = Dict("layout-ncol" => 2),
+)]
+```
+
+```{julia}
+#| multiple: true
+[
+    (;
+        thunk = function ()
+            return [
+                (;
+                    thunk = function ()
+                        return [(; thunk = () -> 1, options = Dict("layout-ncol" => 1))]
+                    end,
+                    options = Dict("multiple" => true),
+                ),
+                (;
+                    thunk = function ()
+                        return [(; thunk = () -> (display(2); 2)), (; thunk = () -> 3)]
+                    end,
+                    options = Dict("multiple" => true),
+                ),
+            ]
+        end,
+        options = Dict("multiple" => true),
+    ),
+    (; thunk = () -> 4),
+    (;
+        thunk = () -> println("## Header"),
+        options = Dict("output" => "asis", "echo" => false),
+    ),
+]
+```
