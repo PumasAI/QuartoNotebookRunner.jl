@@ -67,8 +67,7 @@ function _exeflags_and_env(options)
     exeflags = map(String, options["format"]["metadata"]["julia"]["exeflags"])
     env = map(String, options["format"]["metadata"]["julia"]["env"])
     # Use `--project=@.` if neither `JULIA_PROJECT=...` nor `--project=...` are specified
-    if !any(Base.Fix2(startswith, "JULIA_PROJECT="), env) &&
-       !any(Base.Fix2(startswith, "--project="), exeflags)
+    if !any(startswith("JULIA_PROJECT="), env) && !any(startswith("--project="), exeflags)
         push!(exeflags, "--project=@.")
     end
     return exeflags, env
