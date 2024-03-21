@@ -141,9 +141,11 @@ function worker_init(f::File)
             line::Integer,
             cell_options::AbstractDict = Dict{String,Any}(),
         )
-            return _render_thunk(code, cell_options) do
-                Base.@invokelatest include_str(WORKSPACE[], code; file, line)
-            end
+            return collect(
+                _render_thunk(code, cell_options) do
+                    Base.@invokelatest include_str(WORKSPACE[], code; file, line)
+                end,
+            )
         end
 
         # Recursively render cell thunks. This might be an `include_str` call,
@@ -157,35 +159,34 @@ function worker_init(f::File)
         )
             captured, display_results = with_inline_display(thunk, cell_options)
             if get(cell_options, "multiple", false) === true
-                return collect(
-                    # A cell expansion with `multiple` might itself also contain
-                    # cells that expand to multiple cells, so we need to flatten
-                    # the results to a single list of cells before passing back
-                    # to the server. Cell expansion is recursive.
-                    Base.Iterators.flatten(
-                        map(captured.value) do cell
-                            wrapped = function ()
-                                return IOCapture.capture(
-                                    cell.thunk;
-                                    rethrow = InterruptException,
-                                    color = true,
-                                )
-                            end
-                            # **The recursive call:**
-                            return Base.@invokelatest _render_thunk(
-                                wrapped,
-                                get(cell, :code, ""),
-                                get(Dict{String,Any}, cell, :options),
-                            )
-                        end,
-                    ),
-                )
+                # A cell expansion with `multiple` might itself also contain
+                # cells that expand to multiple cells, so we need to flatten
+                # the results to a single list of cells before passing back
+                # to the server. Cell expansion is recursive.
+                return _flatmap(captured.value) do cell
+                    wrapped = function ()
+                        return IOCapture.capture(
+                            cell.thunk;
+                            rethrow = InterruptException,
+                            color = true,
+                        )
+                    end
+                    # **The recursive call:**
+                    return Base.@invokelatest _render_thunk(
+                        wrapped,
+                        get(cell, :code, ""),
+                        get(Dict{String,Any}, cell, :options),
+                    )
+                end
             else
                 results = Base.@invokelatest render_mimetypes(
                     REPL.ends_with_semicolon(code) ? nothing : captured.value,
                     cell_options,
                 )
-                return [(;
+                # Wrap the `NamedTuple` in a `Tuple` to avoid the `NamedTuple`
+                # being flattened into just it's values when passed into
+                # `flatmap` and `collect`.
+                return ((;
                     code,
                     cell_options,
                     results,
@@ -203,11 +204,17 @@ function worker_init(f::File)
                             ),
                         ),
                     ),
-                )]
+                ),)
             end
         end
 
         # Utilities:
+
+        if VERSION >= v"1.9"
+            _flatmap(f, iters...) = Base.Iterators.flatmap(f, iters...)
+        else
+            _flatmap(f, iters...) = Base.Iterators.flatten(Base.Iterators.map(f, iters...))
+        end
 
         if VERSION >= v"1.8"
             function _parseall(text::AbstractString; filename = "none", lineno = 1)
