@@ -58,7 +58,7 @@ jobs:
           - version: "1.7"
             os: macos-latest
     steps:
-      - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
+      - uses: actions/checkout@9bb56186c3b09b4f86b1c65136769dd318469633
         with:
           persist-credentials: false
       - uses: julia-actions/setup-julia@58ad1cdde70774ab0693de31c3cd4e751b46aea2
@@ -82,7 +82,7 @@ jobs:
     timeout-minutes: 20
 
     steps:
-      - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
+      - uses: actions/checkout@9bb56186c3b09b4f86b1c65136769dd318469633
         with:
           persist-credentials: false
       - uses: julia-actions/setup-julia@58ad1cdde70774ab0693de31c3cd4e751b46aea2
