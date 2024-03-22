@@ -65,7 +65,7 @@ jobs:
         with:
           version: ${{ matrix.version }}
       - uses: julia-actions/cache@dc1a3cdeacb521b0ca93cfc66143fcadb15a5bd0
-      - uses: julia-actions/julia-buildpkg@5484b0e27fa12452eb1deffe4fd40ff700c429b9
+      - uses: julia-actions/julia-buildpkg@90dd6f23eb49626e4e6612cb9d64d456f86e6a1c
       - uses: julia-actions/julia-runtest@79a7e100883947123f8263c5f06e6c0ea3eb972f
         with:
           depwarn: "yes"
