@@ -26,7 +26,6 @@ import IterTools
 import JSON3
 import Logging
 import Malt
-import PNGFiles
 import PrecompileTools
 import ProgressLogging
 import REPL

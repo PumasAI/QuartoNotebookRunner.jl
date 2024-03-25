@@ -849,11 +849,19 @@ function process_results(dict::Dict{String,@NamedTuple{error::Bool, data::Vector
 end
 
 function png_image_metadata(bytes::Vector{UInt8})
-    io = IOBuffer(bytes)
-    seekstart(io)
-    png = PNGFiles.load(io)
-    height, width = size(png)
-    return (; width, height)
+    if @view(bytes[1:8]) != b"\x89PNG\r\n\x1a\n"
+        throw(ArgumentError("Not a png file"))
+    end
+
+    chunk_type = @view bytes[13:16]
+    if chunk_type != b"IHDR"
+        error("PNG file must start with IHDR chunk, started with $chunk_type")
+    end
+
+    width = Int(ntoh(reinterpret(UInt32, @view(bytes[17:20]))[]))
+    height = Int(ntoh(reinterpret(UInt32, @view(bytes[21:24]))[]))
+
+    (; width, height)
 end
 
 """
