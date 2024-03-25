@@ -172,16 +172,8 @@ function worker_init(f::File)
                         )
                     end
 
-                    code = try
-                        Base.@invokelatest getproperty(cell, :code)
-                    catch
-                        ""
-                    end
-                    options = try
-                        Base.@invokelatest getproperty(cell, :options)
-                    catch
-                        Dict{String,Any}()
-                    end
+                    code = _getproperty(cell, :code, "")
+                    options = _getproperty(Dict{String,Any}, cell, :options)
 
                     # **The recursive call:**
                     return Base.@invokelatest _render_thunk(wrapped, code, options)
@@ -217,6 +209,21 @@ function worker_init(f::File)
         end
 
         # Utilities:
+
+        function _getproperty(f::Base.Callable, obj, property::Symbol)
+            if Base.@invokelatest hasproperty(obj, property)
+                Base.@invokelatest getproperty(obj, property)
+            else
+                f()
+            end
+        end
+        function _getproperty(obj, property::Symbol, fallback)
+            if Base.@invokelatest hasproperty(obj, property)
+                Base.@invokelatest getproperty(obj, property)
+            else
+                fallback
+            end
+        end
 
         if VERSION >= v"1.9"
             _flatmap(f, iters...) = Base.Iterators.flatmap(f, iters...)
