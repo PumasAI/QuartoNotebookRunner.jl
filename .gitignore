@@ -6,3 +6,4 @@ Manifest.toml
 *.typ
 *.png
 .DS_Store
+!/test/assets/*
