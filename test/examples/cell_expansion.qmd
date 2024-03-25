@@ -47,3 +47,23 @@ title: Cell Expansion
     ),
 ]
 ```
+
+```{julia}
+#| multiple: true
+
+# test if newly defined structs can be returned as iterators (requires certain
+# invokelatest calls to be present)
+struct QuartoCell
+    thunk::Base.Callable
+    options::Dict
+    code::String
+end
+
+Base.iterate(c::QuartoCell) = Base.iterate(cells(c))
+Base.iterate(c::QuartoCell, state) = Base.iterate(cells(c), state)
+Base.IteratorSize(c::QuartoCell) = Base.SizeUnknown()
+
+cells(q::QuartoCell) = (q,)
+
+QuartoCell(() -> 123, Dict(), "")
+```
