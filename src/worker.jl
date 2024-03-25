@@ -141,10 +141,10 @@ function worker_init(f::File)
             line::Integer,
             cell_options::AbstractDict = Dict{String,Any}(),
         )
-            return collect(
-                _render_thunk(code, cell_options) do
+            return Base.@invokelatest(
+                collect(_render_thunk(code, cell_options) do
                     Base.@invokelatest include_str(WORKSPACE[], code; file, line)
-                end,
+                end)
             )
         end
 
@@ -171,12 +171,20 @@ function worker_init(f::File)
                             color = true,
                         )
                     end
+
+                    code = try
+                        Base.@invokelatest getproperty(cell, :code)
+                    catch
+                        ""
+                    end
+                    options = try
+                        Base.@invokelatest getproperty(cell, :options)
+                    catch
+                        Dict{String,Any}()
+                    end
+
                     # **The recursive call:**
-                    return Base.@invokelatest _render_thunk(
-                        wrapped,
-                        get(cell, :code, ""),
-                        get(Dict{String,Any}, cell, :options),
-                    )
+                    return Base.@invokelatest _render_thunk(wrapped, code, options)
                 end
             else
                 results = Base.@invokelatest render_mimetypes(
