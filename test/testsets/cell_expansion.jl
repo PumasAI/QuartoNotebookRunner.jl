@@ -1,7 +1,7 @@
 include("../utilities/prelude.jl")
 
 test_example(joinpath(@__DIR__, "../examples/cell_expansion.qmd")) do json
-    @test length(json["cells"]) == 10
+    @test length(json["cells"]) == 13
 
     cell = json["cells"][1]
     @test cell["cell_type"] == "markdown"
@@ -76,4 +76,7 @@ test_example(joinpath(@__DIR__, "../examples/cell_expansion.qmd")) do json
     source = cell["source"]
     @test any(line -> contains(line, "#| output: \"asis\""), source)
     @test any(line -> contains(line, "#| echo: false"), source)
+
+    cell = json["cells"][13]
+    @test cell["outputs"][1]["data"]["text/plain"] == "123"
 end
