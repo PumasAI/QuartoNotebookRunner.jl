@@ -141,10 +141,10 @@ function worker_init(f::File)
             line::Integer,
             cell_options::AbstractDict = Dict{String,Any}(),
         )
-            return collect(
-                _render_thunk(code, cell_options) do
+            return Base.@invokelatest(
+                collect(_render_thunk(code, cell_options) do
                     Base.@invokelatest include_str(WORKSPACE[], code; file, line)
-                end,
+                end)
             )
         end
 
@@ -171,12 +171,12 @@ function worker_init(f::File)
                             color = true,
                         )
                     end
+
+                    code = _getproperty(cell, :code, "")
+                    options = _getproperty(Dict{String,Any}, cell, :options)
+
                     # **The recursive call:**
-                    return Base.@invokelatest _render_thunk(
-                        wrapped,
-                        get(cell, :code, ""),
-                        get(Dict{String,Any}, cell, :options),
-                    )
+                    return Base.@invokelatest _render_thunk(wrapped, code, options)
                 end
             else
                 results = Base.@invokelatest render_mimetypes(
@@ -209,6 +209,21 @@ function worker_init(f::File)
         end
 
         # Utilities:
+
+        function _getproperty(f::Base.Callable, obj, property::Symbol)
+            if Base.@invokelatest hasproperty(obj, property)
+                Base.@invokelatest getproperty(obj, property)
+            else
+                f()
+            end
+        end
+        function _getproperty(obj, property::Symbol, fallback)
+            if Base.@invokelatest hasproperty(obj, property)
+                Base.@invokelatest getproperty(obj, property)
+            else
+                fallback
+            end
+        end
 
         if VERSION >= v"1.9"
             _flatmap(f, iters...) = Base.Iterators.flatmap(f, iters...)
