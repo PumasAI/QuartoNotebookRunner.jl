@@ -850,10 +850,38 @@ end
 
 function png_image_metadata(bytes::Vector{UInt8})
     io = IOBuffer(bytes)
+    width, height = detect_png_pixel_size(io)
+    (; width, height)
+end
+
+function detect_png_pixel_size(io::IO)
+    png_signature = "\x89PNG\r\n\x1a\n"
+
     seekstart(io)
-    png = PNGFiles.load(io)
-    height, width = size(png)
-    return (; width, height)
+
+    if String([read(io, UInt8) for _ = 1:length(png_signature)]) != png_signature
+        throw(ArgumentError("Not a png file"))
+    end
+
+    function read_chunk_length()
+        return ntoh(read(io, UInt32))
+    end
+
+    function read_chunk_type()
+        return String([read(io, UInt8) for _ = 1:4])
+    end
+
+    _ = read_chunk_length()
+    chunk_type = read_chunk_type()
+
+    if chunk_type != "IHDR"
+        error("PNG file must start with IHDR chunk, started with $chunk_type")
+    end
+
+    width = Int(ntoh(read(io, UInt32)))
+    height = Int(ntoh(read(io, UInt32)))
+
+    return (width, height)
 end
 
 """
