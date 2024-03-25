@@ -863,16 +863,8 @@ function detect_png_pixel_size(io::IO)
         throw(ArgumentError("Not a png file"))
     end
 
-    function read_chunk_length()
-        return ntoh(read(io, UInt32))
-    end
-
-    function read_chunk_type()
-        return String([read(io, UInt8) for _ = 1:4])
-    end
-
-    _ = read_chunk_length()
-    chunk_type = read_chunk_type()
+    read(io, UInt32) # skip chunk length
+    chunk_type = String([read(io, UInt8) for _ = 1:4])
 
     if chunk_type != "IHDR"
         error("PNG file must start with IHDR chunk, started with $chunk_type")
