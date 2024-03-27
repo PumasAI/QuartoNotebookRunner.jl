@@ -6,6 +6,8 @@ execute:
 
 Disallow errors globally in this notebook.
 
+This is an inline error: `{julia} div(1, 0)`
+
 ```{julia}
 1 + ""
 ```
