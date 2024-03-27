@@ -263,9 +263,15 @@ function _log_error(message, error, backtrace)
     @error message exception = (error, backtrace)
     return (; error = message, juliaError = sprint(Base.showerror, error, backtrace))
 end
+# EvaluationErrors don't send their local backtrace because only the contained
+# notebook-related errors are interesting for the user
+function _log_error(message, error::QuartoNotebookRunner.EvaluationError, backtrace)
+    @error message exception = (error, backtrace)
+    return (; error = message, juliaError = sprint(Base.showerror, error))
+end
 function _log_error(message)
     @error message
-    return (; error = message, juliaError = sprint(Base.showerror, error, backtrace))
+    return (; error = message)
 end
 
 struct HMACMismatchError <: Exception end
