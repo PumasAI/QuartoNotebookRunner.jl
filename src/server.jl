@@ -714,14 +714,24 @@ function evaluate_raw_cells!(f::File, chunks::Vector, options::Dict; showprogres
                             # options and so `multiple` will always be `false`.
                             remote = only(Malt.remote_eval_fetch(f.worker, expr))
                             if !isnothing(remote.error)
-                                error("Error rendering inline code: $(remote.error)")
+                                # file location is not straightforward to determine with inline literals, but just printing the (presumably short)
+                                # code back instead of a location should be quite helpful
+                                push!(
+                                    error_metadata,
+                                    (;
+                                        kind = :inline,
+                                        file = "inline: `$(node.literal)`",
+                                        traceback = join(remote.backtrace, "\n"),
+                                    ),
+                                )
+                            else
+                                processed = process_inline_results(remote.results)
+                                source = replace(
+                                    source,
+                                    "`$(node.literal)`" => "$processed";
+                                    count = 1,
+                                )
                             end
-                            processed = process_inline_results(remote.results)
-                            source = replace(
-                                source,
-                                "`$(node.literal)`" => "$processed";
-                                count = 1,
-                            )
                         end
                     end
                 end
