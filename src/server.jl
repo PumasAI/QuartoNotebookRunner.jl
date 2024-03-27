@@ -530,6 +530,23 @@ macro maybe_progress(showprogress, exprs...)
     return esc(expr)
 end
 
+struct EvaluationError <: Exception
+    metadata::Vector{NamedTuple{(:kind, :file, :traceback),Tuple{Symbol,String,String}}}
+end
+
+function Base.showerror(io::IO, e::EvaluationError)
+    println(
+        io,
+        "EvaluationError: Encountered $(length(e.metadata)) error$(length(e.metadata) == 1 ? "" : "s") during evaluation",
+    )
+    for (i, meta) in enumerate(e.metadata)
+        println(io)
+        println(io, "Error ", i, " of ", length(e.metadata))
+        println(io, "@ ", meta.file)
+        println(io, meta.traceback)
+    end
+end
+
 """
     evaluate_raw_cells!(f::File, chunks::Vector)
 
@@ -540,7 +557,7 @@ function evaluate_raw_cells!(f::File, chunks::Vector, options::Dict; showprogres
     refresh!(f, options)
     cells = []
 
-    has_error = false
+    error_metadata = NamedTuple{(:kind, :file, :traceback),Tuple{Symbol,String,String}}[]
     allow_error_global = options["format"]["execute"]["error"]
 
     header = "Running $(relpath(f.path, pwd()))"
@@ -601,9 +618,11 @@ function evaluate_raw_cells!(f::File, chunks::Vector, options::Dict; showprogres
                                 if !allow_error_cell
                                     for each_error in processed_display.errors
                                         file = "$(chunk.file):$(chunk.line)"
-                                        traceback = Text(join(each_error.traceback, "\n"))
-                                        @error "stopping notebook evaluation due to unexpected `show` error." file traceback
-                                        has_error = true
+                                        traceback = join(each_error.traceback, "\n")
+                                        push!(
+                                            error_metadata,
+                                            (; kind = :show, file, traceback),
+                                        )
                                     end
                                 end
                             end
@@ -634,9 +653,8 @@ function evaluate_raw_cells!(f::File, chunks::Vector, options::Dict; showprogres
                         )
                         if !allow_error_cell
                             file = "$(chunk.file):$(chunk.line)"
-                            traceback = Text(join(remote.backtrace, "\n"))
-                            @error "stopping notebook evaluation due to unexpected cell error." file traceback
-                            has_error = true
+                            traceback = join(remote.backtrace, "\n")
+                            push!(error_metadata, (; kind = :cell, file, traceback))
                         end
                     end
 
@@ -660,9 +678,8 @@ function evaluate_raw_cells!(f::File, chunks::Vector, options::Dict; showprogres
                         if !allow_error_cell
                             for each_error in processed.errors
                                 file = "$(chunk.file):$(chunk.line)"
-                                traceback = Text(join(each_error.traceback, "\n"))
-                                @error "stopping notebook evaluation due to unexpected `show` error." file traceback
-                                has_error = true
+                                traceback = join(each_error.traceback, "\n")
+                                push!(error_metadata, (; kind = :show, file, traceback))
                             end
                         end
                     end
@@ -722,8 +739,8 @@ function evaluate_raw_cells!(f::File, chunks::Vector, options::Dict; showprogres
             throw(ArgumentError("unknown chunk type: $(chunk.type)"))
         end
     end
-    if has_error
-        error("Unexpected cell errors, see logs above.")
+    if !isempty(error_metadata)
+        throw(EvaluationError(error_metadata))
     end
 
     return cells
