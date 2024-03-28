@@ -53,9 +53,29 @@ client.connect(port, '127.0.0.1', function () {
     debug && console.log('Connected');
     client.write(handle());
 });
+
+// for `run` messages, the server will return multiple responses,
+// but even for single responses, the 'data' callback might be called
+// multiple times with fragments, so we handle each full response
+// only after our data contains a linebreak
+let restOfData = "";
 client.on('data', function (data) {
-    console.log(debug ? JSON.parse(data.toString()) : data.toString());
-    client.destroy();
+    restOfData += data.toString();
+    while (true) {
+        const linebreakAt = restOfData.indexOf("\n");
+        if (linebreakAt === -1) {
+            // handle complete data in a later call
+            break
+        }
+        const message = restOfData.substring(0, linebreakAt);
+        restOfData = restOfData.substring(linebreakAt + 1);
+        const d = JSON.parse(message);
+        if (d.type !== 'progress_update') {
+            console.log(debug ? d : message);
+            client.destroy();
+            break
+        }
+    }
 });
 client.on('close', function () {
     debug && console.log('Connection closed');
