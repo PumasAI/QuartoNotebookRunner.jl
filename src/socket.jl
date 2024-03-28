@@ -52,7 +52,11 @@ should match the following schema:
 A description of the message types:
 
  -  `run` - Run a notebook. The content should be the absolute path to the
-    notebook file. When the notebook is run, the server will return a response
+    notebook file.
+    For each chunk that is evaluated, the server will return an object with schema
+    `{type: "progress_update", chunkIndex: number, nChunks: number, source: string, line: number}`
+    before the respective chunk is evaluated.
+    After the processing has finished, the server will return a response
     with the entire evaluated notebook content in a `notebook` field. Reuse a
     notebook process on subsequent runs. To restart a notebook, close it and run
     it again.
@@ -192,10 +196,7 @@ function serve(;
                         elseif json.type == "isready"
                             _write_json(socket, true)
                         else
-                            _write_json(
-                                socket,
-                                _handle_response(notebook_server, json, showprogress),
-                            )
+                            _handle_response(socket, notebook_server, json, showprogress)
                         end
                     end
                 end
@@ -210,6 +211,7 @@ function serve(;
 end
 
 function _handle_response(
+    socket,
     notebooks::Server,
     request::@NamedTuple{type::String, content::Union{String,Dict{String,Any}}},
     showprogress::Bool,
@@ -217,7 +219,8 @@ function _handle_response(
     @debug "debugging" request notebooks = collect(keys(notebooks.workers))
     type = request.type
 
-    type in ("close", "run", "isopen") || return _log_error("Unknown request type: $type")
+    type in ("close", "run", "isopen") ||
+        return _write_json(socket, _log_error("Unknown request type: $type"))
 
     file = _get_file(request.content)
 
@@ -228,15 +231,20 @@ function _handle_response(
         return (; message = "Notebooks closed.")
     end
 
-    isabspath(file) || return _log_error("File path must be absolute: $(repr(file))")
-    isfile(file) || return _log_error("File does not exist: $(repr(file))")
+    isabspath(file) ||
+        return _write_json(socket, _log_error("File path must be absolute: $(repr(file))"))
+    isfile(file) ||
+        return _write_json(socket, _log_error("File does not exist: $(repr(file))"))
 
     if type == "close"
         try
             close!(notebooks, file)
-            return (; status = true)
+            return _write_json(socket, (; status = true))
         catch error
-            return _log_error("Failed to close notebook: $file", error, catch_backtrace())
+            return _write_json(
+                socket,
+                _log_error("Failed to close notebook: $file", error, catch_backtrace()),
+            )
         end
     end
 
@@ -244,15 +252,30 @@ function _handle_response(
 
     if type == "run"
         options = _get_options(request.content)
-        try
-            return (; notebook = run!(notebooks, file; options, showprogress))
-        catch error
-            return _log_error("Failed to run notebook: $file", error, catch_backtrace())
+
+        function chunk_callback(i, n, chunk)
+            _write_json(
+                socket,
+                (;
+                    type = :progress_update,
+                    chunkIndex = i,
+                    nChunks = n,
+                    source = chunk.source,
+                    line = chunk.line,
+                ),
+            )
         end
+
+        result = try
+            (; notebook = run!(notebooks, file; options, showprogress, chunk_callback))
+        catch error
+            _log_error("Failed to run notebook: $file", error, catch_backtrace())
+        end
+        return _write_json(socket, result)
     end
 
     if type == "isopen"
-        return haskey(notebooks.workers, file)
+        return _write_json(socket, haskey(notebooks.workers, file))
     end
 
     # Shouldn't get to this point.

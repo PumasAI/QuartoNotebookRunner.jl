@@ -21,6 +21,7 @@ using Sockets
         server.key,
         Dict(:type => "run", :content => sleep_qmd),
     )
+    @test occursin("progress_update", readline(sock))
     @test !isempty(readline(sock))
     t2 = time()
     @test t2 - t1 >= 3
