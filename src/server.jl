@@ -120,6 +120,7 @@ function evaluate!(
     output::Union{AbstractString,IO,Nothing} = nothing;
     showprogress = true,
     options::Union{String,Dict{String,Any}} = Dict{String,Any}(),
+    chunk_callback = (i, n, c) -> nothing,
 )
     _check_output_dst(output)
 
@@ -128,7 +129,8 @@ function evaluate!(
     if isfile(path)
         raw_chunks, file_frontmatter = raw_text_chunks(f)
         merged_options = _extract_relevant_options(file_frontmatter, options)
-        cells = evaluate_raw_cells!(f, raw_chunks, merged_options; showprogress)
+        cells =
+            evaluate_raw_cells!(f, raw_chunks, merged_options; showprogress, chunk_callback)
         data = (
             metadata = (
                 kernelspec = (
@@ -552,8 +554,17 @@ end
 
 Evaluate the raw cells in `chunks` and return a vector of cells with the results
 in all available mimetypes.
+
+The optional `chunk_callback` is called with `(i::Int, n::Int, chunk)` before a chunk is processed and is
+intended for a progress update mechanism via the socket interface.
 """
-function evaluate_raw_cells!(f::File, chunks::Vector, options::Dict; showprogress = true)
+function evaluate_raw_cells!(
+    f::File,
+    chunks::Vector,
+    options::Dict;
+    showprogress = true,
+    chunk_callback = (i, n, c) -> nothing,
+)
     refresh!(f, options)
     cells = []
 
@@ -561,6 +572,10 @@ function evaluate_raw_cells!(f::File, chunks::Vector, options::Dict; showprogres
     allow_error_global = options["format"]["execute"]["error"]
 
     header = "Running $(relpath(f.path, pwd()))"
+
+    chunks_to_evaluate = sum(c -> c.type === :code && c.evaluate, chunks)
+    ith_chunk_to_evaluate = 1
+
     @maybe_progress showprogress "$header" for (nth, chunk) in enumerate(chunks)
         if chunk.type === :code
             is_multiple = get(chunk.cell_options, "multiple", false) === true
@@ -583,6 +598,9 @@ function evaluate_raw_cells!(f::File, chunks::Vector, options::Dict; showprogres
             end
 
             if chunk.evaluate
+                chunk_callback(ith_chunk_to_evaluate, chunks_to_evaluate, chunk)
+                ith_chunk_to_evaluate += 1
+
                 # Offset the line number by 1 to account for the triple backticks
                 # that are part of the markdown syntax for code blocks.
                 expr = :(render(
@@ -907,13 +925,14 @@ function run!(
     output::Union{AbstractString,IO,Nothing} = nothing,
     showprogress::Bool = true,
     options::Union{String,Dict{String,Any}} = Dict{String,Any}(),
+    chunk_callback = (i, n, c) -> nothing,
 )
     borrow_file!(server, path; optionally_create = true) do file
         if file.timeout_timer !== nothing
             close(file.timeout_timer)
             file.timeout_timer = nothing
         end
-        result = evaluate!(file, output; showprogress, options)
+        result = evaluate!(file, output; showprogress, options, chunk_callback)
         if file.timeout > 0
             file.timeout_timer = Timer(file.timeout) do _
                 close!(server, file.path)
