@@ -601,6 +601,8 @@ function evaluate_raw_cells!(
                 chunk_callback(ith_chunk_to_evaluate, chunks_to_evaluate, chunk)
                 ith_chunk_to_evaluate += 1
 
+                cell_metadata = Dict("id" => nth)
+
                 # Offset the line number by 1 to account for the triple backticks
                 # that are part of the markdown syntax for code blocks.
                 expr = :(render(
@@ -608,6 +610,7 @@ function evaluate_raw_cells!(
                     $(chunk.file),
                     $(chunk.line + 1),
                     $(chunk.cell_options),
+                    $(cell_metadata),
                 ))
 
                 for (mth, remote) in enumerate(Malt.remote_eval_fetch(f.worker, expr))

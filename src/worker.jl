@@ -30,10 +30,16 @@ function worker_init(f::File)
         # `render_mimetypes` function as "normal" cell output does.
         struct InlineDisplay <: AbstractDisplay
             queue::Vector{Any}
+            notebook_options::Dict
             cell_options::Dict
+            cell_metadata::Dict
 
-            function InlineDisplay(cell_options::Dict)
-                new(Any[], cell_options)
+            function InlineDisplay(
+                notebook_options::Dict,
+                cell_options::Dict,
+                cell_metadata::Dict,
+            )
+                new(Any[], notebook_options, cell_options, cell_metadata)
             end
         end
 
@@ -43,8 +49,8 @@ function worker_init(f::File)
         end
         Base.displayable(::InlineDisplay, m::MIME) = true
 
-        function with_inline_display(f, cell_options)
-            inline_display = InlineDisplay(cell_options)
+        function with_inline_display(f, cell_options, cell_metadata)
+            inline_display = InlineDisplay(OPTIONS[], cell_options, cell_metadata)
             pushdisplay(inline_display)
             try
                 return f(), inline_display.queue
@@ -140,9 +146,10 @@ function worker_init(f::File)
             file::AbstractString,
             line::Integer,
             cell_options::AbstractDict = Dict{String,Any}(),
+            cell_metadata::AbstractDict = Dict{String,Any}(),
         )
             return Base.@invokelatest(
-                collect(_render_thunk(code, cell_options) do
+                collect(_render_thunk(code, cell_options, cell_metadata) do
                     Base.@invokelatest include_str(WORKSPACE[], code; file, line)
                 end)
             )
@@ -156,8 +163,10 @@ function worker_init(f::File)
             thunk::Base.Callable,
             code::AbstractString,
             cell_options::AbstractDict = Dict{String,Any}(),
+            cell_metadata::AbstractDict = Dict{String,Any}(),
         )
-            captured, display_results = with_inline_display(thunk, cell_options)
+            captured, display_results =
+                with_inline_display(thunk, cell_options, cell_metadata)
             if get(cell_options, "multiple", false) === true
                 # A cell expansion with `multiple` might itself also contain
                 # cells that expand to multiple cells, so we need to flatten
@@ -176,7 +185,12 @@ function worker_init(f::File)
                     options = _getproperty(Dict{String,Any}, cell, :options)
 
                     # **The recursive call:**
-                    return Base.@invokelatest _render_thunk(wrapped, code, options)
+                    return Base.@invokelatest _render_thunk(
+                        wrapped,
+                        code,
+                        options,
+                        cell_metadata,
+                    )
                 end
             else
                 results = Base.@invokelatest render_mimetypes(
