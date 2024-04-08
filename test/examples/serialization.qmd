@@ -1,0 +1,36 @@
+---
+title: Serialization
+---
+
+```{julia}
+pushfirst!(LOAD_PATH, "@stdlib")
+import Serialization
+popfirst!(LOAD_PATH)
+```
+
+```{julia}
+mktempdir() do dir
+    script = joinpath(dir, "script.jl")
+    write(
+        script,
+        """
+        pushfirst!(LOAD_PATH, "@stdlib")
+        import Serialization
+        popfirst!(LOAD_PATH)
+
+        func = x -> x + 1
+
+        Serialization.serialize("serialization.jls", func)
+        """,
+    )
+    run(`$(Base.julia_cmd()) $script`)
+end
+```
+
+```{julia}
+func = Serialization.deserialize("serialization.jls")
+```
+
+```{julia}
+func(1)
+```

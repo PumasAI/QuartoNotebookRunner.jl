@@ -21,7 +21,7 @@ function worker_init(f::File)
         ### End LOAD_PATH manipulations.
 
         const PROJECT = Base.active_project()
-        const WORKSPACE = Ref(Module(:Notebook))
+        Notebook = Module(:Notebook)
         const OPTIONS = Ref(Dict{String,Any}())
 
         # Intercepts all calls to `display` within the cell and passes the
@@ -68,9 +68,9 @@ function worker_init(f::File)
                 function include(fname::Base.AbstractString)
                     isa(fname, Base.String) ||
                         (fname = Base.convert(Base.String, fname)::Base.String)
-                    Base._include(Base.identity, Main.WORKSPACE[], fname)
+                    Base._include(Base.identity, getfield(Main, :Notebook), fname)
                 end
-                eval(x) = Core.eval(Main.WORKSPACE[], x)
+                eval(x) = Core.eval(getfield(Main, :Notebook), x)
 
                 end
             ),
@@ -96,7 +96,7 @@ function worker_init(f::File)
             # user creates a massive array in a cell, and then reruns it
             # numerous times. So long as it isn't a `const` we should be able to
             # clear it to `nothing` and GC the actual data.
-            mod = WORKSPACE[]
+            mod = getfield(Main, :Notebook)
             for name in names(mod; all = true)
                 if isdefined(mod, name) && !Base.isdeprecated(mod, name)
                     try
@@ -112,13 +112,16 @@ function worker_init(f::File)
 
             # Replace the module with a new one, so that redefinition of consts
             # works between notebook runs.
-            WORKSPACE[] = Module(nameof(mod))
+            Core.eval(Main, :(Notebook = $(Module(nameof(mod)))))
 
             # Ensure that `Pkg` is always available in the notebook so that users
             # can immediately activate a project environment if they want to.
-            Core.eval(WORKSPACE[], :(import Main: Pkg, ojs_define))
+            Core.eval(getfield(Main, :Notebook), :(import Main: Pkg, ojs_define))
             # Custom `include` and `eval` implementation to match behaviour of the REPL.
-            Core.eval(WORKSPACE[], :(import Main.NotebookInclude: include, eval))
+            Core.eval(
+                getfield(Main, :Notebook),
+                :(import Main.NotebookInclude: include, eval),
+            )
 
             # Rerun the package loading hooks if the options have changed.
             if OPTIONS[] != options
@@ -142,9 +145,16 @@ function worker_init(f::File)
             cell_options::AbstractDict = Dict{String,Any}(),
         )
             return Base.@invokelatest(
-                collect(_render_thunk(code, cell_options) do
-                    Base.@invokelatest include_str(WORKSPACE[], code; file, line)
-                end)
+                collect(
+                    _render_thunk(code, cell_options) do
+                        Base.@invokelatest include_str(
+                            getfield(Main, :Notebook),
+                            code;
+                            file,
+                            line,
+                        )
+                    end,
+                )
             )
         end
 
@@ -303,7 +313,7 @@ function worker_init(f::File)
         function with_context(io::IO, cell_options = Dict{String,Any}())
             return IOContext(
                 io,
-                :module => WORKSPACE[],
+                :module => getfield(Main, :Notebook),
                 :color => true,
                 :limit => true,
                 # This allows a `show` method implementation to check for
