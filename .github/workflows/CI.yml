@@ -61,6 +61,14 @@ jobs:
       - uses: actions/checkout@9bb56186c3b09b4f86b1c65136769dd318469633
         with:
           persist-credentials: false
+
+      - uses: r-lib/actions/setup-r@b7e68d63e51bdf225997973e2add36d551f60f02
+        with:
+          use-public-rspm: true
+          r-version: "4.4"
+      - run: echo "LD_LIBRARY_PATH=$(R RHOME)/lib:$LD_LIBRARY_PATH" >> $GITHUB_ENV
+        if: matrix.os == 'ubuntu-latest'
+
       - uses: julia-actions/setup-julia@f2258781c657ad9b4b88072c5eeaf9ec8c370874
         with:
           version: ${{ matrix.version }}
