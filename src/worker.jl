@@ -10,7 +10,6 @@ function worker_init(f::File)
 
             import Pkg
             import REPL
-            import Random
 
             # Avoids needing to have to manually vendor the IOCapture.jl source,
             # since it's not apparently possible to send the `Module` object over
@@ -24,8 +23,6 @@ function worker_init(f::File)
         const PROJECT = Base.active_project()
         Notebook = Module(:Notebook)
         const OPTIONS = Ref(Dict{String,Any}())
-        const POST_EVAL_HOOKS = Vector{Function}()
-        const POST_ERROR_HOOKS = Vector{Function}()
 
         # Intercepts all calls to `display` within the cell and passes the
         # objects instead to our own `InlineDisplay` display that is pushed onto
@@ -137,10 +134,6 @@ function worker_init(f::File)
             else
                 OPTIONS[] = options
             end
-
-            # Ensure we don't duplicate hooks.
-            unique!(POST_EVAL_HOOKS)
-            unique!(POST_ERROR_HOOKS)
 
             return nothing
         end
@@ -286,32 +279,19 @@ function worker_init(f::File)
                 return IOCapture.capture(; rethrow = InterruptException, color = true) do
                     result = nothing
                     line_and_ex = Expr(:toplevel, loc, nothing)
-                    try
-                        for ex in ast.args
-                            if ex isa LineNumberNode
-                                loc = ex
-                                line_and_ex.args[1] = ex
-                                continue
-                            end
-                            # Wrap things to be eval'd in a :toplevel expr to carry line
-                            # information as part of the expr.
-                            line_and_ex.args[2] = ex
-                            for transform in REPL.repl_ast_transforms
-                                line_and_ex = transform(line_and_ex)
-                            end
-                            result = Core.eval(mod, line_and_ex)
-                            for hook in POST_EVAL_HOOKS
-                                Base.@invokelatest hook()
-                            end
+                    for ex in ast.args
+                        if ex isa LineNumberNode
+                            loc = ex
+                            line_and_ex.args[1] = ex
+                            continue
                         end
-                    catch error
-                        for hook in POST_EVAL_HOOKS
-                            Base.@invokelatest hook()
+                        # Wrap things to be eval'd in a :toplevel expr to carry line
+                        # information as part of the expr.
+                        line_and_ex.args[2] = ex
+                        for transform in REPL.repl_ast_transforms
+                            line_and_ex = transform(line_and_ex)
                         end
-                        for hook in POST_ERROR_HOOKS
-                            Base.@invokelatest hook()
-                        end
-                        rethrow(error)
+                        result = Core.eval(mod, line_and_ex)
                     end
                     return result
                 end
@@ -704,85 +684,6 @@ function worker_init(f::File)
             return Base.show(io, mime, PlotlyBasePlot(wrapper.value.plot))
         end
 
-        # RCall.jl integrations:
-
-        struct PNG
-            object::Vector{UInt8}
-        end
-        Base.show(io::IO, mime::MIME"image/png", png::PNG) = write(io, png.object)
-
-        struct SVG
-            object::Vector{UInt8}
-        end
-        function Base.show(io::IO, mime::MIME"image/svg+xml", svg::SVG)
-            r = Random.randstring()
-            text = String(svg.object)
-            text = replace(text, "id=\"glyph" => "id=\"glyph$r")
-            text = replace(text, "href=\"#glyph" => "href=\"#glyph$r")
-            print(io, text)
-        end
-
-        const RCall_temp_files = mktempdir()
-
-        function _RCall_hook(pkgid::Base.PkgId, RCall::Module)
-            for each in readdir(RCall_temp_files; join = true)
-                rm(each; force = true)
-            end
-
-            tmp_file_fmt = joinpath(RCall_temp_files, "rij_%03d")
-            RCall.rcall_p(:options, rcalljl_filename = tmp_file_fmt)
-
-            RCall.reval_p(RCall.rparse_p("""
-                options(device = function(filename=getOption('rcalljl_filename'), ...) {
-                    args <- c(filename = filename, getOption('rcalljl_options'))
-                    do.call(getOption('rcalljl_device'), modifyList(args, list(...)))
-                })
-                """))
-
-            fm = _figure_metadata()
-            rcalljl_device = fm.fig_format == "pdf" ? :png : Symbol(fm.fig_format)
-            rcalljl_device in (:png, :svg) || (rcalljl_device = :png)
-            render_type = rcalljl_device == :png ? PNG : SVG
-            width_inches = fm.fig_width_inch !== nothing ? fm.fig_width_inch : 6
-            height_inches = fm.fig_height_inch !== nothing ? fm.fig_height_inch : 5
-            dpi = fm.fig_dpi !== nothing ? fm.fig_dpi : 96
-
-            RCall.rcall_p(:options; rcalljl_device)
-            RCall.rcall_p(
-                :options,
-                rcalljl_options = Dict(
-                    :width => width_inches * dpi,
-                    :height => height_inches * dpi,
-                ),
-            )
-
-            function display_plots()
-                if RCall.rcopy(Int, RCall.rcall_p(Symbol("dev.cur"))) != 1
-                    RCall.rcall_p(Symbol("dev.off"))
-                    for fn in sort(readdir(RCall_temp_files; join = true))
-                        open(fn) do io
-                            display(render_type(read(io)))
-                        end
-                        rm(fn)
-                    end
-                end
-            end
-
-            function cleanup()
-                if RCall.rcopy(Int, RCall.rcall_p(Symbol("dev.cur"))) != 1
-                    RCall.rcall_p(Symbol("dev.off"))
-                end
-                for fn in readdir(RCall_temp_files; join = true)
-                    rm(fn)
-                end
-            end
-
-            push!(POST_EVAL_HOOKS, display_plots)
-            push!(POST_ERROR_HOOKS, cleanup)
-
-            return nothing
-        end
-
         # Loading hooks:
 
         const PACKAGE_LOADING_HOOKS = Dict{Base.PkgId,Function}()
@@ -824,11 +725,6 @@ function worker_init(f::File)
                     _PlotlyJS_hook,
                     "PlotlyJS",
                     "f0f68f2c-4968-5e81-91da-67840de0976a",
-                )
-                package_loading_hook!(
-                    _RCall_hook,
-                    "RCall",
-                    "6f49c342-dc21-5d91-9882-a32aef131414",
                 )
                 push!(
                     Base.package_callbacks,
