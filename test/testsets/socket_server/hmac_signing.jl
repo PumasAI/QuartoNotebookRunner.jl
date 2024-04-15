@@ -17,6 +17,10 @@ using Sockets
     # check that an error is returned and no document has been run if the key is wrong
     QuartoNotebookRunner._write_hmac_json(sock, wrong_key, command)
     @test occursin("Incorrect HMAC digest", readline(sock))
+    @test eof(sock) # server closes upon receiving wrong hmac
+
+    # reconnect
+    sock = Sockets.connect(server.port)
     @test lock(server.notebookserver.lock) do
         isempty(server.notebookserver.workers)
     end
