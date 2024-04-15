@@ -571,7 +571,12 @@ function evaluate_raw_cells!(
     error_metadata = NamedTuple{(:kind, :file, :traceback),Tuple{Symbol,String,String}}[]
     allow_error_global = options["format"]["execute"]["error"]
 
-    header = "Running $(relpath(f.path, pwd()))"
+    wd = try
+        pwd()
+    catch
+        ""
+    end
+    header = "Running $(relpath(f.path, wd))"
 
     chunks_to_evaluate = sum(c -> c.type === :code && c.evaluate, chunks)
     ith_chunk_to_evaluate = 1
