@@ -583,12 +583,12 @@ function evaluate_raw_cells!(
 
     @maybe_progress showprogress "$header" for (nth, chunk) in enumerate(chunks)
         if chunk.type === :code
-            is_multiple = get(chunk.cell_options, "multiple", false) === true
-            # When we're not evaluating the code, or when there is a `multiple`
+            expand_cell = get(chunk.cell_options, "expand", false) === true
+            # When we're not evaluating the code, or when there is an `expand`
             # cell output then we immediately splice in the cell code. The
-            # results of evaluating a `multiple` cell are added later on and are
+            # results of evaluating an `expand` cell are added later on and are
             # not considered direct outputs of this cell.
-            if !chunk.evaluate || is_multiple
+            if !chunk.evaluate || expand_cell
                 push!(
                     cells,
                     (;
@@ -709,12 +709,12 @@ function evaluate_raw_cells!(
                     push!(
                         cells,
                         (;
-                            id = is_multiple ? string(nth, "_", mth) : string(nth),
+                            id = expand_cell ? string(nth, "_", mth) : string(nth),
                             cell_type = chunk.type,
                             metadata = (;),
                             source = process_cell_source(
                                 remote.code,
-                                is_multiple ? remote.cell_options : Dict(),
+                                expand_cell ? remote.cell_options : Dict(),
                             ),
                             outputs,
                             execution_count = 1,
@@ -734,7 +734,7 @@ function evaluate_raw_cells!(
                             expr = :(render($(source_code), $(chunk.file), $(chunk.line)))
                             # There should only ever be a single result from an
                             # inline evaluation since you can't pass cell
-                            # options and so `multiple` will always be `false`.
+                            # options and so `expand` will always be `false`.
                             remote = only(Malt.remote_eval_fetch(f.worker, expr))
                             if !isnothing(remote.error)
                                 # file location is not straightforward to determine with inline literals, but just printing the (presumably short)
@@ -782,7 +782,7 @@ end
 # All but the last line of a cell should contain a newline character to end it.
 # The optional `cell_options` argument is a dictionary of cell attributes which
 # are written into the processed cell source when the cell is the result of an
-# expansion of a `multiple` cell.
+# expansion of an `expand` cell.
 function process_cell_source(source::AbstractString, cell_options::Dict = Dict())
     lines = collect(eachline(IOBuffer(source); keep = true))
     if !isempty(lines)

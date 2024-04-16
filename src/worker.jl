@@ -167,7 +167,7 @@ function worker_init(f::File)
 
         # Recursively render cell thunks. This might be an `include_str` call,
         # which is the starting point for a source cell, or it may be a
-        # user-provided thunk that comes from a source cell with `multiple` set
+        # user-provided thunk that comes from a source cell with `expand` set
         # to `true`.
         function _render_thunk(
             thunk::Base.Callable,
@@ -175,8 +175,8 @@ function worker_init(f::File)
             cell_options::AbstractDict = Dict{String,Any}(),
         )
             captured, display_results = with_inline_display(thunk, cell_options)
-            if get(cell_options, "multiple", false) === true
-                # A cell expansion with `multiple` might itself also contain
+            if get(cell_options, "expand", false) === true
+                # A cell expansion with `expand` might itself also contain
                 # cells that expand to multiple cells, so we need to flatten
                 # the results to a single list of cells before passing back
                 # to the server. Cell expansion is recursive.

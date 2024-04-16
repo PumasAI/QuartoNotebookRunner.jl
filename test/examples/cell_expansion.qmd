@@ -4,7 +4,7 @@ title: Cell Expansion
 
 ```{julia}
 #| echo: false
-#| multiple: true
+#| expand: true
 [(;
     thunk = function ()
         println("print call")
@@ -19,7 +19,7 @@ title: Cell Expansion
 ```
 
 ```{julia}
-#| multiple: true
+#| expand: true
 [
     (;
         thunk = function ()
@@ -28,17 +28,17 @@ title: Cell Expansion
                     thunk = function ()
                         return [(; thunk = () -> 1, options = Dict("layout-ncol" => 1))]
                     end,
-                    options = Dict("multiple" => true),
+                    options = Dict("expand" => true),
                 ),
                 (;
                     thunk = function ()
                         return [(; thunk = () -> (display(2); 2)), (; thunk = () -> 3)]
                     end,
-                    options = Dict("multiple" => true),
+                    options = Dict("expand" => true),
                 ),
             ]
         end,
-        options = Dict("multiple" => true),
+        options = Dict("expand" => true),
     ),
     (; thunk = () -> 4),
     (;
@@ -49,7 +49,7 @@ title: Cell Expansion
 ```
 
 ```{julia}
-#| multiple: true
+#| expand: true
 
 # test if newly defined structs can be returned as iterators (requires certain
 # invokelatest calls to be present)
