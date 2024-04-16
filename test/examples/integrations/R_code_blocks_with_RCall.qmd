@@ -1,0 +1,66 @@
+---
+title: R code blocks with RCall
+fig-width: 4
+fig-height: 3
+fig-dpi: 150
+fig-format: png
+julia:
+    exeflags: ["--project=RCall"]
+---
+
+This is an R code block but RCall has not been made available in the session, yet, so it will fail.
+
+```{r}
+x <- 1
+```
+
+Here we make RCall available, `import RCall` would also work
+
+```{julia}
+using RCall
+
+x = 123
+```
+
+This is R code accessing a variable from Julia
+
+```{r}
+a <- 5 * $x
+```
+
+Here we have a plot in R with a more complex interpolation
+
+```{r}
+#| label: fig-rplot
+#| fig-cap: A plot done with an implicit R cell
+plot($(sin.(0:0.1:4pi)))
+```
+
+And here a data.frame in R, which is auto-converted to a Julia `DataFrame`
+
+```{r}
+#| label: tbl-dataframe
+#| tbl-cap: A data.frame, autoconverted to Julia
+numeric_data <- c(1, 2, 3, 4, 5)
+boolean_data <- c(TRUE, FALSE, TRUE, FALSE, TRUE)
+categorical_data <- c("A", "B", "C", "A", "B")
+
+# Combine the data into a data frame
+df <- data.frame(
+  Numeric = numeric_data,
+  Boolean = boolean_data,
+  Categorical = as.factor(categorical_data)
+)
+```
+
+This cell contains an R error
+
+```{r}
+x + y
+```
+
+And this is Julia accessing a variable from R
+
+```{julia}
+@rget a
+```

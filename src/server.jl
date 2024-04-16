@@ -298,7 +298,7 @@ function raw_markdown_chunks(path::String)
         terminal_line = 1
         code_cells = false
         for (node, enter) in ast
-            if enter && is_julia_toplevel(node)
+            if enter && (is_julia_toplevel(node) || is_r_toplevel(node))
                 code_cells = true
                 line = node.sourcepos[1][1]
                 markdown = join(source_lines[terminal_line:(line-1)], "\n")
@@ -324,9 +324,12 @@ function raw_markdown_chunks(path::String)
                         "Cannot handle an `eval` code cell option with value $(repr(evaluate)), only true or false.",
                     )
                 end
+                language = is_julia_toplevel(node) ? :julia :
+                    is_r_toplevel(node) ? :r :
+                    error("Unhandled code block language")
                 push!(
                     raw_chunks,
-                    (type = :code, source, file = path, line, evaluate, cell_options),
+                    (type = :code, language = language, source, file = path, line, evaluate, cell_options),
                 )
             end
         end
@@ -606,10 +609,12 @@ function evaluate_raw_cells!(
                 chunk_callback(ith_chunk_to_evaluate, chunks_to_evaluate, chunk)
                 ith_chunk_to_evaluate += 1
 
+                source = transform_source(chunk)
+
                 # Offset the line number by 1 to account for the triple backticks
                 # that are part of the markdown syntax for code blocks.
                 expr = :(render(
-                    $chunk.source,
+                    $source,
                     $(chunk.file),
                     $(chunk.line + 1),
                     $(chunk.cell_options),
@@ -706,6 +711,32 @@ function evaluate_raw_cells!(
                             end
                         end
                     end
+
+                    cell_options = expand_cell ? remote.cell_options : Dict()
+
+                    if chunk.language === :r
+                        # Code cells always get the language of the notebook assigned, in this case julia,
+                        # so to render an R formatted cell, we need to do a workaround. We push a cell before
+                        # the actual code cell which contains a plain markdown block that wraps the code in ```r
+                        # for the formatting.
+                        push!(
+                            cells,
+                            (;
+                                id = string(expand_cell ? string(nth, "_", mth) : string(nth), "_code_prefix"),
+                                cell_type = :markdown,
+                                metadata = (;),
+                                source = process_cell_source("""
+                                    ```r
+                                    $(strip_cell_options(chunk.source))
+                                    ```
+                                    """, Dict())
+                            )
+                        )
+                        # We also need to hide the real code cell in this case, which contains possible formatting
+                        # settings in its YAML front-matter and which can therefore not be omitted entirely.
+                        cell_options["echo"] = false
+                    end
+
                     push!(
                         cells,
                         (;
@@ -713,8 +744,8 @@ function evaluate_raw_cells!(
                             cell_type = chunk.type,
                             metadata = (;),
                             source = process_cell_source(
-                                remote.code,
-                                expand_cell ? remote.cell_options : Dict(),
+                                chunk.source,
+                                cell_options,
                             ),
                             outputs,
                             execution_count = 1,
@@ -796,6 +827,29 @@ function process_cell_source(source::AbstractString, cell_options::Dict = Dict()
             String["#| $line" for line in eachline(IOBuffer(yaml); keep = true)],
             lines,
         )
+    end
+end
+
+function strip_cell_options(source::AbstractString)
+    lines = split(source, "\n")
+    keep_from = something(findfirst(lines) do line
+        !startswith(line, "#|")
+    end, 1)
+    join(lines[keep_from:end], "\n")
+end
+
+function transform_source(chunk)
+    if chunk.language === :julia
+        chunk.source
+    elseif chunk.language === :r
+        """
+        @isdefined(RCall) && RCall isa Module && Base.PkgId(RCall).uuid == Base.UUID("6f49c342-dc21-5d91-9882-a32aef131414") || error("RCall must be imported to execute R code cells with QuartoNotebookRunner")
+        RCall.rcopy(RCall.R\"\"\"
+        $(chunk.source)
+        \"\"\")
+        """
+    else
+        error("Unhandled code chunk language $(chunk.language)")
     end
 end
 
@@ -922,6 +976,11 @@ Return `true` if `node` is a Julia toplevel code block.
 is_julia_toplevel(node) =
     node.t isa CommonMark.CodeBlock &&
     node.t.info == "{julia}" &&
+    node.parent.t isa CommonMark.Document
+
+is_r_toplevel(node) =
+    node.t isa CommonMark.CodeBlock &&
+    node.t.info == "{r}" &&
     node.parent.t isa CommonMark.Document
 
 function run!(
