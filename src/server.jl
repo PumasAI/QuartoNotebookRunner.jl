@@ -447,6 +447,7 @@ function raw_script_chunks(path::String)
                     raw_chunks,
                     (;
                         type = :code,
+                        language = :julia,
                         source,
                         file = path,
                         line = start_line,
