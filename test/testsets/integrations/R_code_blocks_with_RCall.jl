@@ -1,8 +1,10 @@
 include("../../utilities/prelude.jl")
 
-test_example(joinpath(@__DIR__, "../../examples/integrations/R_code_blocks_with_RCall.qmd")) do json
+test_example(
+    joinpath(@__DIR__, "../../examples/integrations/R_code_blocks_with_RCall.qmd"),
+) do json
     cells = json["cells"]
-    
+
     @test occursin("RCall must be imported", cells[3]["outputs"][1]["traceback"][1])
 
     @test cells[8]["outputs"][1]["data"]["text/plain"] == "615.0"
@@ -14,7 +16,8 @@ test_example(joinpath(@__DIR__, "../../examples/integrations/R_code_blocks_with_
     @test occursin("DataFrame", cells[14]["outputs"][1]["data"]["text/plain"])
     @test !isempty(cells[14]["outputs"][1]["data"]["text/html"])
 
-    @test cells[17]["outputs"][1]["traceback"][1] == "REvalError: Error: object 'x' not found"
+    @test cells[17]["outputs"][1]["traceback"][1] ==
+          "REvalError: Error: object 'x' not found"
 
     @test cells[19]["outputs"][1]["data"]["text/plain"] == "615.0"
 
@@ -26,7 +29,7 @@ test_example(joinpath(@__DIR__, "../../examples/integrations/R_code_blocks_with_
             following = cells[i+1]
             @test following["cell_type"] == "code"
             @test any(==("#| echo: false\n"), following["source"])
-            
+
         end
     end
 end

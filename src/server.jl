@@ -324,12 +324,20 @@ function raw_markdown_chunks(path::String)
                         "Cannot handle an `eval` code cell option with value $(repr(evaluate)), only true or false.",
                     )
                 end
-                language = is_julia_toplevel(node) ? :julia :
-                    is_r_toplevel(node) ? :r :
-                    error("Unhandled code block language")
+                language =
+                    is_julia_toplevel(node) ? :julia :
+                    is_r_toplevel(node) ? :r : error("Unhandled code block language")
                 push!(
                     raw_chunks,
-                    (type = :code, language = language, source, file = path, line, evaluate, cell_options),
+                    (
+                        type = :code,
+                        language = language,
+                        source,
+                        file = path,
+                        line,
+                        evaluate,
+                        cell_options,
+                    ),
                 )
             end
         end
@@ -722,15 +730,21 @@ function evaluate_raw_cells!(
                         push!(
                             cells,
                             (;
-                                id = string(expand_cell ? string(nth, "_", mth) : string(nth), "_code_prefix"),
+                                id = string(
+                                    expand_cell ? string(nth, "_", mth) : string(nth),
+                                    "_code_prefix",
+                                ),
                                 cell_type = :markdown,
                                 metadata = (;),
-                                source = process_cell_source("""
-                                    ```r
-                                    $(strip_cell_options(chunk.source))
-                                    ```
-                                    """, Dict())
-                            )
+                                source = process_cell_source(
+                                    """
+           ```r
+           $(strip_cell_options(chunk.source))
+           ```
+           """,
+                                    Dict(),
+                                ),
+                            ),
                         )
                         # We also need to hide the real code cell in this case, which contains possible formatting
                         # settings in its YAML front-matter and which can therefore not be omitted entirely.
@@ -743,10 +757,7 @@ function evaluate_raw_cells!(
                             id = expand_cell ? string(nth, "_", mth) : string(nth),
                             cell_type = chunk.type,
                             metadata = (;),
-                            source = process_cell_source(
-                                chunk.source,
-                                cell_options,
-                            ),
+                            source = process_cell_source(chunk.source, cell_options),
                             outputs,
                             execution_count = 1,
                         ),
