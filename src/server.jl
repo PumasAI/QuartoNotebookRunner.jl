@@ -765,14 +765,26 @@ function evaluate_raw_cells!(
                 end
             end
         elseif chunk.type === :markdown
-            marker = "{julia} "
+            julia_marker = "{julia} "
+            r_marker = "{r} "
             source = chunk.source
-            if contains(chunk.source, "`$marker")
+            if contains(chunk.source, "`$julia_marker") ||
+               contains(chunk.source, "`$r_marker")
                 parser = Parser()
                 for (node, enter) in parser(chunk.source)
                     if enter && node.t isa CommonMark.Code
-                        if startswith(node.literal, marker)
+                        is_julia = startswith(node.literal, julia_marker)
+                        is_r = startswith(node.literal, r_marker)
+                        if is_julia || is_r
+                            marker =
+                                is_julia ? julia_marker :
+                                is_r ? r_marker : error("unreachable reached.")
                             source_code = replace(node.literal, marker => "")
+                            source_code = transform_source((;
+                                source = source_code,
+                                language = is_julia ? :julia :
+                                           is_r ? :r : error("unreachable reached."),
+                            ))
                             expr = :(render($(source_code), $(chunk.file), $(chunk.line)))
                             # There should only ever be a single result from an
                             # inline evaluation since you can't pass cell

@@ -32,4 +32,6 @@ test_example(
 
         end
     end
+
+    @test contains(cells[20]["source"][end], "inline code: 124")
 end
