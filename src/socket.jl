@@ -179,7 +179,9 @@ function serve(;
                             end
                             @error msg error
                             _write_json(socket, (; error = msg))
-                            continue
+                            # close connection with clients sending wrong hmacs or invalid json
+                            # (could be other processes mistakingly targeting our port)
+                            close(socket)
                         end
                         @debug "Received request" json
 
