@@ -2,6 +2,17 @@ include("../../utilities/prelude.jl")
 
 using Sockets
 
+function eof_or_econnreset(socket)
+    try
+        eof(socket)
+    catch err
+        if !(err isa Base.IOError && err.code == Base.UV_ECONNRESET)
+            rethrow(err)
+        end
+        true
+    end
+end
+
 @testset "HMAC signing" begin
     server = QuartoNotebookRunner.serve()
     sock = Sockets.connect(server.port)
@@ -17,7 +28,7 @@ using Sockets
     # check that an error is returned and no document has been run if the key is wrong
     QuartoNotebookRunner._write_hmac_json(sock, wrong_key, command)
     @test occursin("Incorrect HMAC digest", readline(sock))
-    @test eof(sock) # server closes upon receiving wrong hmac
+    @test eof_or_econnreset(sock) # server closes upon receiving wrong hmac
 
     # reconnect
     sock = Sockets.connect(server.port)
