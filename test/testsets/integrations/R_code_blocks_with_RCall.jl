@@ -21,6 +21,10 @@ test_example(
 
     @test cells[19]["outputs"][1]["data"]["text/plain"] == "615.0"
 
+    @test any(cells[20]["source"]) do line
+        occursin("Inline interpolation using R: 616\\.0", line)
+    end
+
     for (i, cell) in enumerate(cells)
         if endswith("code_prefix", cell["id"])
             @test cell["cell_type"] == "markdown"
@@ -29,7 +33,6 @@ test_example(
             following = cells[i+1]
             @test following["cell_type"] == "code"
             @test any(==("#| echo: false\n"), following["source"])
-
         end
     end
 end

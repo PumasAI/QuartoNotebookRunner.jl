@@ -64,3 +64,5 @@ And this is Julia accessing a variable from R
 ```{julia}
 @rget a
 ```
+
+Inline interpolation using R: `{r} a + 1`

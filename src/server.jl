@@ -765,14 +765,17 @@ function evaluate_raw_cells!(
                 end
             end
         elseif chunk.type === :markdown
-            marker = "{julia} "
+            marker = r"{(?:julia|r)} "
             source = chunk.source
-            if contains(chunk.source, "`$marker")
+            if contains(chunk.source, r"`{(?:julia|r)} ")
                 parser = Parser()
                 for (node, enter) in parser(chunk.source)
                     if enter && node.t isa CommonMark.Code
                         if startswith(node.literal, marker)
                             source_code = replace(node.literal, marker => "")
+                            if startswith(node.literal, "{r}")
+                                source_code = wrap_with_r_boilerplate(source_code)
+                            end
                             expr = :(render($(source_code), $(chunk.file), $(chunk.line)))
                             # There should only ever be a single result from an
                             # inline evaluation since you can't pass cell
@@ -849,16 +852,20 @@ function strip_cell_options(source::AbstractString)
     join(lines[keep_from:end], "\n")
 end
 
+function wrap_with_r_boilerplate(code)
+    """
+    @isdefined(RCall) && RCall isa Module && Base.PkgId(RCall).uuid == Base.UUID("6f49c342-dc21-5d91-9882-a32aef131414") || error("RCall must be imported to execute R code cells with QuartoNotebookRunner")
+    RCall.rcopy(RCall.R\"\"\"
+    $code
+    \"\"\")
+    """
+end
+
 function transform_source(chunk)
     if chunk.language === :julia
         chunk.source
     elseif chunk.language === :r
-        """
-        @isdefined(RCall) && RCall isa Module && Base.PkgId(RCall).uuid == Base.UUID("6f49c342-dc21-5d91-9882-a32aef131414") || error("RCall must be imported to execute R code cells with QuartoNotebookRunner")
-        RCall.rcopy(RCall.R\"\"\"
-        $(chunk.source)
-        \"\"\")
-        """
+        wrap_with_r_boilerplate(chunk.source)
     else
         error("Unhandled code chunk language $(chunk.language)")
     end
