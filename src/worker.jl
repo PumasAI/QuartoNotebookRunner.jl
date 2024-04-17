@@ -138,6 +138,13 @@ function worker_init(f::File)
                 OPTIONS[] = options
             end
 
+            # Run package refresh hooks every time.
+            for (pkgid, hook) in PACKAGE_REFRESH_HOOKS
+                if haskey(Base.loaded_modules, pkgid)
+                    hook()
+                end
+            end
+
             # Ensure we don't duplicate hooks.
             unique!(POST_EVAL_HOOKS)
             unique!(POST_ERROR_HOOKS)
@@ -783,23 +790,36 @@ function worker_init(f::File)
             return nothing
         end
 
+        function _RCall_refresh_hook(pkgid::Base.PkgId, RCall::Module)
+            # remove all variables from the session, this does not detach loaded libraries
+            # but we don't unload libraries in julia either to save time
+            RCall.reval_p(RCall.rparse_p("""
+                rm(list = ls(all.names = TRUE))
+                """))
+        end
+
         # Loading hooks:
+
+        function pkg_hook_creator(hooks_dict::Dict{Base.PkgId,Function})
+            function package_hook!(f::Function, name::String, uuid::String)
+                pkgid = Base.PkgId(Base.UUID(uuid), name)
+                hooks_dict[pkgid] = function ()
+                    mod = get(Base.loaded_modules, pkgid, nothing)
+                    try
+                        Base.@invokelatest f(pkgid, mod)
+                    catch error
+                        @error "hook failed" pkgid mod error
+                    end
+                    return nothing
+                end
+            end
+        end
 
         const PACKAGE_LOADING_HOOKS = Dict{Base.PkgId,Function}()
         if isdefined(Base, :package_callbacks)
             let
-                function package_loading_hook!(f::Function, name::String, uuid::String)
-                    pkgid = Base.PkgId(Base.UUID(uuid), name)
-                    PACKAGE_LOADING_HOOKS[pkgid] = function ()
-                        mod = get(Base.loaded_modules, pkgid, nothing)
-                        try
-                            Base.@invokelatest f(pkgid, mod)
-                        catch error
-                            @error "hook failed" pkgid mod error
-                        end
-                        return nothing
-                    end
-                end
+                package_loading_hook! = pkg_hook_creator(PACKAGE_LOADING_HOOKS)
+
                 package_loading_hook!(
                     _CairoMakie_hook,
                     "CairoMakie",
@@ -841,6 +861,17 @@ function worker_init(f::File)
             end
         else
             @error "package_callbacks not defined"
+        end
+
+        const PACKAGE_REFRESH_HOOKS = Dict{Base.PkgId,Function}()
+        let
+            package_refresh_hook! = pkg_hook_creator(PACKAGE_REFRESH_HOOKS)
+
+            package_refresh_hook!(
+                _RCall_refresh_hook,
+                "RCall",
+                "6f49c342-dc21-5d91-9882-a32aef131414",
+            )
         end
 
         # Once we've defined the functions perform an initial refresh to ensure
