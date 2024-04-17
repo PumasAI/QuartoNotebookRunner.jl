@@ -8,7 +8,6 @@ julia:
 using RCall
 ```
 
-delete this block to cause an error in the last cell
 ```{r}
 x <- 1
 ```

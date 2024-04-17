@@ -15,8 +15,7 @@ include("../../utilities/prelude.jl")
         @test json.cells[end].outputs[1].data["text/plain"] == "4.0"
 
         original = read(copy, String)
-        modified = replace(original, r"delete this block[\s\S]*?```\r?\n" => "")
-        @test length(modified) < length(original)
+        modified = replace(original, "x <- 1" => "NULL")
 
         open(copy, "w") do io
             print(io, modified)
