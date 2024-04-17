@@ -793,9 +793,7 @@ function worker_init(f::File)
         function _RCall_refresh_hook(pkgid::Base.PkgId, RCall::Module)
             # remove all variables from the session, this does not detach loaded libraries
             # but we don't unload libraries in julia either to save time
-            @info RCall.reval("ls(all.names = TRUE)")
-            @info RCall.reval_p(RCall.rparse_p("rm(list = ls(all.names = TRUE))"))
-            @info RCall.reval("ls(all.names = TRUE)")
+            RCall.reval_p(RCall.rparse_p("rm(list = ls(all.names = TRUE))"))
         end
 
         # Loading hooks:

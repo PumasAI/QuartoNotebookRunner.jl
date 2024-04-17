@@ -14,15 +14,15 @@ include("../../utilities/prelude.jl")
 
         @test json.cells[end].outputs[1].data["text/plain"] == "4.0"
 
-        modified = replace(read(copy, String), r"delete this block[\s\S]*?```\n" => "")
+        original = read(copy, String)
+        modified = replace(original, r"delete this block[\s\S]*?```\r?\n" => "")
+        @test length(modified) < length(original)
 
         open(copy, "w") do io
             print(io, modified)
         end
 
         json = run!(s, copy)
-        display(json.cells[end])
-        display(json.cells[end].outputs[1])
         @test json.cells[end].outputs[1].traceback[1] ==
               "REvalError: Error: object 'x' not found"
     finally
