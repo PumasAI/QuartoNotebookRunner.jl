@@ -1,0 +1,18 @@
+---
+title: RCall refresh
+julia:
+    exeflags: ["--project=RCall"]
+---
+
+```{julia}
+using RCall
+```
+
+delete this block to cause an error in the last cell
+```{r}
+x <- 1
+```
+
+```{r}
+x + 3
+```
