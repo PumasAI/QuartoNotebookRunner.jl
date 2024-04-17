@@ -846,11 +846,11 @@ function process_cell_source(source::AbstractString, cell_options::Dict = Dict()
 end
 
 function strip_cell_options(source::AbstractString)
-    lines = split(source, "\n")
+    lines = collect(eachline(IOBuffer(source); keep = true))
     keep_from = something(findfirst(lines) do line
         !startswith(line, "#|")
     end, 1)
-    join(lines[keep_from:end], "\n")
+    join(lines[keep_from:end])
 end
 
 function wrap_with_r_boilerplate(code)
