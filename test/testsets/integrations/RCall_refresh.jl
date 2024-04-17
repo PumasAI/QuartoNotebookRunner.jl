@@ -21,6 +21,8 @@ include("../../utilities/prelude.jl")
         end
 
         json = run!(s, copy)
+        display(json.cells[end])
+        display(json.cells[end].outputs[1])
         @test json.cells[end].outputs[1].traceback[1] ==
               "REvalError: Error: object 'x' not found"
     finally
