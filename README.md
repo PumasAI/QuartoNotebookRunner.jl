@@ -3,10 +3,24 @@
 [![CI](https://github.com/PumasAI/QuartoNotebookRunner.jl/actions/workflows/CI.yml/badge.svg)](https://github.com/PumasAI/QuartoNotebookRunner.jl/actions/workflows/CI.yml)
 [![codecov](https://codecov.io/gh/PumasAI/QuartoNotebookRunner.jl/graph/badge.svg?token=84nO9FG9oc)](https://codecov.io/gh/PumasAI/QuartoNotebookRunner.jl)
 
-Run [Quarto](https://quarto.org) notebooks containing Julia code and save the
-results to Jupyter notebooks.
+> [!NOTE]
+>
+> This Julia package provides a code evaluation engine that Quarto
+> can use. Please run the `quarto` CLI tool rather than this package
+> directly unless you would like to help with the development of this engine.
+>
+> Starting from the **pre-release** [`v1.5.29`](https://github.com/quarto-dev/quarto-cli/releases/tag/v1.5.29)
+> this engine is available out-of-the-box with `quarto` when you set `engine: julia` in
+> your Quarto notebook files. You don't need to follow the developer instructions
+> below.
 
-## Installation
+## Developer Documentation
+
+This Julia package can run [Quarto](https://quarto.org) notebooks containing Julia code and save the
+results to Jupyter notebooks. These intermediate `.ipynb` files can then be passed to `quarto render`
+for final rendering to a multitude of different output formats.
+
+### Installation
 
 Install this package into an isolated named environment rather than your global
 environment so that it does not interact with any other packages.
@@ -15,7 +29,7 @@ environment so that it does not interact with any other packages.
 julia --project=@quarto -e 'import Pkg; Pkg.add("QuartoNotebookRunner")'
 ```
 
-## Usage
+### Usage
 
 ```
 julia --project=@quarto
@@ -42,7 +56,7 @@ runs. Non-constant globals are GC'd between runs to avoid memory leaks.
 
 Note that no caching is implemented, or any form of reactive evaluation.
 
-## Daemon mode
+### Daemon mode
 
 Start the socket server with:
 
