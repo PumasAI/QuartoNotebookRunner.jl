@@ -171,6 +171,8 @@ function _extract_relevant_options(file_frontmatter::Dict, options::Dict)
 
     julia_default = get(file_frontmatter, "julia", nothing)
 
+    params_default = get(file_frontmatter, "params", Dict{String,Any}())
+
     if isempty(options)
         return _options_template(;
             fig_width = fig_width_default,
@@ -181,6 +183,7 @@ function _extract_relevant_options(file_frontmatter::Dict, options::Dict)
             pandoc_to = pandoc_to_default,
             julia = julia_default,
             daemon = daemon_default,
+            params = params_default,
         )
     else
         format = get(D, options, "format")
@@ -199,6 +202,13 @@ function _extract_relevant_options(file_frontmatter::Dict, options::Dict)
         julia = get(metadata, "julia", Dict())
         julia_merged = _recursive_merge(julia_default, julia)
 
+        # quarto stores params in two places currently, in `format.metadata.params` we have params specified in the front matter
+        # and in top-level `params` we have the parameters via command-line arguments.
+        # In case quarto decides to unify this behavior later, we probably can stop merging these on our side.
+        # Cf. https://github.com/quarto-dev/quarto-cli/issues/9197
+        params = get(metadata, "params", Dict())
+        cli_params = get(options, "params", Dict())
+        params_merged = _recursive_merge(params_default, params, cli_params)
 
         return _options_template(;
             fig_width,
@@ -209,6 +219,7 @@ function _extract_relevant_options(file_frontmatter::Dict, options::Dict)
             pandoc_to,
             julia = julia_merged,
             daemon,
+            params = params_merged,
         )
     end
 end
@@ -222,6 +233,7 @@ function _options_template(;
     pandoc_to,
     julia,
     daemon,
+    params,
 )
     D = Dict{String,Any}
     return D(
@@ -237,6 +249,7 @@ function _options_template(;
             "pandoc" => D("to" => pandoc_to),
             "metadata" => D("julia" => julia),
         ),
+        "params" => D(params),
     )
 end
 
@@ -578,6 +591,8 @@ function evaluate_raw_cells!(
     chunk_callback = (i, n, c) -> nothing,
 )
     refresh!(f, options)
+    evaluate_params!(f, options["params"])
+
     cells = []
 
     error_metadata = NamedTuple{(:kind, :file, :traceback),Tuple{Symbol,String,String}}[]
@@ -823,6 +838,15 @@ function evaluate_raw_cells!(
     end
 
     return cells
+end
+
+function evaluate_params!(f, params::Dict)
+    exprs = map(collect(pairs(params))) do (key, value)
+        :(@eval getfield(Main, :Notebook) $(Symbol(key::String)) = $value)
+    end
+    expr = Expr(:block, exprs...)
+    Malt.remote_eval_fetch(f.worker, expr)
+    return
 end
 
 # All but the last line of a cell should contain a newline character to end it.

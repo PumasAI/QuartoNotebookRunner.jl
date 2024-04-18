@@ -1,0 +1,43 @@
+---
+params:
+    a: 1
+    b: 2.0
+    c: some string
+    d: "some other string"
+    e: ["string", "array"]
+    f: [1, 2, 3]
+    g: {a: 1, b: 2}
+---
+
+```{julia}
+a
+```
+
+```{julia}
+b
+```
+
+```{julia}
+c
+```
+
+```{julia}
+d
+```
+
+```{julia}
+print(repr(e))
+```
+
+```{julia}
+print(repr(f))
+```
+
+```{julia}
+g["a"]
+```
+
+```{julia}
+g["b"]
+```
+
