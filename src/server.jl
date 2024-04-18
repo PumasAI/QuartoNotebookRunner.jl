@@ -840,7 +840,17 @@ function evaluate_raw_cells!(
     return cells
 end
 
-function evaluate_params!(f, params::Dict)
+function evaluate_params!(f, params::Dict{String})
+    invalid_param_keys = filter(!Base.isidentifier, keys(params))
+    if !isempty(invalid_param_keys)
+        plu = length(invalid_param_keys) > 1
+        throw(
+            ArgumentError(
+                "Found parameter key$(plu ? "s that are not " : " that is not a ") valid Julia identifier$(plu ? "s" : ""): $(join((repr(k) for k in invalid_param_keys), ", ", " and ")).",
+            ),
+        )
+    end
+
     exprs = map(collect(pairs(params))) do (key, value)
         :(@eval getfield(Main, :Notebook) $(Symbol(key::String)) = $value)
     end

@@ -39,3 +39,15 @@ end
     @test cells[14].outputs[1].data["text/plain"] == "4"
     @test cells[16].outputs[1].data["text/plain"] == "2"
 end
+
+@testset "Invalid parameters" begin
+    s = Server()
+    options = Dict{String,Any}("params" => Dict("invalid identifier" => 7))
+    @test_throws ArgumentError(
+        "Found parameter key that is not a  valid Julia identifier: \"invalid identifier\".",
+    ) QuartoNotebookRunner.run!(
+        s,
+        joinpath(@__DIR__, "../examples/parameters.qmd");
+        options,
+    )
+end
