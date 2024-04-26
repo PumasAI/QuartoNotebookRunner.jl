@@ -31,7 +31,8 @@ test_example(joinpath(@__DIR__, "../examples/cell_expansion.qmd")) do json
     @test output["data"]["text/plain"] == "\"return value\""
 
     source = cell["source"]
-    @test any(line -> contains(line, "#| layout-ncol: 2"), source)
+    @test source[1] == "#| layout-ncol: 2\n"
+    @test source[2] == "# Fake code goes here."
 
     cell = json["cells"][5]
     @test cell["cell_type"] == "code"

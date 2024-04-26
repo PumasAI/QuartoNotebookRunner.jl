@@ -767,13 +767,15 @@ function evaluate_raw_cells!(
                         cell_options["echo"] = false
                     end
 
+                    source = expand_cell ? remote.code : chunk.source
+
                     push!(
                         cells,
                         (;
                             id = expand_cell ? string(nth, "_", mth) : string(nth),
                             cell_type = chunk.type,
                             metadata = (;),
-                            source = process_cell_source(chunk.source, cell_options),
+                            source = process_cell_source(source, cell_options),
                             outputs,
                             execution_count = 1,
                         ),
