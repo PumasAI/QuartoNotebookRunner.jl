@@ -1,11 +1,8 @@
 ---
 title: Mimetypes
+julia:
+    exeflags: ["--project=mimetypes"]
 ---
-
-```{julia}
-Pkg.activate("mimetypes")
-Pkg.instantiate()
-```
 
 ```{julia}
 import CairoMakie
