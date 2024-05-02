@@ -1,0 +1,33 @@
+---
+engine: julia
+execute:
+    error: true
+---
+
+```{julia}
+#| expand: true
+
+"a" + "b"
+```
+
+```{julia}
+#| expand: true
+
+[
+    (; thunk = () -> "no problem here"),
+    (;
+        thunk = function ()
+            return [
+                (;
+                    thunk = function ()
+                        return [(; thunk = () -> error("a nested thunk error"))]
+                    end,
+                    options = Dict("expand" => true),
+                ),
+            ]
+        end,
+        options = Dict("expand" => true),
+    ),
+]
+```
+

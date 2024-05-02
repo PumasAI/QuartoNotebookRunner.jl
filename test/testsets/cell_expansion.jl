@@ -81,3 +81,11 @@ test_example(joinpath(@__DIR__, "../examples/cell_expansion.qmd")) do json
     cell = json["cells"][13]
     @test cell["outputs"][1]["data"]["text/plain"] == "123"
 end
+
+test_example(joinpath(@__DIR__, "../examples/cell_expansion_errors.qmd")) do json
+    cells = json["cells"]
+
+    @test any(x -> occursin("MethodError", x), cells[3]["outputs"][]["traceback"])
+    @test cells[6]["outputs"][]["data"]["text/plain"] == "\"no problem here\""
+    @test any(x -> occursin("a nested thunk error", x), cells[7]["outputs"][]["traceback"])
+end
