@@ -208,7 +208,7 @@ function worker_init(f::File)
                     ),)
                 else
 
-                    if !Base.isiterable(typeof(captured.value))
+                    if !(Base.@invokelatest Base.isiterable(typeof(captured.value)))
                         return ((;
                             code = "",
                             cell_options = Dict{String,Any}(),

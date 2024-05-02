@@ -55,7 +55,7 @@ title: Cell Expansion
 # invokelatest calls to be present)
 struct QuartoCell
     thunk::Base.Callable
-    options::Dict
+    options::Dict{String,Any}
     code::String
 end
 
