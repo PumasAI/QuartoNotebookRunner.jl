@@ -79,7 +79,7 @@ jobs:
         with:
           depwarn: "yes"
       - uses: julia-actions/julia-processcoverage@03114f09f119417c3242a9fb6e0b722676aedf38
-      - uses: codecov/codecov-action@84508663e988701840491b86de86b666e8a86bed
+      - uses: codecov/codecov-action@5ecb98a3c6b747ed38dc09f787459979aebb39be
         with:
           verbose: true
           files: lcov.info
