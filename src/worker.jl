@@ -208,7 +208,7 @@ function worker_init(f::File)
                     ),)
                 else
                     function invalid_return_value_cell(
-                        f::Function;
+                        errmsg;
                         code = "",
                         cell_options = Dict{String,Any}(),
                     )
@@ -222,20 +222,20 @@ function worker_init(f::File)
                             display_results,
                             output = captured.output,
                             error = "Invalid return value for expanded cell",
-                            backtrace = collect(eachline(IOBuffer(f()))),
+                            backtrace = collect(eachline(IOBuffer(errmsg))),
                         ),)
                     end
 
                     if !(Base.@invokelatest Base.isiterable(typeof(captured.value)))
-                        return invalid_return_value_cell() do
+                        return invalid_return_value_cell(
                             """
                             Return value of a cell with `expand: true` is not iterable.
                             The returned value must iterate objects that each have a `thunk`
                             property which contains a function that returns the cell output.
                             Instead, the returned value was:
                             $(repr(captured.value))
-                            """
-                        end
+                            """,
+                        )
                     end
 
                     # A cell expansion with `expand` might itself also contain
@@ -248,32 +248,30 @@ function worker_init(f::File)
                         options = _getproperty(Dict{String,Any}, cell, :options)
 
                         if !(code isa String)
-                            return invalid_return_value_cell() do
+                            return invalid_return_value_cell(
                                 """
                                 While iterating over the elements of the return value of a cell with
                                 `expand: true`, a value was found at position $i which has a `code` property
                                 that is not of the expected type `String`. The value was:
                                 $(repr(cell.code))
-                                """
-                            end
+                                """,
+                            )
                         end
 
                         if !(options isa Dict{String})
-                            return invalid_return_value_cell(; code) do
+                            return invalid_return_value_cell(
                                 """
                                 While iterating over the elements of the return value of a cell with
                                 `expand: true`, a value was found at position $i which has a `options` property
                                 that is not of the expected type `Dict{String}`. The value was:
                                 $(repr(cell.options))
-                                """
-                            end
+                                """;
+                                code,
+                            )
                         end
 
                         if !hasproperty(cell, :thunk)
-                            return invalid_return_value_cell(;
-                                code,
-                                cell_options = options,
-                            ) do
+                            return invalid_return_value_cell(
                                 """
                                 While iterating over the elements of the return value of a cell with
                                 `expand: true`, a value was found at position $i which does not have a
@@ -282,15 +280,14 @@ function worker_init(f::File)
                                 the output of the cell.
                                 The object without a `thunk` property was:
                                 $(repr(cell))
-                                """
-                            end
+                                """;
+                                code,
+                                cell_options = options,
+                            )
                         end
 
                         if !(cell.thunk isa Base.Callable)
-                            return invalid_return_value_cell(;
-                                code,
-                                cell_options = options,
-                            ) do
+                            return invalid_return_value_cell(
                                 """
                                 While iterating over the elements of the return value of a cell with
                                 `expand: true` a value was found at position $i which has a `thunk`
@@ -299,8 +296,10 @@ function worker_init(f::File)
                                 cell must have a property `thunk` with a function that returns
                                 the output of the cell. Instead, the returned value was:
                                 $(repr(cell.thunk))
-                                """
-                            end
+                                """;
+                                code,
+                                cell_options = options,
+                            )
                         end
 
                         wrapped = function ()
