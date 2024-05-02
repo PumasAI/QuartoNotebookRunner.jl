@@ -31,3 +31,32 @@ execute:
 ]
 ```
 
+```{julia}
+#| expand: true
+
+[(; thunk = "not a function")]
+```
+
+```{julia}
+#| expand: true
+
+:not_an_iterable
+```
+
+```{julia}
+#| expand: true
+
+[(; no_thunk_here = "")]
+```
+
+```{julia}
+#| expand: true
+
+[(; thunk = () -> 123, code = :invalid_code)]
+```
+
+```{julia}
+#| expand: true
+
+[(; thunk = () -> 123, options = Dict(:invalid => "options"))]
+```

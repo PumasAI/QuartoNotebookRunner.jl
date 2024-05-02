@@ -86,6 +86,34 @@ test_example(joinpath(@__DIR__, "../examples/cell_expansion_errors.qmd")) do jso
     cells = json["cells"]
 
     @test any(x -> occursin("MethodError", x), cells[3]["outputs"][]["traceback"])
+
     @test cells[6]["outputs"][]["data"]["text/plain"] == "\"no problem here\""
+
     @test any(x -> occursin("a nested thunk error", x), cells[7]["outputs"][]["traceback"])
+
+    cell = cells[10]
+    @test cell["outputs"][]["ename"] == "Invalid return value for expanded cell"
+    @test any(
+        x -> occursin("not a function of type `Base.Callable`", x),
+        cell["outputs"][]["traceback"],
+    )
+
+    cell = cells[13]
+    @test cell["outputs"][]["ename"] == "Invalid return value for expanded cell"
+    @test any(x -> occursin("is not iterable", x), cell["outputs"][]["traceback"])
+
+    cell = cells[16]
+    @test cell["outputs"][]["ename"] == "Invalid return value for expanded cell"
+    @test any(
+        x -> occursin("must have a property `thunk`", x),
+        cell["outputs"][]["traceback"],
+    )
+
+    cell = cells[19]
+    @test cell["outputs"][]["ename"] == "Invalid return value for expanded cell"
+    @test any(x -> occursin("`code` property", x), cell["outputs"][]["traceback"])
+
+    cell = cells[22]
+    @test cell["outputs"][]["ename"] == "Invalid return value for expanded cell"
+    @test any(x -> occursin("`options` property", x), cell["outputs"][]["traceback"])
 end
