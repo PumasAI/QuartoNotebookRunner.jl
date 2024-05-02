@@ -183,24 +183,49 @@ function worker_init(f::File)
         )
             captured, display_results = with_inline_display(thunk, cell_options)
             if get(cell_options, "expand", false) === true
-                # A cell expansion with `expand` might itself also contain
-                # cells that expand to multiple cells, so we need to flatten
-                # the results to a single list of cells before passing back
-                # to the server. Cell expansion is recursive.
-                return _flatmap(captured.value) do cell
-                    wrapped = function ()
-                        return IOCapture.capture(
-                            cell.thunk;
-                            rethrow = InterruptException,
-                            color = true,
-                        )
+                if captured.error
+                    return ((;
+                        code = "", # an expanded cell that errored can't have returned code
+                        cell_options = Dict{String,Any}(), # or options
+                        results = Dict{
+                            String,
+                            @NamedTuple{error::Bool, data::Vector{UInt8}}
+                        }(),
+                        display_results,
+                        output = captured.output,
+                        error = string(typeof(captured.value)),
+                        backtrace = collect(
+                            eachline(
+                                IOBuffer(
+                                    clean_bt_str(
+                                        captured.error,
+                                        captured.backtrace,
+                                        captured.value,
+                                    ),
+                                ),
+                            ),
+                        ),
+                    ),)
+                else
+                    # A cell expansion with `expand` might itself also contain
+                    # cells that expand to multiple cells, so we need to flatten
+                    # the results to a single list of cells before passing back
+                    # to the server. Cell expansion is recursive.
+                    return _flatmap(captured.value) do cell
+                        wrapped = function ()
+                            return IOCapture.capture(
+                                cell.thunk;
+                                rethrow = InterruptException,
+                                color = true,
+                            )
+                        end
+
+                        code = _getproperty(cell, :code, "")
+                        options = _getproperty(Dict{String,Any}, cell, :options)
+
+                        # **The recursive call:**
+                        return Base.@invokelatest _render_thunk(wrapped, code, options)
                     end
-
-                    code = _getproperty(cell, :code, "")
-                    options = _getproperty(Dict{String,Any}, cell, :options)
-
-                    # **The recursive call:**
-                    return Base.@invokelatest _render_thunk(wrapped, code, options)
                 end
             else
                 results = Base.@invokelatest render_mimetypes(
