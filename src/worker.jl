@@ -183,24 +183,136 @@ function worker_init(f::File)
         )
             captured, display_results = with_inline_display(thunk, cell_options)
             if get(cell_options, "expand", false) === true
-                # A cell expansion with `expand` might itself also contain
-                # cells that expand to multiple cells, so we need to flatten
-                # the results to a single list of cells before passing back
-                # to the server. Cell expansion is recursive.
-                return _flatmap(captured.value) do cell
-                    wrapped = function ()
-                        return IOCapture.capture(
-                            cell.thunk;
-                            rethrow = InterruptException,
-                            color = true,
+                if captured.error
+                    return ((;
+                        code = "", # an expanded cell that errored can't have returned code
+                        cell_options = Dict{String,Any}(), # or options
+                        results = Dict{
+                            String,
+                            @NamedTuple{error::Bool, data::Vector{UInt8}}
+                        }(),
+                        display_results,
+                        output = captured.output,
+                        error = string(typeof(captured.value)),
+                        backtrace = collect(
+                            eachline(
+                                IOBuffer(
+                                    clean_bt_str(
+                                        captured.error,
+                                        captured.backtrace,
+                                        captured.value,
+                                    ),
+                                ),
+                            ),
+                        ),
+                    ),)
+                else
+                    function invalid_return_value_cell(
+                        errmsg;
+                        code = "",
+                        cell_options = Dict{String,Any}(),
+                    )
+                        return ((;
+                            code,
+                            cell_options,
+                            results = Dict{
+                                String,
+                                @NamedTuple{error::Bool, data::Vector{UInt8}}
+                            }(),
+                            display_results,
+                            output = captured.output,
+                            error = "Invalid return value for expanded cell",
+                            backtrace = collect(eachline(IOBuffer(errmsg))),
+                        ),)
+                    end
+
+                    if !(Base.@invokelatest Base.isiterable(typeof(captured.value)))
+                        return invalid_return_value_cell(
+                            """
+                            Return value of a cell with `expand: true` is not iterable.
+                            The returned value must iterate objects that each have a `thunk`
+                            property which contains a function that returns the cell output.
+                            Instead, the returned value was:
+                            $(repr(captured.value))
+                            """,
                         )
                     end
 
-                    code = _getproperty(cell, :code, "")
-                    options = _getproperty(Dict{String,Any}, cell, :options)
+                    # A cell expansion with `expand` might itself also contain
+                    # cells that expand to multiple cells, so we need to flatten
+                    # the results to a single list of cells before passing back
+                    # to the server. Cell expansion is recursive.
+                    return _flatmap(enumerate(captured.value)) do (i, cell)
 
-                    # **The recursive call:**
-                    return Base.@invokelatest _render_thunk(wrapped, code, options)
+                        code = _getproperty(cell, :code, "")
+                        options = _getproperty(Dict{String,Any}, cell, :options)
+
+                        if !(code isa String)
+                            return invalid_return_value_cell(
+                                """
+                                While iterating over the elements of the return value of a cell with
+                                `expand: true`, a value was found at position $i which has a `code` property
+                                that is not of the expected type `String`. The value was:
+                                $(repr(cell.code))
+                                """,
+                            )
+                        end
+
+                        if !(options isa Dict{String})
+                            return invalid_return_value_cell(
+                                """
+                                While iterating over the elements of the return value of a cell with
+                                `expand: true`, a value was found at position $i which has a `options` property
+                                that is not of the expected type `Dict{String}`. The value was:
+                                $(repr(cell.options))
+                                """;
+                                code,
+                            )
+                        end
+
+                        if !hasproperty(cell, :thunk)
+                            return invalid_return_value_cell(
+                                """
+                                While iterating over the elements of the return value of a cell with
+                                `expand: true`, a value was found at position $i which does not have a
+                                `thunk` property. Every object in the iterator returned from an expanded
+                                cell must have a property `thunk` with a function that returns
+                                the output of the cell.
+                                The object without a `thunk` property was:
+                                $(repr(cell))
+                                """;
+                                code,
+                                cell_options = options,
+                            )
+                        end
+
+                        if !(cell.thunk isa Base.Callable)
+                            return invalid_return_value_cell(
+                                """
+                                While iterating over the elements of the return value of a cell with
+                                `expand: true` a value was found at position $i which has a `thunk`
+                                property that is not a function of type `Base.Callable`.
+                                Every object in the iterator returned from an expanded
+                                cell must have a property `thunk` with a function that returns
+                                the output of the cell. Instead, the returned value was:
+                                $(repr(cell.thunk))
+                                """;
+                                code,
+                                cell_options = options,
+                            )
+                        end
+
+                        wrapped = function ()
+                            return IOCapture.capture(
+                                cell.thunk;
+                                rethrow = InterruptException,
+                                color = true,
+                            )
+                        end
+
+                        # **The recursive call:**
+                        return Base.@invokelatest _render_thunk(wrapped, code, options)
+                    end
                 end
             else
                 results = Base.@invokelatest render_mimetypes(
