@@ -396,6 +396,26 @@ function worker_init(f::File)
             line::Integer,
         )
             loc = LineNumberNode(line, Symbol(file))
+
+            # inspired by IJulia/execute_request()
+            # a cell beginning with "? ..." is interpreted as a help request
+            hcode = replace(code, r"^\s*\?" => "")
+            if hcode != code
+                code = string("import REPL; Core.eval(REPL, REPL.helpmode(\"", chomp(hcode), "\"))")
+            end
+
+            # "; ..." cells are interpreted as shell commands for run
+            hcode = replace(code, r"^\s*;" => "")
+            if hcode != code
+                code = string("Base.repl_cmd(`", chomp(hcode), "`, stdout)")
+            end
+
+            # "] ..." cells are interpreted as pkg shell commands
+            hcode = replace(code, r"^\]" => "")
+            if hcode != code
+                code = string("Pkg.REPLMode.PRINTED_REPL_WARNING[]=true; Pkg.REPLMode.do_cmd(Pkg.REPLMode.MiniREPL(),\"", chomp(hcode), "\")")
+            end
+
             try
                 ast = _parseall(code, filename = file, lineno = line)
                 @assert Meta.isexpr(ast, :toplevel)
