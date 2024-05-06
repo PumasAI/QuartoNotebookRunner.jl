@@ -71,7 +71,7 @@ function _exeflags_and_env(options)
         push!(exeflags, "--project=@.")
     end
     # if exeflags already contains '--color=no', the 'no' will prevail
-    pushfirst!(exeflags,"--color=yes")
+    pushfirst!(exeflags, "--color=yes")
     return exeflags, env
 end
 
