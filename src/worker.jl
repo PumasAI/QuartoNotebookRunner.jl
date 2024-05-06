@@ -401,7 +401,11 @@ function worker_init(f::File)
             # a cell beginning with "? ..." is interpreted as a help request
             hcode = replace(code, r"^\s*\?" => "")
             if hcode != code
-                code = string("import REPL; Core.eval(REPL, REPL.helpmode(\"", chomp(hcode), "\"))")
+                code = string(
+                    "import REPL; Core.eval(REPL, REPL.helpmode(\"",
+                    chomp(hcode),
+                    "\"))",
+                )
             end
 
             # "; ..." cells are interpreted as shell commands for run
@@ -413,7 +417,11 @@ function worker_init(f::File)
             # "] ..." cells are interpreted as pkg shell commands
             hcode = replace(code, r"^\]" => "")
             if hcode != code
-                code = string("Pkg.REPLMode.PRINTED_REPL_WARNING[]=true; Pkg.REPLMode.do_cmd(Pkg.REPLMode.MiniREPL(),\"", chomp(hcode), "\")")
+                code = string(
+                    "Pkg.REPLMode.PRINTED_REPL_WARNING[]=true; Pkg.REPLMode.do_cmd(Pkg.REPLMode.MiniREPL(),\"",
+                    chomp(hcode),
+                    "\")",
+                )
             end
 
             try
