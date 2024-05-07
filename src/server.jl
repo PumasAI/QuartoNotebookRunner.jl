@@ -70,6 +70,8 @@ function _exeflags_and_env(options)
     if !any(startswith("JULIA_PROJECT="), env) && !any(startswith("--project="), exeflags)
         push!(exeflags, "--project=@.")
     end
+    # if exeflags already contains '--color=no', the 'no' will prevail
+    pushfirst!(exeflags, "--color=yes")
     return exeflags, env
 end
 

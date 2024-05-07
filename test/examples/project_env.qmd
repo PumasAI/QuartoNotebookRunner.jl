@@ -2,6 +2,7 @@
 title: Project
 julia:
     env: ["JULIA_PROJECT=project"]
+    exeflags: ["--color=no"]
 ---
 
 Non-global project environment.

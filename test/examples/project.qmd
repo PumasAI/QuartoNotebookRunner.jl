@@ -1,5 +1,7 @@
 ---
 title: Project
+julia:
+    exeflags: ["--color=no"]
 ---
 
 Non-global project environment.
