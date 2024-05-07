@@ -51,14 +51,20 @@ jobs:
           - windows-latest
         # macOS 1.6 seems to consistently stall on `Plots` notebooks. Skip this
         # combination and test on a slightly newer macOS version instead.
+        # 1.6 windows has recently stalled out on mimetypes, use 1.7 windows in
+        # the tests. We still test 1.6 on Linux.
         exclude:
           - version: "1.6"
             os: macos-13
+          - version: "1.6"
+            os: windows-latest
         include:
           - version: "1.7"
             os: macos-13
+          - version: "1.7"
+            os: windows-latest
     steps:
-      - uses: actions/checkout@0ad4b8fadaa221de15dcec353f45205ec38ea70b
+      - uses: actions/checkout@44c2b7a8a4ea60a981eaca3cf939b5f4305c123b
         with:
           persist-credentials: false
 
@@ -91,7 +97,7 @@ jobs:
     timeout-minutes: 20
 
     steps:
-      - uses: actions/checkout@0ad4b8fadaa221de15dcec353f45205ec38ea70b
+      - uses: actions/checkout@44c2b7a8a4ea60a981eaca3cf939b5f4305c123b
         with:
           persist-credentials: false
       - uses: julia-actions/setup-julia@f2258781c657ad9b4b88072c5eeaf9ec8c370874
