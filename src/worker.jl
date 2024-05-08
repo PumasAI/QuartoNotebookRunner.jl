@@ -396,6 +396,16 @@ function worker_init(f::File)
             line::Integer,
         )
             loc = LineNumberNode(line, Symbol(file))
+
+            # handle REPL modes
+            if code[1] == '?'
+                code = "Core.eval(Main.REPL, Main.REPL.helpmode(\"$(code[2:end])\"))"
+            elseif code[1] == ';'
+                code = "Base.repl_cmd(`$(code[2:end])`, stdout)"
+            elseif code[1] == ']'
+                code = "Pkg.REPLMode.PRINTED_REPL_WARNING[]=true; Pkg.REPLMode.do_cmd(Pkg.REPLMode.MiniREPL(),\"$(code[2:end])\")"
+            end
+
             try
                 ast = _parseall(code, filename = file, lineno = line)
                 @assert Meta.isexpr(ast, :toplevel)

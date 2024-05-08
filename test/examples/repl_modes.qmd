@@ -1,0 +1,19 @@
+---
+title: REPL modes
+---
+
+```{julia}
+;echo OK
+```
+
+```{julia}
+;cmd /c echo OK
+```
+
+```{julia}
+] status
+```
+
+```{julia}
+?Int64
+```
