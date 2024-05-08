@@ -403,8 +403,7 @@ function worker_init(f::File)
             elseif code[1] == ';'
                 code = "Base.repl_cmd(`$(code[2:end])`, stdout)"
             elseif code[1] == ']'
-                code = "Pkg.REPLMode.PRINTED_REPL_WARNING[]=true;\
-                        Pkg.REPLMode.do_cmd(Pkg.REPLMode.MiniREPL(),\"$(code[2:end])\")"
+                code = "Pkg.REPLMode.PRINTED_REPL_WARNING[]=true; Pkg.REPLMode.do_cmd(Pkg.REPLMode.MiniREPL(),\"$(code[2:end])\")"
             end
 
             try
