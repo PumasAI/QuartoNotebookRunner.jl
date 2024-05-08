@@ -3,20 +3,26 @@ include("../utilities/prelude.jl")
 test_example(joinpath(@__DIR__, "../examples/repl_modes.qmd")) do json
 
     cells = json["cells"]
-    @test length(cells) == 6
+    @test length(cells) == 8
 
-    cell = cells[2]
-    @test cell["outputs"][1]["text"] == "OK\n"
-    @test cell["outputs"][1]["output_type"] == "stream"
-    @test cell["outputs"][1]["name"] == "stdout"
+    if !Sys.iswindows()
+        cell = cells[2]
+        @test cell["outputs"][1]["text"] == "OK\n"
+        @test cell["outputs"][1]["output_type"] == "stream"
+        @test cell["outputs"][1]["name"] == "stdout"
+    else
+        # https://github.com/JuliaLang/julia/issues/23597
+        cell = cells[4]
+        @test contains(cell["outputs"][1]["text"], "OK")
+    end
 
-    cell = cells[4]
+    cell = cells[6]
     @test cell["outputs"][1]["output_type"] == "stream"
     @test cell["outputs"][1]["name"] == "stdout"
     @test contains(cell["outputs"][1]["text"], "Status")
     @test contains(cell["outputs"][1]["text"], "Project.toml")
 
-    cell = cells[6]
+    cell = cells[8]
     @test cell["outputs"][1]["output_type"] == "stream"
     @test cell["outputs"][1]["name"] == "stdout"
     @test contains(cell["outputs"][1]["text"], "search")

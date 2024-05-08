@@ -7,6 +7,10 @@ title: REPL modes
 ```
 
 ```{julia}
+;cmd /c echo OK
+```
+
+```{julia}
 ] status
 ```
 

@@ -397,31 +397,14 @@ function worker_init(f::File)
         )
             loc = LineNumberNode(line, Symbol(file))
 
-            # inspired by IJulia/execute_request()
-            # a cell beginning with "? ..." is interpreted as a help request
-            hcode = replace(code, r"^\s*\?" => "")
-            if hcode != code
-                code = string(
-                    "import REPL; Core.eval(REPL, REPL.helpmode(\"",
-                    chomp(hcode),
-                    "\"))",
-                )
-            end
-
-            # "; ..." cells are interpreted as shell commands for run
-            hcode = replace(code, r"^\s*;" => "")
-            if hcode != code
-                code = string("Base.repl_cmd(`", chomp(hcode), "`, stdout)")
-            end
-
-            # "] ..." cells are interpreted as pkg shell commands
-            hcode = replace(code, r"^\]" => "")
-            if hcode != code
-                code = string(
-                    "Pkg.REPLMode.PRINTED_REPL_WARNING[]=true; Pkg.REPLMode.do_cmd(Pkg.REPLMode.MiniREPL(),\"",
-                    chomp(hcode),
-                    "\")",
-                )
+            # handle REPL modes
+            if code[1] == '?'
+                code = "Core.eval(Main.REPL, Main.REPL.helpmode(\"$(code[2:end])\"))"
+            elseif code[1] == ';'
+                code = "Base.repl_cmd(`$(code[2:end])`, stdout)"
+            elseif code[1] == ']'
+                code = "Pkg.REPLMode.PRINTED_REPL_WARNING[]=true;\
+                        Pkg.REPLMode.do_cmd(Pkg.REPLMode.MiniREPL(),\"$(code[2:end])\")"
             end
 
             try
