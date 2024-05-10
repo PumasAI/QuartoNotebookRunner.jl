@@ -30,6 +30,12 @@ end
 
 # Includes.
 
-include("worker.jl")
+include("package_hooks.jl")
+include("InlineDisplay.jl")
+include("NotebookInclude.jl")
+include("refresh.jl")
+include("render.jl")
+include("utilities.jl")
+include("ojs_define.jl")
 
 end
