@@ -28,4 +28,8 @@ function __init__()
     @require_extensions
 end
 
+# Includes.
+
+include("worker.jl")
+
 end
