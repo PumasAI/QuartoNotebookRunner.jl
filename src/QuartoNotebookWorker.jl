@@ -337,6 +337,11 @@ function debug(; exeflags = String[])
 
                 pushfirst!(LOAD_PATH, $(repr(project)))
 
+                # Always do a `precompile` so that it's simpler to kill and
+                # restart the worker without it potentially being stale.
+                import Pkg
+                Pkg.precompile()
+
                 import QuartoNotebookWorker
 
                 # Attempt to import some other useful packages.

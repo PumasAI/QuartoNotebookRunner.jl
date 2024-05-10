@@ -32,6 +32,7 @@ end
 
 include("package_hooks.jl")
 include("InlineDisplay.jl")
+include("NotebookState.jl")
 include("NotebookInclude.jl")
 include("refresh.jl")
 include("render.jl")

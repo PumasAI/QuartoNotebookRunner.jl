@@ -250,7 +250,7 @@ function with_context(io::IO, cell_options = Dict{String,Any}())
         #
         # TODO: perhaps preprocess the metadata provided here rather
         # than just passing it through as-is.
-        :QuartoNotebookRunner => (; cell_options, options = OPTIONS[]),
+        :QuartoNotebookRunner => (; cell_options, options = NotebookState.OPTIONS[]),
     )
 end
 
@@ -296,7 +296,7 @@ function render_mimetypes(value, cell_options)
     # what the package defines itself.
     value = _mimetype_wrapper(value)
 
-    to_format = OPTIONS[]["format"]["pandoc"]["to"]
+    to_format = NotebookState.OPTIONS[]["format"]["pandoc"]["to"]
 
     result = Dict{String,@NamedTuple{error::Bool, data::Vector{UInt8}}}()
     # Some output formats that we want to write to need different
