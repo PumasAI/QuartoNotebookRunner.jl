@@ -303,8 +303,17 @@ end
     debug()
 
 Run an interactive Julia REPL within the `QuartoNotebookWorker` environment. If
-you have `Revise` and `Debugger` available they will be loaded. Editing code in
-the `src/QuartoNotebookWorker` directory will be reflected in the running REPL.
+you have `Revise`, `Debugger`, or `TestEnv` available they will be loaded.
+Editing code in the `src/QuartoNotebookWorker` directory will be reflected in
+the running REPL. Use
+
+```julia
+julia> TestEnv.activate("QuartoNotebookWorker"); cd("test")
+
+julia> include("runtests.jl")
+```
+
+to run the test suite without having to reload the worker package.
 """
 function debug(; exeflags = String[])
     if islocked(WORKER_SETUP_LOCK)
@@ -316,26 +325,65 @@ function debug(; exeflags = String[])
             write(
                 file,
                 """
+                # Try load `Revise` first, since we want to be able to track
+                # changes in the worker package.
                 try
                     import Revise
                 catch error
                     @info "Revise not available."
                 end
+
+                cd($(repr(QNW)))
+
+                pushfirst!(LOAD_PATH, $(repr(project)))
+
+                import QuartoNotebookWorker
+
+                # Attempt to import some other useful packages.
                 try
                     import Debugger
                 catch error
                     @info "Debugger not available."
                 end
-
-                push!(LOAD_PATH, "$project")
-
-                import QuartoNotebookWorker
+                try
+                    import TestEnv
+                catch error
+                    @info "TestEnv not available."
+                end
                 """,
             )
             julia = Base.julia_cmd()[1]
             cmd = `$julia $exeflags --startup-file=no -i $file`
             run(cmd)
         end
+    end
+end
+
+"""
+    test()
+
+Run the test suite for `QuartoNotebookWorker`. This is run in isolation from the
+current process. If you want to run the tests interactively use `debug()` and
+the `TestEnv` package to do so.
+"""
+function test(; exeflags = String[])
+    mktempdir() do temp_dir
+        file = joinpath(temp_dir, "runtests.jl")
+        project = LOADER_ENV[]
+        write(
+            file,
+            """
+            cd($(repr(QNW)))
+
+            pushfirst!(LOAD_PATH, $(repr(project)))
+
+            import Pkg
+            Pkg.test("QuartoNotebookWorker")
+            """,
+        )
+        julia = Base.julia_cmd()[1]
+        cmd = `$julia $exeflags --startup-file=no $file`
+        run(cmd)
     end
 end
 
