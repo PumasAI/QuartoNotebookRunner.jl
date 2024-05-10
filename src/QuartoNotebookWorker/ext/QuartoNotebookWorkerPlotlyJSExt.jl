@@ -1,0 +1,6 @@
+module QuartoNotebookWorkerPlotlyJSExt
+
+import QuartoNotebookWorker
+import PlotlyJS
+
+end

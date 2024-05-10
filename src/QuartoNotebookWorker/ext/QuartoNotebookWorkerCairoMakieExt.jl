@@ -1,0 +1,6 @@
+module QuartoNotebookWorkerCairoMakieExt
+
+import QuartoNotebookWorker
+import CairoMakie
+
+end
