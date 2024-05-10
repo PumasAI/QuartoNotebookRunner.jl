@@ -28,6 +28,10 @@ function __init__()
     @require_extensions
 end
 
+# Imports.
+
+import REPL
+
 # Includes.
 
 include("package_hooks.jl")

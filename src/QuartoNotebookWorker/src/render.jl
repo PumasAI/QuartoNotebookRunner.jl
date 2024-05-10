@@ -7,7 +7,12 @@ function render(
     return Base.@invokelatest(
         collect(
             _render_thunk(code, cell_options) do
-                Base.@invokelatest include_str(getfield(Main, :Notebook), code; file, line)
+                Base.@invokelatest include_str(
+                    NotebookState.notebook_module(),
+                    code;
+                    file,
+                    line,
+                )
             end,
         )
     )
@@ -194,7 +199,7 @@ function include_str(mod::Module, code::AbstractString; file::AbstractString, li
         # Note: IO capturing combines stdout and stderr into a single
         # `.output`, but Jupyter notebook spec appears to want them
         # separate. Revisit this if it causes issues.
-        return IOCapture.capture(; rethrow = InterruptException, color = true) do
+        return Packages.IOCapture.capture(; rethrow = InterruptException, color = true) do
             result = nothing
             line_and_ex = Expr(:toplevel, loc, nothing)
             try
@@ -238,7 +243,7 @@ end
 function with_context(io::IO, cell_options = Dict{String,Any}())
     return IOContext(
         io,
-        :module => getfield(Main, :Notebook),
+        :module => NotebookState.notebook_module(),
         :color => true,
         :limit => true,
         # This allows a `show` method implementation to check for
