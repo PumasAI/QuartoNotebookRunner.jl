@@ -33,6 +33,7 @@ function configure()
         dpi_kwargs = Dict{Symbol,Any}()
     end
 
+    pkgid = Base.PkgId(Plots)
     if (QuartoNotebookWorker._pkg_version(pkgid) < v"1.28.1") && (fm.fig_format == "pdf")
         Plots.gr(; size_kwargs..., fmt = :png, dpi_kwargs...)
     else
@@ -42,8 +43,10 @@ function configure()
 end
 
 function __init__()
-    configure()
-    QuartoNotebookWorker.add_package_loading_hook!(configure)
+    if ccall(:jl_generating_output, Cint, ()) == 0
+        configure()
+        QuartoNotebookWorker.add_package_loading_hook!(configure)
+    end
 end
 
 end

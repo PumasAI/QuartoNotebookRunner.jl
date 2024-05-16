@@ -30,6 +30,7 @@ end
 
 # Imports.
 
+import Pkg
 import REPL
 
 # Includes.

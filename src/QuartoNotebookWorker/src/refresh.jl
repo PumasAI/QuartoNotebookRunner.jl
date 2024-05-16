@@ -1,4 +1,4 @@
-function refresh!(path, options = NotebookState.OPTIONS[])
+function refresh!(path, original_options, options = original_options)
     # Current directory should always start out as the directory of the
     # notebook file, which is not necessarily right initially if the parent
     # process was started from a different directory to the notebook.

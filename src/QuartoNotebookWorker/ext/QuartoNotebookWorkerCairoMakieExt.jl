@@ -21,8 +21,10 @@ function configure()
 end
 
 function __init__()
-    configure()
-    QuartoNotebookWorker.add_package_loading_hook!(configure)
+    if ccall(:jl_generating_output, Cint, ()) == 0
+        configure()
+        QuartoNotebookWorker.add_package_loading_hook!(configure)
+    end
 end
 
 end

@@ -18,6 +18,7 @@ function configure()
         fig_width = _width_inch * 96
         fig_height = _height_inch * 96
 
+        pkgid = Base.PkgId(Makie)
         if QuartoNotebookWorker._pkg_version(pkgid) < v"0.20"
             Makie.update_theme!(; resolution = (fig_width, fig_height))
         else
@@ -27,8 +28,10 @@ function configure()
 end
 
 function __init__()
-    configure()
-    QuartoNotebookWorker.add_package_loading_hook!(configure)
+    if ccall(:jl_generating_output, Cint, ()) == 0
+        configure()
+        QuartoNotebookWorker.add_package_loading_hook!(configure)
+    end
 end
 
 end
