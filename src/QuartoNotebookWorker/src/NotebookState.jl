@@ -48,6 +48,8 @@ function define_notebook_module!(root = Main)
 
     return mod
 end
-notebook_module() = getfield(Main, :Notebook)::Module
+
+# `getfield` ends up throwing a segfault here, `getproperty` works fine though.
+notebook_module() = Base.getproperty(Main, :Notebook)::Module
 
 end

@@ -143,7 +143,7 @@ function _render_thunk(
                 end
 
                 wrapped = function ()
-                    return IOCapture.capture(
+                    return QuartoNotebookWorker.Packages.IOCapture.capture(
                         cell.thunk;
                         rethrow = InterruptException,
                         color = true,
