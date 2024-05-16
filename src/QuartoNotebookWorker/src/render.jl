@@ -180,21 +180,66 @@ function _render_thunk(
     end
 end
 
+function _process_code(
+    mod::Module,
+    code::AbstractString;
+    filename::AbstractString,
+    lineno::Integer,
+)
+    help_regex = r"^\s*\?"
+    if startswith(code, help_regex)
+        code = String(chomp(replace(code, help_regex => ""; count = 1)))
+        ex = REPL.helpmode(code, mod)
+
+        # helpmode embeds object references to `stdout` into the
+        # expression, but since we are capturing the output it refers to
+        # a different stream. We need to replace the first `stdout`
+        # reference with `:stdout` and remove the argument from the
+        # other call so that it uses the redirected one.
+        ex.args[2] = :stdout
+        deleteat!(ex.args[end].args, 3)
+
+        return Expr(:toplevel, ex)
+    end
+
+    shell_regex = r"^\s*;"
+    if startswith(code, shell_regex)
+        code = chomp(replace(code, shell_regex => ""; count = 1))
+        ex = :($(Base).@cmd($code))
+
+        # Force the line numbering of macroexpansion errors to match the
+        # location in the notebook cell where the shell command was
+        # written.
+        ex.args[2] = LineNumberNode(lineno, filename)
+
+        return Expr(:toplevel, :($(Base).run($ex)), nothing)
+    end
+
+    pkg_regex = r"^\s*\]"
+    if startswith(code, pkg_regex)
+        code = String(chomp(replace(code, pkg_regex => ""; count = 1)))
+        return Expr(
+            :toplevel,
+            :(
+                let printed = $(Pkg).REPLMode.PRINTED_REPL_WARNING[]
+                    $(Pkg).REPLMode.PRINTED_REPL_WARNING[] = true
+                    try
+                        $(Pkg).REPLMode.do_cmd($(Pkg).REPLMode.MiniREPL(), $code)
+                    finally
+                        $(Pkg).REPLMode.PRINTED_REPL_WARNING[] = printed
+                    end
+                end
+            ),
+        )
+    end
+
+    return _parseall(code; filename, lineno)
+end
 
 function include_str(mod::Module, code::AbstractString; file::AbstractString, line::Integer)
     loc = LineNumberNode(line, Symbol(file))
-
-    # handle REPL modes
-    if code[1] == '?'
-        code = "Core.eval(Main.REPL, Main.REPL.helpmode(\"$(code[2:end])\"))"
-    elseif code[1] == ';'
-        code = "Base.repl_cmd(`$(code[2:end])`, stdout)"
-    elseif code[1] == ']'
-        code = "Pkg.REPLMode.PRINTED_REPL_WARNING[]=true; Pkg.REPLMode.do_cmd(Pkg.REPLMode.MiniREPL(),\"$(code[2:end])\")"
-    end
-
     try
-        ast = _parseall(code, filename = file, lineno = line)
+        ast = _process_code(mod, code; filename = file, lineno = line)
         @assert Meta.isexpr(ast, :toplevel)
         # Note: IO capturing combines stdout and stderr into a single
         # `.output`, but Jupyter notebook spec appears to want them
