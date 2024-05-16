@@ -79,8 +79,8 @@ function __init__()
         configure()
         QuartoNotebookWorker.add_package_loading_hook!(configure)
         QuartoNotebookWorker.add_package_refresh_hook!(refresh)
-        QuartoNotebookWorker.add_post_eval_hook(display_plots)
-        QuartoNotebookWorker.add_post_error_hook(cleanup_temp_files)
+        QuartoNotebookWorker.add_post_eval_hook!(display_plots)
+        QuartoNotebookWorker.add_post_error_hook!(cleanup_temp_files)
     end
 end
 
