@@ -19,7 +19,6 @@ module QuartoNotebookWorker
 
 import Pkg
 import RelocatableFolders
-import Serialization
 import Scratch
 import TOML
 
@@ -30,20 +29,7 @@ import PackageExtensionCompat
 
 # Dependency detection.
 
-function stdlib_dir()
-    normpath(
-        joinpath(
-            Sys.BINDIR::String,
-            "..",
-            "share",
-            "julia",
-            "stdlib",
-            "v$(VERSION.major).$(VERSION.minor)",
-        ),
-    )
-end
-
-function gather_packages(modules::Vector{Module})
+function vendor_packages(modules::Vector{Module})
     pkgids = Base.PkgId.(modules)
 
     is_stdlib(path) = startswith(path, Sys.STDLIB) && ispath(path)
@@ -68,11 +54,9 @@ function gather_packages(modules::Vector{Module})
         for each in ("JuliaProject.toml", "Project.toml")
             project_file = joinpath(root, each)
             if isfile(project_file)
+                pushfirst!(packages, pkgid)
                 project_toml = TOML.parsefile(project_file)
-                version = project_toml["version"]
-                pushfirst!(packages, pkgid => VersionNumber(version))
-                deps = project_toml["deps"]
-                for (name, uuid) in deps
+                for (name, uuid) in project_toml["deps"]
                     gather!(Base.PkgId(Base.UUID(uuid), name))
                 end
                 return nothing
@@ -86,106 +70,6 @@ function gather_packages(modules::Vector{Module})
         gather!(pkgid)
     end
 
-    return (; packages, stdlibs)
-end
-
-# Expression rewriting.
-
-walk(x, _, outer) = outer(x)
-walk(x::Expr, inner, outer) = outer(Expr(x.head, map(inner, x.args)...))
-postwalk(f, x) = walk(x, x -> postwalk(f, x), f)
-
-function rewrite_import_or_using(expr::Expr, rewrites::Dict{Symbol,Vector{Symbol}})
-    return postwalk(expr) do ex
-        if Meta.isexpr(ex, :(.))
-            root = get(ex.args, 1, nothing)
-            haskey(rewrites, root) && prepend!(ex.args, rewrites[root])
-        end
-        ex
-    end
-end
-
-function extract_module_doc(expr::Expr, name::Symbol)
-    if Meta.isexpr(expr, :macrocall, 4) && expr.args[1] == GlobalRef(Core, Symbol("@doc"))
-        docs = expr.args[3]
-        modexpr = expr.args[4]
-        push!(modexpr.args[end].args, :(@doc $docs $name))
-        return modexpr
-    end
-    return expr
-end
-
-function parse_source(source::String, entry_point, rewrites)
-    expr = Meta.parseall(source)
-
-    Meta.isexpr(expr, :toplevel) || error("Invalid source, not toplevel.")
-    isa(expr.args[1], LineNumberNode) || error("Invalid source, not linenumbernode.")
-
-    if !isnothing(entry_point)
-        expr = expr.args[end]
-        expr = extract_module_doc(expr, Symbol(entry_point))
-
-        Meta.isexpr(expr, :module) || error("Expected module expr $expr")
-
-        expr = expr.args[end]
-        Meta.isexpr(expr, :block) || error("Expected block expr $expr")
-    end
-
-    expr = postwalk(expr) do ex
-        if Meta.isexpr(ex, [:using, :import])
-            ex = rewrite_import_or_using(ex, rewrites)
-        end
-        ex
-    end
-
-    return expr
-end
-
-# Source serialization and loader generation.
-
-function serialize_source(source, entry_point, rewrites)
-    expr = parse_source(source, entry_point, rewrites)
-    buffer = IOBuffer()
-    Serialization.serialize(buffer, expr)
-    return take!(buffer)
-end
-
-const LOADER_CODE = RelocatableFolders.@path joinpath(@__DIR__, "loader.jl")
-
-function loader(name::Union{String,Nothing})
-    buffer = IOBuffer()
-    isnothing(name) || println(buffer, "module $name")
-    println(buffer, rstrip(read(LOADER_CODE, String)))
-    isnothing(name) || println(buffer, "end")
-    return take!(buffer)
-end
-
-# Package bundling.
-
-function bundle_package(pkgid::Base.PkgId, version::VersionNumber, rewrites)
-    entry_point = Base.locate_package(pkgid)
-    root = dirname(dirname(entry_point))
-    rel_entry_point = relpath(entry_point, root)
-    files = Dict{String,Vector{UInt8}}()
-    cd(root) do
-        for (root, _, filenames) in walkdir("src")
-            for filename in filenames
-                if endswith(filename, ".jl")
-                    path = normpath(joinpath(root, filename))
-                    source = String(read(path, String))
-                    is_entry_point = path == rel_entry_point
-                    entry_point_name = is_entry_point ? pkgid.name : nothing
-                    files[path] = loader(entry_point_name)
-                    files["$path.$VERSION.jls"] =
-                        serialize_source(source, entry_point_name, rewrites)
-                end
-            end
-        end
-    end
-    return (; files, version, pkgid)
-end
-
-function bundle_packages(; packages, stdlibs)
     # Ensure the worker project has the right stdlibs.
     project_file = joinpath(QNW, "Project.toml")
     project_toml = TOML.parsefile(project_file)
@@ -199,10 +83,8 @@ function bundle_packages(; packages, stdlibs)
     # Bundle the packages. Swapping out the imports of vendored packages with
     # package-local imports.
     result = []
-    prefix = [:QuartoNotebookWorker, :Packages]
-    rewrites = Dict(Symbol(pkg.name) => prefix for (pkg, version) in packages)
-    for (package, version) in packages
-        push!(result, bundle_package(package, version, rewrites))
+    for pkgid in packages
+        push!(result, (; pkgid, entry_point = Base.locate_package(pkgid)))
     end
     return result
 end
@@ -221,22 +103,17 @@ let
     end
 end
 
-# This contains the serialized code for the vendored packages.
-const VENDORED_PACKAGES = bundle_packages(; gather_packages([
-    # The list of packages to be vendored.
+const VENDORED_PACKAGES = vendor_packages([
+    # This contains the entry point files for each vendored package.
     IOCapture,
     PackageExtensionCompat,
-])...)
+])
 
 # So that we key the loader environment on the vendored package versions.
-const LOADER_HASH = string(Base.hash([pkg.version for pkg in VENDORED_PACKAGES]); base = 62)
+const LOADER_HASH = string(Base.hash([p.entry_point for p in VENDORED_PACKAGES]); base = 62)
 
-# Add package init-time we store the path to the scratch spaces used to store
-# the deserialized vendored packages. These paths are passed as preferences to
-# the loader environment such that the worker package loads the right vendored
-# packages and when we load a different version of the vendored packages we
-# trigger recompilation of the worker package.
-const PACKAGE_DIRS = Dict{Base.PkgId,String}()
+# The loader environment is used to load the worker package into whatever
+# environment that the user has started the process with.
 const LOADER_ENV = Ref("")
 
 # Since we start a task to perform the loader env setup at package init-time we
@@ -253,24 +130,13 @@ function __init__()
 
                 loader_project_toml = joinpath(LOADER_ENV[], "Project.toml")
 
-                packages = []
-                for pkg in VENDORED_PACKAGES
-                    package_dir = "vendored.$(VERSION).$(pkg.pkgid.name).$(pkg.version)"
-                    root = Scratch.@get_scratch!(package_dir)
-                    for (path, content) in pkg.files
-                        fullpath = joinpath(root, path)
-                        mkpath(dirname(fullpath))
-                        write(fullpath, content)
-                    end
-                    push!(packages, joinpath(root, "src", "$(pkg.pkgid.name).jl"))
-                    PACKAGE_DIRS[pkg.pkgid] = root
-                end
-
                 toml =
                     isfile(loader_project_toml) ? TOML.parsefile(loader_project_toml) :
                     Dict()
-                toml["preferences"] =
-                    Dict("QuartoNotebookWorker" => Dict("packages" => packages))
+                toml["preferences"] = Dict(
+                    "QuartoNotebookWorker" =>
+                        Dict("packages" => [p.entry_point for p in VENDORED_PACKAGES]),
+                )
                 open(loader_project_toml, "w") do io
                     TOML.print(io, toml)
                 end

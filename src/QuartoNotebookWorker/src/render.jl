@@ -180,6 +180,15 @@ function _render_thunk(
     end
 end
 
+# Setting the `helpmode` module isn't an option on Julia 1.6 so we need to
+# manually replace `Main` with the module we want.
+function _helpmode(code::AbstractString, mod::Module)
+    ex = REPL.helpmode(code)
+    return postwalk(ex) do x
+        return x == Main ? mod : x
+    end
+end
+
 function _process_code(
     mod::Module,
     code::AbstractString;
@@ -189,7 +198,7 @@ function _process_code(
     help_regex = r"^\s*\?"
     if startswith(code, help_regex)
         code = String(chomp(replace(code, help_regex => ""; count = 1)))
-        ex = REPL.helpmode(code, mod)
+        ex = _helpmode(code, mod)
 
         # helpmode embeds object references to `stdout` into the
         # expression, but since we are capturing the output it refers to
