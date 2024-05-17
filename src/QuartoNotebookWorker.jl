@@ -145,7 +145,7 @@ function __init__()
                     write(
                         file,
                         """
-                        pushfirst!(LOAD_PATH, "@")
+                        pushfirst!(LOAD_PATH, "@stdlib")
                         import Pkg
                         Pkg.develop(; path = $(repr(QNW)))
                         Pkg.update()
