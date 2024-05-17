@@ -6,12 +6,11 @@ package is self-contained and our dependencies don't conflict with any that a
 user might want to import into their notebook.
 
 Most of what this module does is at precompilation time. It gathers the
-dependencies of the vendored packages and serializes the source code of the
-vendored packages. This serialized source code is then deserialized and loaded
-into the `QuartoNotebookWorker` package when it is precompiled. We encode the
-roots of each vendored package as a preference in the `QuartoNotebookWorker`
-project file. This allows us to trigger recompilation of the worker package when
-the vendored packages change since the paths passed as preferences will change.
+dependencies of the vendored packages and saves their entry paths.  We encode
+the entry points of each vendored package as a preference in the
+`QuartoNotebookWorker` project file. This allows us to trigger recompilation of
+the worker package when the vendored packages change since the paths passed as
+preferences will change.
 """
 module QuartoNotebookWorker
 
