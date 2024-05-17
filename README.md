@@ -65,3 +65,61 @@ julia --project=@quarto -e 'import QuartoNotebookRunner; QuartoNotebookRunner.se
 ```
 
 and then interact with it via the JSON API from any other language. See `test/client.js` for an example.
+
+### Source code structure
+
+The source for this package is split into two distinct parts.
+
+#### `QuartoNotebookRunner`
+
+The `QuartoNotebookRunner` package is what users install themselves (or have
+installed via `quarto`). This package manages the parsing of Quarto notebooks,
+passing of parsed code blocks to the worker processes that run the code in
+isolation, as well as communicating with the `quarto` process that requests the
+rendering of a notebook.
+
+#### `QuartoNotebookWorker`
+
+The `QuartoNotebookWorker` package, located at `src/QuartoNotebookWorker`, is a
+"local" package that is loaded into every worker process that runs a notebook.
+This worker package has no dependencies outside of the standard library.
+
+There are several external package dependencies that are used by this worker
+package, but the code for them is vendored dynamically into the worker package,
+rather than being added as external dependencies. This avoids a user potentially
+running into conflicting versions of packages should they require a different
+version.
+
+To debug issues within the worker package you can directly run a REPL with it
+loaded rather than having to create a notebook and run code through it. Use the
+following to import `QuartoNotebookWorker` in a REPL session:
+
+```
+julia> using QuartoNotebookRunner # Load the runner package.
+
+julia> QuartoNotebookRunner.QuartoNotebookWorker.debug() # Start a subprocess with the worker package loaded.
+```
+
+A new Julia REPL will start *inside* of the current one.
+
+```
+julia> QuartoNotebookWorker.<tab> # Access the worker package.
+```
+
+Use `ctrl-d` (or `exit()`) to exit the worker REPL and return to the main REPL.
+
+If you have `Revise`, `TestEnv`, or `Debugger` available within your global
+environment then those will be loaded into the interactive worker process as
+well to aid in debugging. Editing code within the `src/QuartoNotebookWorker`
+folder will reflect the changes in the REPL via `Revise` in the normal way.
+
+### Adding package "integrations"
+
+Some packages require custom integrations to be written to make them behave as
+expected within the worker processes that run notebooks. For example, `Plots.jl`
+requires a custom integration to work correctly with `quarto`'s image format and
+dimension settings.
+
+This is achieved by using Julia's native package extension mechanism. You can
+find all the current package integrations in the `src/QuartoNotebookWorker/ext`
+folder.
