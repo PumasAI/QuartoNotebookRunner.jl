@@ -23,7 +23,7 @@ mutable struct File
 
                 worker = cd(() -> Malt.Worker(; exeflags, env), dirname(path))
                 file = new(worker, path, exeflags, env, ReentrantLock(), timeout, nothing)
-                init!(file)
+                init!(file, merged_options)
                 return file
             else
                 throw(
@@ -92,9 +92,9 @@ end
 
 # Implementation.
 
-function init!(file::File)
+function init!(file::File, options::Dict)
     worker = file.worker
-    Malt.remote_eval_fetch(worker, worker_init(file))
+    Malt.remote_eval_fetch(worker, worker_init(file, options))
 end
 
 function refresh!(file::File, options::Dict)
@@ -103,7 +103,7 @@ function refresh!(file::File, options::Dict)
         Malt.stop(file.worker)
         file.worker = cd(() -> Malt.Worker(; exeflags, env), dirname(file.path))
         file.exeflags = exeflags
-        init!(file)
+        init!(file, options)
     end
     expr = :(refresh!($(options)))
     Malt.remote_eval_fetch(file.worker, expr)
