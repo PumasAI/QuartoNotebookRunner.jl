@@ -40,7 +40,7 @@ function vendor_packages(modules::Vector{Module})
 
         entry_point = Base.locate_package(pkgid)
         if isnothing(entry_point)
-            @info "skipping package" pkgid
+            @debug "skipping package" pkgid
             return nothing
         end
 
