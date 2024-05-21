@@ -41,6 +41,7 @@ export Server, render, run!, close!
 
 # Includes.
 
+include("WorkerSetup.jl")
 include("server.jl")
 include("socket.jl")
 include("worker.jl")
