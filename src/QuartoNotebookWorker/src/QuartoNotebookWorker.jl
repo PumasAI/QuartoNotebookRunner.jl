@@ -38,6 +38,9 @@ is_include(ex) =
     isa(ex.args[2], String)
 
 function rewrite_include(ex::Expr)
+    # Turns the 1-argument `include` calls into the 2-argument form where the
+    # first argument is the `rewriter` function that transforms the parsed
+    # expressions before evaluation.
     insert!(ex.args, 2, rewriter)
     return ex
 end

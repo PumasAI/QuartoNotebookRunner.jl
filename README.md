@@ -97,7 +97,7 @@ following to import `QuartoNotebookWorker` in a REPL session:
 ```
 julia> using QuartoNotebookRunner # Load the runner package.
 
-julia> QuartoNotebookRunner.QuartoNotebookWorker.debug() # Start a subprocess with the worker package loaded.
+julia> QuartoNotebookRunner.WorkerSetup.debug() # Start a subprocess with the worker package loaded.
 ```
 
 A new Julia REPL will start *inside* of the current one.
@@ -122,4 +122,5 @@ dimension settings.
 
 This is achieved by using Julia's native package extension mechanism. You can
 find all the current package integrations in the `src/QuartoNotebookWorker/ext`
-folder.
+folder. Typically this is done via adding function hooks within the `__init__`
+method of the extension that run at different points during notebook execution.

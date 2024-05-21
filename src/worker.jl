@@ -1,6 +1,6 @@
 function worker_init(f::File, options::Dict)
-    project = QuartoNotebookWorker.LOADER_ENV[]
-    return lock(QuartoNotebookWorker.WORKER_SETUP_LOCK) do
+    project = WorkerSetup.LOADER_ENV[]
+    return lock(WorkerSetup.WORKER_SETUP_LOCK) do
         return quote
             push!(LOAD_PATH, $(project))
 

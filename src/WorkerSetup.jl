@@ -1,5 +1,5 @@
 """
-This module handles generation of the vendored dependencies for the "real"
+This module handles generation of the vendored dependencies for the
 `QuartoNotebookWorker` package that lives in the `src/QuartoNotebookWorker`
 directory. We want to vendored external dependencies to ensure that the worker
 package is self-contained and our dependencies don't conflict with any that a
@@ -12,7 +12,7 @@ the entry points of each vendored package as a preference in the
 the worker package when the vendored packages change since the paths passed as
 preferences will change.
 """
-module QuartoNotebookWorker
+module WorkerSetup
 
 # Imports.
 
@@ -28,7 +28,7 @@ import PackageExtensionCompat
 
 # Dependency detection.
 
-function vendor_packages(modules::Vector{Module})
+function package_information(modules::Vector{Module})
     pkgids = Base.PkgId.(modules)
 
     is_stdlib(path) = startswith(path, Sys.STDLIB) && ispath(path)
@@ -79,8 +79,6 @@ function vendor_packages(modules::Vector{Module})
         end
     end
 
-    # Bundle the packages. Swapping out the imports of vendored packages with
-    # package-local imports.
     result = []
     for pkgid in packages
         push!(result, (; pkgid, entry_point = Base.locate_package(pkgid)))
@@ -102,7 +100,7 @@ let
     end
 end
 
-const VENDORED_PACKAGES = vendor_packages([
+const VENDORED_PACKAGES = package_information([
     # This contains the entry point files for each vendored package.
     IOCapture,
     PackageExtensionCompat,
@@ -155,6 +153,10 @@ function __init__()
                     julia = Base.julia_cmd()[1]
                     project = LOADER_ENV[]
                     cmd = `$(julia) --startup-file=no --project=$project $file`
+                    # Run it once without showing output, since that would print
+                    # `Pkg` logging when importing the package. If it fails then
+                    # rerun the command but show the output so the user still
+                    # gets feedback on the error that occurred.
                     success(cmd) || run(cmd)
                 end
             end

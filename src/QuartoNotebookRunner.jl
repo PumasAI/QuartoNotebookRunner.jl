@@ -41,7 +41,7 @@ export Server, render, run!, close!
 
 # Includes.
 
-include("QuartoNotebookWorker.jl")
+include("WorkerSetup.jl")
 include("server.jl")
 include("socket.jl")
 include("worker.jl")
