@@ -612,12 +612,9 @@ function evaluate_raw_cells!(
 
     @maybe_progress showprogress "$header" for (nth, chunk) in enumerate(chunks)
         if chunk.type === :code
-            expand_cell = get(chunk.cell_options, "expand", false) === true
-            # When we're not evaluating the code, or when there is an `expand`
-            # cell output then we immediately splice in the cell code. The
-            # results of evaluating an `expand` cell are added later on and are
-            # not considered direct outputs of this cell.
-            if !chunk.evaluate || expand_cell
+            if !chunk.evaluate
+                # Cells that are not evaluated are not executed, but they are
+                # still included in the notebook.
                 push!(
                     cells,
                     (;
@@ -626,12 +623,10 @@ function evaluate_raw_cells!(
                         metadata = (;),
                         source = process_cell_source(chunk.source),
                         outputs = [],
-                        execution_count = chunk.evaluate ? 1 : 0,
+                        execution_count = 0,
                     ),
                 )
-            end
-
-            if chunk.evaluate
+            else
                 chunk_callback(ith_chunk_to_evaluate, chunks_to_evaluate, chunk)
                 ith_chunk_to_evaluate += 1
 
@@ -646,7 +641,26 @@ function evaluate_raw_cells!(
                     $(chunk.cell_options),
                 ))
 
-                for (mth, remote) in enumerate(Malt.remote_eval_fetch(f.worker, expr))
+                worker_results, expand_cell = Malt.remote_eval_fetch(f.worker, expr)
+
+                # When the result of the cell evaluation is a cell expansion
+                # then we insert the original cell contents before the expanded
+                # cells as a mock cell similar to if it has `eval: false` set.
+                if expand_cell
+                    push!(
+                        cells,
+                        (;
+                            id = string(nth),
+                            cell_type = chunk.type,
+                            metadata = (;),
+                            source = process_cell_source(chunk.source),
+                            outputs = [],
+                            execution_count = 1,
+                        ),
+                    )
+                end
+
+                for (mth, remote) in enumerate(worker_results)
                     outputs = []
                     processed = process_results(remote.results)
 
@@ -800,7 +814,10 @@ function evaluate_raw_cells!(
                             # There should only ever be a single result from an
                             # inline evaluation since you can't pass cell
                             # options and so `expand` will always be `false`.
-                            remote = only(Malt.remote_eval_fetch(f.worker, expr))
+                            worker_results, expand_cell =
+                                Malt.remote_eval_fetch(f.worker, expr)
+                            expand_cell && error("inline code cells cannot be expanded")
+                            remote = only(worker_results)
                             if !isnothing(remote.error)
                                 # file location is not straightforward to determine with inline literals, but just printing the (presumably short)
                                 # code back instead of a location should be quite helpful

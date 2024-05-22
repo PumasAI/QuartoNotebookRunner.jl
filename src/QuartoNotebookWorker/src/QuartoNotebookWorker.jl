@@ -1,5 +1,11 @@
 module QuartoNotebookWorker
 
+# Exports:
+
+export Cell
+export expand
+
+
 walk(x, _, outer) = outer(x)
 walk(x::Expr, inner, outer) = outer(Expr(x.head, map(inner, x.args)...))
 postwalk(f, x) = walk(x, x -> postwalk(f, x), f)
@@ -83,6 +89,7 @@ include("InlineDisplay.jl")
 include("NotebookState.jl")
 include("NotebookInclude.jl")
 include("refresh.jl")
+include("cell_expansion.jl")
 include("render.jl")
 include("utilities.jl")
 include("ojs_define.jl")

@@ -4,9 +4,16 @@ function render(
     line::Integer,
     cell_options::AbstractDict = Dict{String,Any}(),
 )
-    return Base.@invokelatest(
+    # This records whether the outermost cell is an expandable cell, which we
+    # then return to the server so that it can decide whether to treat the cell
+    # results it gets back as an expansion or not. We can't decide this
+    # statically since expansion depends on whether the runtime type of the cell
+    # output is `is_expandable` or not. Recursive calls to `_render_thunk` don't
+    # matter to the server, it's just the outermost cell that matters.
+    is_expansion_ref = Ref(false)
+    result = Base.@invokelatest(
         collect(
-            _render_thunk(code, cell_options) do
+            _render_thunk(code, cell_options, is_expansion_ref) do
                 Base.@invokelatest include_str(
                     NotebookState.notebook_module(),
                     code;
@@ -16,6 +23,7 @@ function render(
             end,
         )
     )
+    return (result, is_expansion_ref[])
 end
 
 # Recursively render cell thunks. This might be an `include_str` call,
@@ -26,133 +34,53 @@ function _render_thunk(
     thunk::Base.Callable,
     code::AbstractString,
     cell_options::AbstractDict = Dict{String,Any}(),
+    is_expansion_ref::Ref{Bool} = Ref(false),
 )
     captured, display_results = with_inline_display(thunk, cell_options)
-    if get(cell_options, "expand", false) === true
-        if captured.error
+
+    # Attempt to expand the cell. This requires the cell result to have a method
+    # defined for the `QuartoNotebookWorker.expand` function. We only attempt to
+    # run expansion if the cell didn't error. Cell expansion can itself error,
+    # so we need to catch that and return an error cell if that's the case.
+    expansion = nothing
+    is_expansion = false
+    if !captured.error
+        try
+            expansion = expand(captured.value)
+            is_expansion = _is_expanded(captured.value, expansion)
+        catch error
+            backtrace = catch_backtrace()
             return ((;
                 code = "", # an expanded cell that errored can't have returned code
                 cell_options = Dict{String,Any}(), # or options
                 results = Dict{String,@NamedTuple{error::Bool, data::Vector{UInt8}}}(),
                 display_results,
                 output = captured.output,
-                error = string(typeof(captured.value)),
+                error = string(typeof(error)),
                 backtrace = collect(
-                    eachline(
-                        IOBuffer(
-                            clean_bt_str(
-                                captured.error,
-                                captured.backtrace,
-                                captured.value,
-                            ),
-                        ),
-                    ),
+                    eachline(IOBuffer(clean_bt_str(true, backtrace, error))),
                 ),
             ),)
-        else
-            function invalid_return_value_cell(
-                errmsg;
-                code = "",
-                cell_options = Dict{String,Any}(),
-            )
-                return ((;
-                    code,
-                    cell_options,
-                    results = Dict{String,@NamedTuple{error::Bool, data::Vector{UInt8}}}(),
-                    display_results,
-                    output = captured.output,
-                    error = "Invalid return value for expanded cell",
-                    backtrace = collect(eachline(IOBuffer(errmsg))),
-                ),)
-            end
+        end
+        # Track in this side-channel whether the cell is an expansion or not.
+        is_expansion_ref[] = is_expansion
+    end
 
-            if !(Base.@invokelatest Base.isiterable(typeof(captured.value)))
-                return invalid_return_value_cell(
-                    """
-                    Return value of a cell with `expand: true` is not iterable.
-                    The returned value must iterate objects that each have a `thunk`
-                    property which contains a function that returns the cell output.
-                    Instead, the returned value was:
-                    $(repr(captured.value))
-                    """,
+    if is_expansion
+        # A cell expansion with `expand` might itself also contain
+        # cells that expand to multiple cells, so we need to flatten
+        # the results to a single list of cells before passing back
+        # to the server. Cell expansion is recursive.
+        return _flatmap(expansion) do cell
+            wrapped = function ()
+                return QuartoNotebookWorker.Packages.IOCapture.capture(
+                    cell.thunk;
+                    rethrow = InterruptException,
+                    color = true,
                 )
             end
-
-            # A cell expansion with `expand` might itself also contain
-            # cells that expand to multiple cells, so we need to flatten
-            # the results to a single list of cells before passing back
-            # to the server. Cell expansion is recursive.
-            return _flatmap(enumerate(captured.value)) do (i, cell)
-
-                code = _getproperty(cell, :code, "")
-                options = _getproperty(Dict{String,Any}, cell, :options)
-
-                if !(code isa String)
-                    return invalid_return_value_cell(
-                        """
-                        While iterating over the elements of the return value of a cell with
-                        `expand: true`, a value was found at position $i which has a `code` property
-                        that is not of the expected type `String`. The value was:
-                        $(repr(cell.code))
-                        """,
-                    )
-                end
-
-                if !(options isa Dict{String})
-                    return invalid_return_value_cell(
-                        """
-                        While iterating over the elements of the return value of a cell with
-                        `expand: true`, a value was found at position $i which has a `options` property
-                        that is not of the expected type `Dict{String}`. The value was:
-                        $(repr(cell.options))
-                        """;
-                        code,
-                    )
-                end
-
-                if !hasproperty(cell, :thunk)
-                    return invalid_return_value_cell(
-                        """
-                        While iterating over the elements of the return value of a cell with
-                        `expand: true`, a value was found at position $i which does not have a
-                        `thunk` property. Every object in the iterator returned from an expanded
-                        cell must have a property `thunk` with a function that returns
-                        the output of the cell.
-                        The object without a `thunk` property was:
-                        $(repr(cell))
-                        """;
-                        code,
-                        cell_options = options,
-                    )
-                end
-
-                if !(cell.thunk isa Base.Callable)
-                    return invalid_return_value_cell(
-                        """
-                        While iterating over the elements of the return value of a cell with
-                        `expand: true` a value was found at position $i which has a `thunk`
-                        property that is not a function of type `Base.Callable`.
-                        Every object in the iterator returned from an expanded
-                        cell must have a property `thunk` with a function that returns
-                        the output of the cell. Instead, the returned value was:
-                        $(repr(cell.thunk))
-                        """;
-                        code,
-                        cell_options = options,
-                    )
-                end
-
-                wrapped = function ()
-                    return QuartoNotebookWorker.Packages.IOCapture.capture(
-                        cell.thunk;
-                        rethrow = InterruptException,
-                        color = true,
-                    )
-                end
-
-                # **The recursive call:**
-                return Base.@invokelatest _render_thunk(wrapped, code, options)
-            end
+            # **The recursive call:**
+            return Base.@invokelatest _render_thunk(wrapped, cell.code, cell.options)
         end
     else
         results = Base.@invokelatest render_mimetypes(
