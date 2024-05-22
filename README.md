@@ -14,6 +14,58 @@
 > your Quarto notebook files. You don't need to follow the developer instructions
 > below.
 
+## Features
+
+### Expandable cells
+
+Executable julia cells that contain the option `#| expand: true` have special behavior defined.
+QuartoNotebookRunner expects such cells to return an iterable collection of objects with a mandatory
+`thunk` field and two optional `code` and `options` fields.
+
+The `thunk` should contain a function that represents the lazily computed output of a "fake" code cell.
+Such a code cell is "fake" in the sense that it is not present in the original markdown source, and because its own "code" (which can
+optionally be set via the `code` field) is never executed. However, by having the option of making one
+code cell's output expand into multiple fake code cells plus their outputs, you have the freedom of
+dynamically generating parts of a quarto notebook that would otherwise have to be hardcoded.
+One example where this can be useful is quarto's tabset feature which groups multiple sections into tabs.
+
+Here is one simple example where a cell creates two expanded "fake" cells. We can use the `options` field
+to set cell options like `echo` or `output` which allows us to hide code and use outputs as markdown.
+
+````markdown
+---
+engine: julia
+---
+
+```{julia}
+#| expand: true
+
+[
+    (;
+        thunk = () -> println(
+            "This thunk's _stdout_ is treated as **markdown** ",
+            "because of the `output: asis` option.\n\n",
+            "::: {.callout-note}\n",
+            "The fake code cell is hidden with `echo: false`\n",
+            ":::",
+        ),
+        options = Dict("echo" => false, "output" => "asis")),
+    (;
+        thunk = () -> 456,
+        code = """
+        # fake code that is not actually executed
+        456
+        """
+    ),
+]
+```
+````
+
+Which results in this output when rendered to HTML with quarto:
+
+<img width="600" alt="image" src="https://github.com/PumasAI/QuartoNotebookRunner.jl/assets/22495855/bf821a24-aa6d-42c0-900e-c08af8739325">
+
+
 ## Developer Documentation
 
 This Julia package can run [Quarto](https://quarto.org) notebooks containing Julia code and save the
