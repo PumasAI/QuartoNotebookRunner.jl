@@ -45,6 +45,7 @@ include("WorkerSetup.jl")
 include("server.jl")
 include("socket.jl")
 include("worker.jl")
+include("utilities.jl")
 include("precompile.jl")
 
 end # module QuartoNotebookRunner
