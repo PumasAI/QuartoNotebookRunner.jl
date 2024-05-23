@@ -33,12 +33,8 @@ function configure()
         dpi_kwargs = Dict{Symbol,Any}()
     end
 
-    pkgid = Base.PkgId(Plots)
-    if (QuartoNotebookWorker._pkg_version(pkgid) < v"1.28.1") && (fm.fig_format == "pdf")
-        Plots.gr(; size_kwargs..., fmt = :png, dpi_kwargs...)
-    else
-        Plots.gr(; size_kwargs..., fmt = fm.fig_format, dpi_kwargs...)
-    end
+    Plots.gr(; size_kwargs..., dpi_kwargs...)
+
     return nothing
 end
 
