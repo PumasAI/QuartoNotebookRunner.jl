@@ -1,0 +1,17 @@
+---
+title: Plots integration
+fig-width: 4
+fig-height: 3
+fig-dpi: 150
+fig-format: pdf
+julia:
+    exeflags: ["--project=Plots"]
+---
+
+```{julia}
+import Plots
+```
+
+```{julia}
+Plots.plot(Plots.fakedata(50, 5), w = 3)
+```

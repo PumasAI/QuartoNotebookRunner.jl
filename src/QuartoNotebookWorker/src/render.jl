@@ -396,6 +396,7 @@ function render_mimetypes(value, cell_options)
             "text/latex",
             "image/svg+xml",
             "image/png",
+            "application/pdf",
             "application/json",
         ]
     end

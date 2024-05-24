@@ -971,6 +971,7 @@ just has to provide bytes.
 function process_results(dict::Dict{String,@NamedTuple{error::Bool, data::Vector{UInt8}}})
     funcs = Dict(
         "application/json" => json_reader,
+        "application/pdf" => Base64.base64encode,
         "text/plain" => String,
         "text/markdown" => String,
         "text/html" => String,
