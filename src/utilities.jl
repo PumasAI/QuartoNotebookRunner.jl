@@ -24,6 +24,9 @@ function test_pr(
         )
     end
 
+    # Ensure that any running server is stopped before we start.
+    _stop_running_server() || error("Failed to stop the running server.")
+
     mktempdir() do dir
         file = joinpath(dir, "file.jl")
         write(
@@ -34,11 +37,73 @@ function test_pr(
             """,
         )
         run(`$(Base.julia_cmd()) --startup-file=no --project=$dir $file`)
-        run(
-            addenv(
-                `$cmd --no-execute-daemon --execute-debug`,
-                "QUARTO_JULIA_PROJECT" => dir,
-            ),
-        )
+        run(addenv(`$cmd --execute-debug`, "QUARTO_JULIA_PROJECT" => dir))
     end
+end
+
+function _stop_running_server()
+    cache_dir = _quarto_julia_cache_dir()
+    transport_file = joinpath(cache_dir, "julia_transport.txt")
+    if isfile(transport_file)
+        @info "Removing transport file." transport_file
+
+        json = open(JSON3.read, transport_file)
+        pid = get(json, "pid", nothing)
+        try
+            _kill_proc(pid)
+        catch error
+            @error "Failed to stop the running server." error transport_file pid
+            return false
+        end
+        try
+            rm(transport_file)
+        catch error
+            @error "Failed to remove the transport file." error transport_file
+            return false
+        end
+    else
+        @info "No transport file found."
+    end
+    return true
+end
+
+function _kill_proc(id::Integer)
+    if Sys.iswindows()
+        run(`taskkill /F /PID $id`)
+    else
+        run(`kill -9 $id`)
+    end
+end
+
+function _quarto_julia_cache_dir()
+    home = homedir()
+    if Sys.isapple()
+        path = joinpath(home, "Library", "Caches", "quarto", "julia")
+        isdir(path) && return path
+    elseif Sys.iswindows()
+        localappdata = get(ENV, "LOCALAPPDATA", nothing)
+        if !isnothing(localappdata)
+            path = joinpath(localappdata, "quarto", "julia")
+            isdir(path) && return path
+        end
+
+        appdata = get(ENV, "APPDATA", nothing)
+        if !isnothing(appdata)
+            path = joinpath(appdata, "quarto", "julia")
+            isdir(path) && return path
+        end
+    elseif Sys.islinux()
+        xdg_cache_home = get(ENV, "XDG_CACHE_HOME", nothing)
+        if !isnothing(xdg_cache_home)
+            path = joinpath(xdg_cache_home, ".cache", "quarto", "julia")
+            isdir(path) && return path
+        end
+
+        path = joinpath(home, ".cache", "quarto", "julia")
+        isdir(path) && return path
+    else
+        error("Unsupported OS.")
+    end
+
+    error("Could not find a suitable cache directory.")
 end
