@@ -195,7 +195,7 @@ function include_str(mod::Module, code::AbstractString; file::AbstractString, li
                     # information as part of the expr.
                     line_and_ex.args[2] = ex
                     for transform in REPL.repl_ast_transforms
-                        line_and_ex = transform(line_and_ex)
+                        line_and_ex = Base.@invokelatest transform(line_and_ex)
                     end
                     result = Core.eval(mod, line_and_ex)
                     run_post_eval_hooks()
