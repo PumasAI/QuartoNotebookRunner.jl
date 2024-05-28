@@ -170,8 +170,7 @@ Julia type should not be rendered and instead should be converted into a series
 of notebook cells that are themselves evaluated and rendered. This allows for
 notebooks to generate a dynamic number of cells based on runtime information
 computed within the notebook rather than just the static cells of the original
-notebook source. In some sense you can think of this as macros for notebooks:
-code that generates code.
+notebook source.
 
 The below example shows how to create a `Replicate` type that will be expanded
 into `n` cells of the same value.

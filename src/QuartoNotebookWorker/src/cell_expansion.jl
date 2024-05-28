@@ -80,7 +80,7 @@ _is_expanded(@nospecialize(_), ::Vector{Cell}) = true
 function _is_expanded(@nospecialize(original), @nospecialize(result))
     throw(
         CellExpansionError(
-            "invalid cell expansion result for `expand(::$(typeof(original)))`. Expected the result to`Vector{Cell}`, got `$(typeof(result))`.",
+            "invalid cell expansion result for `expand(::$(typeof(original)))`. Expected the result to be a `Vector{Cell}`, got `$(typeof(result))`.",
         ),
     )
 end
