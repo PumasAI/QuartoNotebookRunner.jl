@@ -5,58 +5,41 @@ execute:
 ---
 
 ```{julia}
-#| expand: true
-
-"a" + "b"
+import QuartoNotebookWorker: Cell, expand
 ```
 
 ```{julia}
-#| expand: true
-
-[
-    (; thunk = () -> "no problem here"),
-    (;
-        thunk = function ()
-            return [
-                (;
-                    thunk = function ()
-                        return [(; thunk = () -> error("a nested thunk error"))]
-                    end,
-                    options = Dict("expand" => true),
-                ),
-            ]
-        end,
-        options = Dict("expand" => true),
-    ),
+struct CustomStruct
+    content::Any
+end
+expand(cs::CustomStruct) = [
+    Cell(c.thunk; code = get(c, :code, nothing), options = get(c, :options, Dict())) for
+    c in cs.content
 ]
 ```
 
 ```{julia}
-#| expand: true
-
-[(; thunk = "not a function")]
+CustomStruct([
+    (; thunk = () -> "no problem here"),
+    (;
+        thunk = function ()
+            return CustomStruct([
+                (;
+                    thunk = function ()
+                        return CustomStruct([(; thunk = () -> error("a nested thunk error"))])
+                    end,
+                ),
+            ])
+        end,
+    ),
+])
 ```
 
 ```{julia}
-#| expand: true
-
-:not_an_iterable
+struct BrokenStruct end
+expand(bs::BrokenStruct) = "broken"
 ```
 
 ```{julia}
-#| expand: true
-
-[(; no_thunk_here = "")]
-```
-
-```{julia}
-#| expand: true
-
-[(; thunk = () -> 123, code = :invalid_code)]
-```
-
-```{julia}
-#| expand: true
-
-[(; thunk = () -> 123, options = Dict(:invalid => "options"))]
+BrokenStruct()
 ```

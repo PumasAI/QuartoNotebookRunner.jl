@@ -3,67 +3,65 @@ title: Cell Expansion
 ---
 
 ```{julia}
-#| echo: false
-#| expand: true
-[(;
-    thunk = function ()
-        println("print call")
-        display("display call")
-        "return value"
-    end,
-    code = """
-    # Fake code goes here.
-    """,
-    options = Dict("layout-ncol" => 2),
-)]
+import QuartoNotebookWorker: Cell, expand
 ```
 
 ```{julia}
-#| expand: true
-[
+struct CustomStruct
+    content::Any
+
+    function CustomStruct(content)
+        new([
+            Cell(
+                n.thunk;
+                code = get(n, :code, nothing),
+                options = get(n, :options, Dict()),
+            ) for n in content
+        ])
+    end
+end
+expand(cs::CustomStruct) = cs.content
+```
+
+```{julia}
+#| echo: false
+CustomStruct([
     (;
         thunk = function ()
-            return [
-                (;
-                    thunk = function ()
-                        return [(; thunk = () -> 1, options = Dict("layout-ncol" => 1))]
-                    end,
-                    options = Dict("expand" => true),
-                ),
-                (;
-                    thunk = function ()
-                        return [(; thunk = () -> (display(2); 2)), (; thunk = () -> 3)]
-                    end,
-                    options = Dict("expand" => true),
-                ),
-            ]
+            println("print call")
+            display("display call")
+            "return value"
         end,
-        options = Dict("expand" => true),
+        code = """
+        # Fake code goes here.
+        """,
+        options = Dict("layout-ncol" => 2),
+    ),
+])
+```
+
+```{julia}
+CustomStruct([
+    (;
+        thunk = function ()
+            return CustomStruct([
+                (;
+                    thunk = function ()
+                        return CustomStruct([(; thunk = () -> 1, options = Dict("layout-ncol" => 1))])
+                    end,
+                ),
+                (;
+                    thunk = function ()
+                        return CustomStruct([(; thunk = () -> (display(2); 2)), (; thunk = () -> 3)])
+                    end,
+                ),
+            ])
+        end,
     ),
     (; thunk = () -> 4),
     (;
         thunk = () -> println("## Header"),
         options = Dict("output" => "asis", "echo" => false),
     ),
-]
-```
-
-```{julia}
-#| expand: true
-
-# test if newly defined structs can be returned as iterators (requires certain
-# invokelatest calls to be present)
-struct QuartoCell
-    thunk::Base.Callable
-    options::Dict{String,Any}
-    code::String
-end
-
-Base.iterate(c::QuartoCell) = Base.iterate(cells(c))
-Base.iterate(c::QuartoCell, state) = Base.iterate(cells(c), state)
-Base.IteratorSize(c::QuartoCell) = Base.SizeUnknown()
-
-cells(q::QuartoCell) = (q,)
-
-QuartoCell(() -> 123, Dict(), "")
+])
 ```

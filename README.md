@@ -124,3 +124,130 @@ This is achieved by using Julia's native package extension mechanism. You can
 find all the current package integrations in the `src/QuartoNotebookWorker/ext`
 folder. Typically this is done via adding function hooks within the `__init__`
 method of the extension that run at different points during notebook execution.
+
+### Package Extensions
+
+As discussed above `QuartoNotebookWorker` is implemented as a full Julia package
+rather than just a `Module` loaded into the worker processes. This allows for
+any package to extend the functionality provided by the worker via Julia's
+[package extension mechanism][package-extensions]. For example, given a package
+called `PackageName` you could create a new package extension in
+`PackageName/ext/PackageNameQuartoNotebookWorkerExt.jl` with contents
+
+[package-extensions]: https://pkgdocs.julialang.org/v1/creating-packages/#Conditional-loading-of-code-in-packages-(Extensions)
+
+```julia
+module PackageNameQuartoNotebookWorkerExt
+
+import PackageName
+import QuartoNotebookWorker
+
+# ... Extension code here ...
+
+end
+```
+
+and update the `Project.toml` file for the `PackageName` package to include the
+following extension configuration:
+
+```toml
+[weakdeps]
+QuartoNotebookWorker = "38328d9c-a911-4051-bc06-3f7f556ffeda"
+
+[extensions]
+PackageNameQuartoNotebookWorkerExt = "QuartoNotebookWorker"
+```
+
+With these additions whenever `PackageName` is loaded into a `.qmd` file that is
+being run with `engine: julia` the extension code in the
+`PackageNameQuartoNotebookWorkerExt` module will be loaded. Below are the
+available interfaces that are can be extended.
+
+#### `expand`
+
+The `expand` function is used to inform `QuartoNotebookWorker` that a specific
+Julia type should not be rendered and instead should be converted into a series
+of notebook cells that are themselves evaluated and rendered. This allows for
+notebooks to generate a dynamic number of cells based on runtime information
+computed within the notebook rather than just the static cells of the original
+notebook source.
+
+The below example shows how to create a `Replicate` type that will be expanded
+into `n` cells of the same value.
+
+```julia
+module PackageNameQuartoNotebookWorkerExt
+
+import PackageName
+import QuartoNotebookWorker
+
+function QuartoNotebookWorker.expand(r::PackageName.Replicate)
+    # Return a list of notebook `Cell`s to be rendered.
+    return [QuartoNotebookWorker.Cell(r.value) for _ in 1:r.n]
+end
+
+end
+```
+
+Where `PackageName` itself defines the `Replicate` type as
+
+```julia
+module PackageName
+
+export Replicate
+
+struct Replicate
+    value
+    n::Int
+end
+
+end
+```
+
+The `Cell` type takes a value, which can be any Julia type. If it is a
+`Function` then the result of the `Cell` will be the result of calling the
+`value()`, including any printing to `stdout` and `stderr` that may occur during
+the call. If it is any other type then the result of the `Cell` will be the
+value itself.
+
+> [!NOTE]
+>
+> To return a `Function` itself as the output of the `Cell` you can wrap it
+> with `Returns(func)`, which will then not call `func`.
+
+Optional `code` keyword allows fake source code for the cell to be set, which
+will be rendered by `quarto`. Note that the source code is never parsed or
+evaluated. Additionally the `options` keyword allows for defining cell options
+that will be passed to `quarto` to control cell rendering such as captions,
+layout, etc.
+
+Within a `.qmd` file you can then use the `Replicate` type as follows:
+
+````qmd
+```{julia}
+using PackageName
+```
+
+Generate two cells that each output `"Hello"` as their returned value.
+
+```{julia}
+Replicate("Hello", 2)
+```
+
+Next we generate three cells that each push the current `DateTime` to a shared
+`state` vector, print `"World"` to `stdout` and then return the entire `state`
+for rendering. The `echo: false` option is used to suppress the output of the
+original cell itself.
+
+```{julia}
+#| echo: false
+import Dates
+let state = []
+    Replicate(3) do
+        push!(state, Dates.now())
+        println("World")
+        return state
+    end
+end
+```
+````
