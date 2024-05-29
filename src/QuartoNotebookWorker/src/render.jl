@@ -46,7 +46,7 @@ function _render_thunk(
     is_expansion = false
     if !captured.error
         try
-            expansion = expand(captured.value)
+            expansion = Base.@invokelatest expand(captured.value)
             is_expansion = _is_expanded(captured.value, expansion)
         catch error
             backtrace = catch_backtrace()
