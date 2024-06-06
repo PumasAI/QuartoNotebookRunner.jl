@@ -129,39 +129,19 @@ method of the extension that run at different points during notebook execution.
 
 As discussed above `QuartoNotebookWorker` is implemented as a full Julia package
 rather than just a `Module` loaded into the worker processes. This allows for
-any package to extend the functionality provided by the worker via Julia's
-[package extension mechanism][package-extensions]. For example, given a package
-called `PackageName` you could create a new package extension in
-`PackageName/ext/PackageNameQuartoNotebookWorkerExt.jl` with contents
-
-[package-extensions]: https://pkgdocs.julialang.org/v1/creating-packages/#Conditional-loading-of-code-in-packages-(Extensions)
+any package to extend the functionality provided by the worker. To do this make
+use `Requires.jl` (or the mechanism that it leverages) to load extension code
+that requires `QuartoNotebookWorker`.
 
 ```julia
-module PackageNameQuartoNotebookWorkerExt
-
-import PackageName
-import QuartoNotebookWorker
-
-# ... Extension code here ...
-
+function __init__()
+    @require QuartoNotebookWorker="38328d9c-a911-4051-bc06-3f7f556ffeda" include("extension.jl")
 end
 ```
 
-and update the `Project.toml` file for the `PackageName` package to include the
-following extension configuration:
-
-```toml
-[weakdeps]
-QuartoNotebookWorker = "38328d9c-a911-4051-bc06-3f7f556ffeda"
-
-[extensions]
-PackageNameQuartoNotebookWorkerExt = "QuartoNotebookWorker"
-```
-
-With these additions whenever `PackageName` is loaded into a `.qmd` file that is
-being run with `engine: julia` the extension code in the
-`PackageNameQuartoNotebookWorkerExt` module will be loaded. Below are the
-available interfaces that are can be extended.
+With this addition whenever `PackageName` is loaded into a `.qmd` file that is
+being run with `engine: julia` the extension code in the `extension.jl` file
+will be loaded. Below are the available interfaces that are can be extended.
 
 #### `expand`
 
@@ -176,16 +156,12 @@ The below example shows how to create a `Replicate` type that will be expanded
 into `n` cells of the same value.
 
 ```julia
-module PackageNameQuartoNotebookWorkerExt
-
 import PackageName
 import QuartoNotebookWorker
 
 function QuartoNotebookWorker.expand(r::PackageName.Replicate)
     # Return a list of notebook `Cell`s to be rendered.
     return [QuartoNotebookWorker.Cell(r.value) for _ in 1:r.n]
-end
-
 end
 ```
 
