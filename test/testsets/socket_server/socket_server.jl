@@ -16,7 +16,7 @@ include("../../utilities/prelude.jl")
         @test d1 == false
 
         d2 = json(`$node $client $(server.port) $(server.key) run $(cell_types)`)
-        @test length(d2["notebook"]["cells"]) == 6
+        @test length(d2["notebook"]["cells"]) == 8
 
         d3 = json(`$node $client $(server.port) $(server.key) isopen $(cell_types)`)
         @test d3 == true

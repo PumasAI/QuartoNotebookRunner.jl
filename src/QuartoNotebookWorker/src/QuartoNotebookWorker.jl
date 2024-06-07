@@ -79,6 +79,7 @@ end
 
 # Imports.
 
+import InteractiveUtils
 import Pkg
 import REPL
 
