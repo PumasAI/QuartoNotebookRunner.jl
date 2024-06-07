@@ -5,6 +5,8 @@ julia:
 ---
 
 ```{julia}
+ENV["PYTHON"] = ""
+Pkg.build("PyCall")
 using SymPy
 ```
 
