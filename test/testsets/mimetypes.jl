@@ -29,4 +29,5 @@ test_example(joinpath(@__DIR__, "../examples/mimetypes.qmd")) do json
     cell = cells[14]
     @test !isempty(cell["outputs"][1]["data"]["text/plain"])
     @test !isempty(cell["outputs"][1]["data"]["text/latex"])
+    @test !isempty(cell["outputs"][1]["data"]["text/markdown"])
 end
