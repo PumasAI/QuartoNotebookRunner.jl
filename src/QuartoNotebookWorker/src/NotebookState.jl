@@ -39,7 +39,11 @@ function define_notebook_module!(root = Main)
     # Add some default imports. Rather than directly using `import` we just
     # `const` them directly from the `Function` objects themselves.
     imports = quote
-        const Pkg = $(Pkg)
+        # We can import `QuartoNotebookWorker` since we have pushed it onto the
+        # end of `LOAD_PATH`.
+        import QuartoNotebookWorker.Pkg
+        using QuartoNotebookWorker.InteractiveUtils
+
         const ojs_define = $(QuartoNotebookWorker.ojs_define)
         const include = $(QuartoNotebookWorker.NotebookInclude.include)
         const eval = $(QuartoNotebookWorker.NotebookInclude.eval)

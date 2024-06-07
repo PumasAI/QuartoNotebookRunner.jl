@@ -19,3 +19,7 @@ Errors:
 ```{julia}
 div(1, 0)
 ```
+
+```{julia}
+versioninfo()
+```

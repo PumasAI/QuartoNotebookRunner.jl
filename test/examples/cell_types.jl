@@ -21,3 +21,6 @@ println(1)
 
 # %%
 div(1, 0)
+
+# %%
+versioninfo()

@@ -1,7 +1,7 @@
 include("../utilities/prelude.jl")
 
 test_example(joinpath(@__DIR__, "../examples/cell_types.qmd")) do json
-    @test length(json["cells"]) == 6
+    @test length(json["cells"]) == 8
 
     cell = json["cells"][1]
     @test cell["cell_type"] == "markdown"
@@ -42,4 +42,12 @@ test_example(joinpath(@__DIR__, "../examples/cell_types.qmd")) do json
     @test contains(traceback, "div")
     @test count("top-level scope", traceback) == 1
     @test count(r"cell_types\.(qmd|jl):", traceback) == 1
+
+    cell = json["cells"][8]
+    outputs = cell["outputs"]
+    @test length(outputs) == 1
+    output = outputs[1]
+    @test output["output_type"] == "stream"
+    @test output["name"] == "stdout"
+    @test startswith(output["text"], "Julia Version ")
 end
