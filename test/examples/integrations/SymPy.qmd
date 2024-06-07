@@ -1,0 +1,14 @@
+---
+title: SymPy integration
+julia:
+    exeflags: ["--project=SymPy"]
+---
+
+```{julia}
+using SymPy
+```
+
+```{julia}
+@syms x
+integrate(sin(x)*cos(x), x)
+```
