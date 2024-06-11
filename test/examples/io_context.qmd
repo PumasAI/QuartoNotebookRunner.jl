@@ -1,0 +1,11 @@
+---
+title: io_context
+---
+
+```{julia}
+struct M
+    a::Int
+end
+x = M(22)
+print(x)
+```
