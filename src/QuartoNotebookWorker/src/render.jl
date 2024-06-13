@@ -19,6 +19,7 @@ function render(
                     code;
                     file,
                     line,
+                    cell_options,
                 )
             end,
         )
@@ -173,7 +174,13 @@ function _process_code(
     return _parseall(code; filename, lineno)
 end
 
-function include_str(mod::Module, code::AbstractString; file::AbstractString, line::Integer)
+function include_str(
+    mod::Module,
+    code::AbstractString;
+    file::AbstractString,
+    line::Integer,
+    cell_options::AbstractDict,
+)
     loc = LineNumberNode(line, Symbol(file))
     try
         ast = _process_code(mod, code; filename = file, lineno = line)
@@ -181,7 +188,11 @@ function include_str(mod::Module, code::AbstractString; file::AbstractString, li
         # Note: IO capturing combines stdout and stderr into a single
         # `.output`, but Jupyter notebook spec appears to want them
         # separate. Revisit this if it causes issues.
-        return Packages.IOCapture.capture(; rethrow = InterruptException, color = true) do
+        return Packages.IOCapture.capture(;
+            rethrow = InterruptException,
+            color = true,
+            io_context = _io_context(cell_options),
+        ) do
             result = nothing
             line_and_ex = Expr(:toplevel, loc, nothing)
             try
@@ -223,10 +234,12 @@ end
 
 # passing our module removes Main.Notebook noise when printing types etc.
 function with_context(io::IO, cell_options = Dict{String,Any}())
-    return IOContext(
-        io,
+    return IOContext(io, _io_context(cell_options)...)
+end
+
+function _io_context(cell_options = Dict{String,Any}())
+    return [
         :module => NotebookState.notebook_module(),
-        :color => true,
         :limit => true,
         # This allows a `show` method implementation to check for
         # metadata that may be of relevance to it's rendering. For
@@ -238,7 +251,7 @@ function with_context(io::IO, cell_options = Dict{String,Any}())
         # TODO: perhaps preprocess the metadata provided here rather
         # than just passing it through as-is.
         :QuartoNotebookRunner => (; cell_options, options = NotebookState.OPTIONS[]),
-    )
+    ]
 end
 
 function clean_bt_str(is_error::Bool, bt, err, prefix = "", mimetype = false)
