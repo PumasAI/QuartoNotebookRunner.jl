@@ -810,7 +810,7 @@ function evaluate_raw_cells!(
                             if startswith(node.literal, "{r}")
                                 source_code = wrap_with_r_boilerplate(source_code)
                             end
-                            expr = :(render($(source_code), $(chunk.file), $(chunk.line)))
+                            expr = :(render($(source_code), $(chunk.file), $(chunk.line); inline = true))
                             # There should only ever be a single result from an
                             # inline evaluation since you can't pass cell
                             # options and so `expand` will always be `false`.

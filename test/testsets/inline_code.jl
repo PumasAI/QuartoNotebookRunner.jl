@@ -59,7 +59,7 @@ include("../utilities/prelude.jl")
         @test any(contains("Some `Text` objects *\\*placeholder\\**."), cell.source)
 
         cell = cells[9]
-        @test any(contains("Some plain `String`s \"\\*placeholder\\*\"."), cell.source)
+        @test any(contains("Some plain `String`s \\*placeholder\\*."), cell.source)
         @test any(contains("A more complex expression 2."), cell.source)
     end
 end
