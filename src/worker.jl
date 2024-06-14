@@ -11,7 +11,7 @@ function worker_init(f::File, options::Dict)
                     ),
                 )
                 global refresh!(args...) = QNW.refresh!($(f.path), $(options), args...)
-                global render(args...) = QNW.render(args...)
+                global render(args...; kwargs...) = QNW.render(args...; kwargs...)
             end
 
             nothing

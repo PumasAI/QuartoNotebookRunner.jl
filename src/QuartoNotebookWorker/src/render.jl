@@ -2,7 +2,8 @@ function render(
     code::AbstractString,
     file::AbstractString,
     line::Integer,
-    cell_options::AbstractDict = Dict{String,Any}(),
+    cell_options::AbstractDict = Dict{String,Any}();
+    inline::Bool = false,
 )
     # This records whether the outermost cell is an expandable cell, which we
     # then return to the server so that it can decide whether to treat the cell
@@ -13,7 +14,7 @@ function render(
     is_expansion_ref = Ref(false)
     result = Base.@invokelatest(
         collect(
-            _render_thunk(code, cell_options, is_expansion_ref) do
+            _render_thunk(code, cell_options, is_expansion_ref; inline) do
                 Base.@invokelatest include_str(
                     NotebookState.notebook_module(),
                     code;
@@ -35,7 +36,8 @@ function _render_thunk(
     thunk::Base.Callable,
     code::AbstractString,
     cell_options::AbstractDict = Dict{String,Any}(),
-    is_expansion_ref::Ref{Bool} = Ref(false),
+    is_expansion_ref::Ref{Bool} = Ref(false);
+    inline::Bool,
 )
     captured, display_results = with_inline_display(thunk, cell_options)
 
@@ -81,12 +83,18 @@ function _render_thunk(
                 )
             end
             # **The recursive call:**
-            return Base.@invokelatest _render_thunk(wrapped, cell.code, cell.options)
+            return Base.@invokelatest _render_thunk(
+                wrapped,
+                cell.code,
+                cell.options;
+                inline,
+            )
         end
     else
         results = Base.@invokelatest render_mimetypes(
             REPL.ends_with_semicolon(code) ? nothing : captured.value,
-            cell_options,
+            cell_options;
+            inline,
         )
         # Wrap the `NamedTuple` in a `Tuple` to avoid the `NamedTuple`
         # being flattened into just it's values when passed into
@@ -290,7 +298,9 @@ Base.show(io::IO, m::MIME"text/plain", w::WrapperType) = Base.show(io, m, w.valu
 Base.showable(mime::MIME, w::WrapperType) = Base.showable(mime, w.value)
 
 
-function render_mimetypes(value, cell_options)
+# for inline code chunks, `inline` should be set to `true` which causes "text/plain" output like
+# what you'd get from `print` (Strings without quotes) and not from `show("text/plain", ...)`
+function render_mimetypes(value, cell_options; inline::Bool = false)
     # Intercept objects prior to rendering so that we can wrap specific
     # types in our own `WrapperType` to customised rendering instead of
     # what the package defines itself.
@@ -329,23 +339,31 @@ function render_mimetypes(value, cell_options)
             "image/png",
         ],
     )
-    mimes = get(mime_groups, to_format) do
-        [
-            "text/plain",
-            "text/markdown",
-            "text/html",
-            "text/latex",
-            "image/svg+xml",
-            "image/png",
-            "application/pdf",
-            "application/json",
-        ]
+    mimes = if inline
+        ["text/plain", "text/markdown"]
+    else
+        get(mime_groups, to_format) do
+            [
+                "text/plain",
+                "text/markdown",
+                "text/html",
+                "text/latex",
+                "image/svg+xml",
+                "image/png",
+                "application/pdf",
+                "application/json",
+            ]
+        end
     end
     for mime in mimes
         if showable(mime, value)
             buffer = IOBuffer()
             try
-                Base.@invokelatest show(with_context(buffer, cell_options), mime, value)
+                if inline && mime == "text/plain"
+                    Base.@invokelatest print(with_context(buffer, cell_options), value)
+                else
+                    Base.@invokelatest show(with_context(buffer, cell_options), mime, value)
+                end
             catch error
                 backtrace = catch_backtrace()
                 result[mime] = (;
@@ -377,7 +395,7 @@ function render_mimetypes(value, cell_options)
     end
     return result
 end
-render_mimetypes(value::Nothing, cell_options) =
+render_mimetypes(value::Nothing, cell_options; inline::Bool = false) =
     Dict{String,@NamedTuple{error::Bool, data::Vector{UInt8}}}()
 
 
