@@ -116,6 +116,8 @@ Evaluate the code and markdown in `f` and return a vector of cells with the
 results in all available mimetypes.
 
 `output` can be a file path, or an IO stream.
+`markdown` can be used to pass an override for the file content, which is used
+    to pass the modified markdown that quarto creates after resolving shortcodes
 """
 function evaluate!(
     f::File,
@@ -123,13 +125,25 @@ function evaluate!(
     showprogress = true,
     options::Union{String,Dict{String,Any}} = Dict{String,Any}(),
     chunk_callback = (i, n, c) -> nothing,
+    markdown::Union{String,Nothing} = nothing,
 )
     _check_output_dst(output)
 
     options = _parsed_options(options)
     path = abspath(f.path)
     if isfile(path)
-        raw_chunks, file_frontmatter = raw_text_chunks(f)
+        display(markdown)
+        raw_chunks, file_frontmatter = if markdown === nothing
+            raw_text_chunks(f)
+        else
+            mktempdir() do dir
+                tempfile = joinpath(dir, "input.qmd")
+                open(tempfile, "w") do io
+                    write(io, markdown)
+                end
+                raw_text_chunks(tempfile)
+            end
+        end
         merged_options = _extract_relevant_options(file_frontmatter, options)
         cells =
             evaluate_raw_cells!(f, raw_chunks, merged_options; showprogress, chunk_callback)
@@ -1067,6 +1081,7 @@ function run!(
     server::Server,
     path::AbstractString;
     output::Union{AbstractString,IO,Nothing} = nothing,
+    markdown::Union{Nothing,String} = nothing,
     showprogress::Bool = true,
     options::Union{String,Dict{String,Any}} = Dict{String,Any}(),
     chunk_callback = (i, n, c) -> nothing,
@@ -1076,7 +1091,7 @@ function run!(
             close(file.timeout_timer)
             file.timeout_timer = nothing
         end
-        result = evaluate!(file, output; showprogress, options, chunk_callback)
+        result = evaluate!(file, output; showprogress, options, markdown, chunk_callback)
         if file.timeout > 0
             file.timeout_timer = Timer(file.timeout) do _
                 close!(server, file.path)
