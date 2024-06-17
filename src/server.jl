@@ -132,17 +132,7 @@ function evaluate!(
     options = _parsed_options(options)
     path = abspath(f.path)
     if isfile(path)
-        raw_chunks, file_frontmatter = if markdown === nothing
-            raw_text_chunks(f)
-        else
-            mktempdir() do dir
-                tempfile = joinpath(dir, "input.qmd")
-                open(tempfile, "w") do io
-                    write(io, markdown)
-                end
-                raw_text_chunks(tempfile)
-            end
-        end
+        raw_chunks, file_frontmatter = raw_text_chunks(f, markdown)
         merged_options = _extract_relevant_options(file_frontmatter, options)
         cells =
             evaluate_raw_cells!(f, raw_chunks, merged_options; showprogress, chunk_callback)
@@ -298,7 +288,9 @@ write_json(::Nothing, data) = data
 Return a vector of raw markdown and code chunks from `file` ready for evaluation
 by `evaluate_raw_cells!`.
 """
-raw_text_chunks(file::File) = raw_text_chunks(file.path)
+raw_text_chunks(file::File, ::Nothing) = raw_text_chunks(file.path)
+raw_text_chunks(file::File, markdown::String) =
+    raw_markdown_chunks_from_string(file.path, markdown)
 
 function raw_text_chunks(path::String)
     endswith(path, ".qmd") && return raw_markdown_chunks(path)
@@ -312,85 +304,74 @@ end
 Return a vector of raw markdown and code chunks from `file` ready
 for evaluation by `evaluate_raw_cells!`.
 """
-raw_markdown_chunks(file::File) = raw_markdown_chunks(file.path)
+raw_markdown_chunks(file::File) =
+    endswith(path, ".qmd") ? raw_markdown_chunks(file.path) :
+    throw(ArgumentError("file is not a quarto markdown file: $(path)"))
+raw_markdown_chunks(path::String) =
+    raw_markdown_chunks_from_string(path, read(path, String))
 
-function raw_markdown_chunks(path::String)
-    if !endswith(path, ".qmd")
-        throw(ArgumentError("file is not a quarto markdown file: $(path)"))
-    end
+function raw_markdown_chunks_from_string(path::String, markdown::String)
+    raw_chunks = []
+    pars = Parser()
+    ast = pars(markdown; source = path)
+    source_lines = collect(eachline(IOBuffer(markdown)))
+    terminal_line = 1
+    code_cells = false
+    for (node, enter) in ast
+        if enter && (is_julia_toplevel(node) || is_r_toplevel(node))
+            code_cells = true
+            line = node.sourcepos[1][1]
+            md = join(source_lines[terminal_line:(line-1)], "\n")
+            push!(
+                raw_chunks,
+                (type = :markdown, source = md, file = path, line = terminal_line),
+            )
+            terminal_line = node.sourcepos[2][1] + 1
 
-    if isfile(path)
-        raw_chunks = []
-        ast = open(Parser(), path)
-        source_lines = readlines(path)
-        terminal_line = 1
-        code_cells = false
-        for (node, enter) in ast
-            if enter && (is_julia_toplevel(node) || is_r_toplevel(node))
-                code_cells = true
-                line = node.sourcepos[1][1]
-                markdown = join(source_lines[terminal_line:(line-1)], "\n")
-                push!(
-                    raw_chunks,
-                    (
-                        type = :markdown,
-                        source = markdown,
-                        file = path,
-                        line = terminal_line,
-                    ),
-                )
-                terminal_line = node.sourcepos[2][1] + 1
-
-                # currently, the only execution-relevant cell option is `eval` which controls if a code block is executed or not.
-                # this option could in the future also include a vector of line numbers, which knitr supports.
-                # all other options seem to be quarto-rendering related, like where to put figure captions etc.
-                source = node.literal
-                cell_options = extract_cell_options(source; file = path, line = line)
-                evaluate = get(cell_options, "eval", true)
-                if !(evaluate isa Bool)
-                    error(
-                        "Cannot handle an `eval` code cell option with value $(repr(evaluate)), only true or false.",
-                    )
-                end
-                language =
-                    is_julia_toplevel(node) ? :julia :
-                    is_r_toplevel(node) ? :r : error("Unhandled code block language")
-                push!(
-                    raw_chunks,
-                    (
-                        type = :code,
-                        language = language,
-                        source,
-                        file = path,
-                        line,
-                        evaluate,
-                        cell_options,
-                    ),
+            # currently, the only execution-relevant cell option is `eval` which controls if a code block is executed or not.
+            # this option could in the future also include a vector of line numbers, which knitr supports.
+            # all other options seem to be quarto-rendering related, like where to put figure captions etc.
+            source = node.literal
+            cell_options = extract_cell_options(source; file = path, line = line)
+            evaluate = get(cell_options, "eval", true)
+            if !(evaluate isa Bool)
+                error(
+                    "Cannot handle an `eval` code cell option with value $(repr(evaluate)), only true or false.",
                 )
             end
-        end
-        if terminal_line <= length(source_lines)
-            markdown = join(source_lines[terminal_line:end], "\n")
+            language =
+                is_julia_toplevel(node) ? :julia :
+                is_r_toplevel(node) ? :r : error("Unhandled code block language")
             push!(
                 raw_chunks,
-                (type = :markdown, source = markdown, file = path, line = terminal_line),
+                (
+                    type = :code,
+                    language = language,
+                    source,
+                    file = path,
+                    line,
+                    evaluate,
+                    cell_options,
+                ),
             )
         end
-
-        # The case where the notebook has no code cells.
-        if isempty(raw_chunks) && !code_cells
-            push!(
-                raw_chunks,
-                (type = :markdown, source = read(path, String), file = path, line = 1),
-            )
-        end
-
-        frontmatter = _recursive_merge(default_frontmatter(), CommonMark.frontmatter(ast))
-
-        return raw_chunks, frontmatter
-    else
-        throw(ArgumentError("file does not exist: $(path)"))
     end
+    if terminal_line <= length(source_lines)
+        md = join(source_lines[terminal_line:end], "\n")
+        push!(
+            raw_chunks,
+            (type = :markdown, source = md, file = path, line = terminal_line),
+        )
+    end
+
+    # The case where the notebook has no code cells.
+    if isempty(raw_chunks) && !code_cells
+        push!(raw_chunks, (type = :markdown, source = markdown, file = path, line = 1))
+    end
+
+    frontmatter = _recursive_merge(default_frontmatter(), CommonMark.frontmatter(ast))
+
+    return raw_chunks, frontmatter
 end
 
 _recursive_merge(x::AbstractDict...) = merge(_recursive_merge, x...)
