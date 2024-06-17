@@ -270,7 +270,16 @@ function _handle_response(
         end
 
         result = try
-            (; notebook = run!(notebooks, file; options, markdown, showprogress, chunk_callback))
+            (;
+                notebook = run!(
+                    notebooks,
+                    file;
+                    options,
+                    markdown,
+                    showprogress,
+                    chunk_callback,
+                )
+            )
         catch error
             _log_error("Failed to run notebook: $file", error, catch_backtrace())
         end
@@ -365,7 +374,8 @@ function _get_nested(d::Dict, keys...)
     end
     return _d
 end
-_get_markdown(options::Dict)::Union{Nothing,String} = _get_nested(options, "target", "markdown", "value")
+_get_markdown(options::Dict)::Union{Nothing,String} =
+    _get_nested(options, "target", "markdown", "value")
 
 # Compat:
 
