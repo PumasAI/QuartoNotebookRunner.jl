@@ -132,7 +132,6 @@ function evaluate!(
     options = _parsed_options(options)
     path = abspath(f.path)
     if isfile(path)
-        display(markdown)
         raw_chunks, file_frontmatter = if markdown === nothing
             raw_text_chunks(f)
         else
