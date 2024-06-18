@@ -254,6 +254,7 @@ function _handle_response(
 
     if type == "run"
         options = _get_options(request.content)
+        markdown = _get_markdown(options)
 
         function chunk_callback(i, n, chunk)
             _write_json(
@@ -269,7 +270,16 @@ function _handle_response(
         end
 
         result = try
-            (; notebook = run!(notebooks, file; options, showprogress, chunk_callback))
+            (;
+                notebook = run!(
+                    notebooks,
+                    file;
+                    options,
+                    markdown,
+                    showprogress,
+                    chunk_callback,
+                )
+            )
         catch error
             _log_error("Failed to run notebook: $file", error, catch_backtrace())
         end
@@ -355,6 +365,17 @@ _get_file(content::String) = content
 
 _get_options(content::Dict) = get(Dict{String,Any}, content, "options")
 _get_options(::String) = Dict{String,Any}()
+
+function _get_nested(d::Dict, keys...)
+    _d = d
+    for key in keys
+        _d = get(_d, key, nothing)
+        _d === nothing && return
+    end
+    return _d
+end
+_get_markdown(options::Dict)::Union{Nothing,String} =
+    _get_nested(options, "target", "markdown", "value")
 
 # Compat:
 

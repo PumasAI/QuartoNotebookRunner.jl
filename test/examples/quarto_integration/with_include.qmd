@@ -1,0 +1,10 @@
+---
+engine: julia
+---
+
+{{< include to_include.qmd >}}
+
+```{julia}
+y = x + 1
+println("y = $y")
+```
