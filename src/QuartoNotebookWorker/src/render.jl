@@ -47,15 +47,10 @@ function _render_thunk(
     # so we need to catch that and return an error cell if that's the case.
     expansion = nothing
     is_expansion = false
-    # Intercept objects prior to rendering so that we can wrap specific
-    # types in our own `WrapperType` to customised rendering instead of
-    # what the package defines itself.
-    # Calling the wrapping mechanism here allows it to affect expansion
-    value = Base.@invokelatest _mimetype_wrapper(captured.value)
     if !captured.error
         try
-            expansion = Base.@invokelatest expand(value)
-            is_expansion = _is_expanded(value, expansion)
+            expansion = Base.@invokelatest expand(captured.value)
+            is_expansion = _is_expanded(captured.value, expansion)
         catch error
             backtrace = catch_backtrace()
             return ((;
@@ -97,7 +92,7 @@ function _render_thunk(
         end
     else
         results = Base.@invokelatest render_mimetypes(
-            REPL.ends_with_semicolon(code) ? nothing : value,
+            REPL.ends_with_semicolon(code) ? nothing : captured.value,
             cell_options;
             inline,
         )
@@ -110,11 +105,11 @@ function _render_thunk(
             results,
             display_results,
             output = captured.output,
-            error = captured.error ? string(typeof(value)) : nothing,
+            error = captured.error ? string(typeof(captured.value)) : nothing,
             backtrace = collect(
                 eachline(
                     IOBuffer(
-                        clean_bt_str(captured.error, captured.backtrace, value),
+                        clean_bt_str(captured.error, captured.backtrace, captured.value),
                     ),
                 ),
             ),
@@ -306,6 +301,11 @@ Base.showable(mime::MIME, w::WrapperType) = Base.showable(mime, w.value)
 # for inline code chunks, `inline` should be set to `true` which causes "text/plain" output like
 # what you'd get from `print` (Strings without quotes) and not from `show("text/plain", ...)`
 function render_mimetypes(value, cell_options; inline::Bool = false)
+    # Intercept objects prior to rendering so that we can wrap specific
+    # types in our own `WrapperType` to customised rendering instead of
+    # what the package defines itself.
+    value = _mimetype_wrapper(value)
+
     to_format = NotebookState.OPTIONS[]["format"]["pandoc"]["to"]
 
     result = Dict{String,@NamedTuple{error::Bool, data::Vector{UInt8}}}()
