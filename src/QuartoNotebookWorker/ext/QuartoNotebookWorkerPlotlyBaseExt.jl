@@ -40,6 +40,11 @@ function Base.show(io::IO, ::MIME"text/html", p::PlotlyBasePlotWithoutRequireJS)
     PlotlyBase.to_html(io, p.plot; include_plotlyjs = "require-loaded", full_html = false)
 end
 
+Base.show(io::IO, M::MIME, p::PlotlyBasePlotWithoutRequireJS) = show(io, M, p.plot)
+Base.show(io::IO, m::MIME"text/plain", p::PlotlyBasePlotWithoutRequireJS) =
+    show(io, m, p.plot)
+Base.showable(M::MIME, p::PlotlyBasePlotWithoutRequireJS) = showable(M, p.plot)
+
 function Base.show(io::IO, ::MIME"text/html", ::PlotlyRequireJSConfig)
     print(io, PlotlyBase._requirejs_config())
 end
