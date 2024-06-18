@@ -16,7 +16,7 @@ function Base.show(io::IO, ::MIME"text/html", wrapper::PlotlyJSSyncPlot)
     PlotlyJS.PlotlyBase.to_html(
         io,
         wrapper.value.plot;
-        include_plotlyjs = "require",
+        include_plotlyjs = "require-loaded",
         full_html = false,
     )
 end
