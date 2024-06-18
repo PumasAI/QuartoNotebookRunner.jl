@@ -3,11 +3,6 @@ module QuartoNotebookWorkerPlotlyBaseExt
 import QuartoNotebookWorker
 import PlotlyBase
 
-QuartoNotebookWorker._mimetype_wrapper(p::PlotlyBase.Plot) = PlotlyBasePlot(p)
-struct PlotlyBasePlot <: QuartoNotebookWorker.WrapperType
-    value::PlotlyBase.Plot
-end
-
 struct PlotlyBasePlotWithoutRequireJS
     plot::PlotlyBase.Plot
 end
@@ -16,9 +11,9 @@ struct PlotlyRequireJSConfig end
 
 const FIRST_PLOT_DISPLAYED = Ref(false)
 
-function QuartoNotebookWorker.expand(p::PlotlyBasePlot)
+function QuartoNotebookWorker.expand(p::PlotlyBase.Plot)
 
-    plotcell = QuartoNotebookWorker.Cell(PlotlyBasePlotWithoutRequireJS(p.value))
+    plotcell = QuartoNotebookWorker.Cell(PlotlyBasePlotWithoutRequireJS(p))
 
     # Quarto expects that the require.js preamble which Plotly needs to function
     # comes in its own cell, which will then be hoisted into the HTML page header.
