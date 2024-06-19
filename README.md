@@ -11,7 +11,7 @@
 >
 > Starting from the **pre-release** [`v1.5.29`](https://github.com/quarto-dev/quarto-cli/releases/tag/v1.5.29)
 > this engine is available out-of-the-box with `quarto` when you set `engine: julia` in
-> your Quarto notebook files. You don't need to follow the developer instructions
+> your Quarto notebook files (setting it project-wide via `_quarto.yml` [is not yet supported](https://github.com/quarto-dev/quarto-cli/issues/3157)). You don't need to follow the developer instructions
 > below.
 
 ## Developer Documentation
