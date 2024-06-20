@@ -68,7 +68,7 @@ jobs:
         with:
           persist-credentials: false
 
-      - uses: julia-actions/setup-julia@f2258781c657ad9b4b88072c5eeaf9ec8c370874
+      - uses: julia-actions/setup-julia@81d42b556a18b0d67455a742fcbffdeb49b3ffb0
         with:
           version: ${{ matrix.version }}
       - uses: julia-actions/cache@d48542bb7b6239a9391789f01d21a6bdde9ad5df
@@ -105,7 +105,7 @@ jobs:
       - uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332
         with:
           persist-credentials: false
-      - uses: julia-actions/setup-julia@f2258781c657ad9b4b88072c5eeaf9ec8c370874
+      - uses: julia-actions/setup-julia@81d42b556a18b0d67455a742fcbffdeb49b3ffb0
         with:
           version: "1"
       - run: |
