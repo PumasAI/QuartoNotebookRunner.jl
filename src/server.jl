@@ -872,7 +872,7 @@ function evaluate_params!(f, params::Dict{String})
     end
 
     exprs = map(collect(pairs(params))) do (key, value)
-        :(@eval getfield(Main, :Notebook) $(Symbol(key::String)) = $value)
+        :(@eval getfield(Main, :Notebook) const $(Symbol(key::String)) = $value)
     end
     expr = Expr(:block, exprs...)
     Malt.remote_eval_fetch(f.worker, expr)

@@ -41,3 +41,6 @@ g["a"]
 g["b"]
 ```
 
+```{julia}
+a = nothing
+```
