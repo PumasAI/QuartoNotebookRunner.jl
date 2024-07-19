@@ -58,7 +58,7 @@ if !@isdefined(SCHEMA)
                 # (pdf). All we are doing here at the moment is ensuring quarto doesn't
                 # break on our notebook outputs.
                 if success(`$quarto_bin --version`)
-                    @test success(`$quarto_bin render $ipynb --to docx`)
+                    @test success(`$quarto_bin render $ipynb --no-execute --to docx`)
                 else
                     @error "quarto not found, skipping smoke test."
                 end
