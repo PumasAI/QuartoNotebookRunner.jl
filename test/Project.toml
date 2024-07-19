@@ -6,3 +6,6 @@ NodeJS_18_jll = "c1e1d063-8311-5f52-a749-c7b05e91ae37"
 Sockets = "6462fe0b-24de-5631-8697-dd941f90decc"
 Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
 quarto_jll = "b7163347-bfae-5fd9-aba4-19f139889d78"
+
+[compat]
+quarto_jll = "= 1.4.549"

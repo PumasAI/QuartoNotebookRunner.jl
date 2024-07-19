@@ -11,6 +11,11 @@ test_example(joinpath(@__DIR__, "../examples/parameters.qmd")) do json
     @test cells[12]["outputs"][1]["text"] == "[1, 2, 3]"
     @test cells[14]["outputs"][1]["data"]["text/plain"] == "1"
     @test cells[16]["outputs"][1]["data"]["text/plain"] == "2"
+    @test cells[18]["outputs"][1]["output_type"] == "error"
+    @test contains(
+        cells[18]["outputs"][1]["traceback"][1],
+        "invalid redefinition of constant",
+    )
 end
 
 @testset "parameters via options" begin
