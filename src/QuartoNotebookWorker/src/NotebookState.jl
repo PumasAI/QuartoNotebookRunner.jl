@@ -6,6 +6,7 @@ import ..QuartoNotebookWorker
 
 const PROJECT = Ref("")
 const OPTIONS = Ref(Dict{String,Any}())
+const CELL_OPTIONS = Ref(Dict{String,Any}())
 
 function __init__()
     if ccall(:jl_generating_output, Cint, ()) == 0

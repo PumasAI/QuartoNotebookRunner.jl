@@ -39,6 +39,7 @@ function _render_thunk(
     is_expansion_ref::Ref{Bool} = Ref(false);
     inline::Bool,
 )
+    NotebookState.CELL_OPTIONS[] = cell_options
     captured, display_results = with_inline_display(thunk, cell_options)
 
     # Attempt to expand the cell. This requires the cell result to have a method

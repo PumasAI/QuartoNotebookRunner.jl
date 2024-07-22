@@ -5,6 +5,9 @@ module QuartoNotebookWorker
 export Cell
 export expand
 
+export cell_options
+export notebook_options
+
 
 walk(x, _, outer) = outer(x)
 walk(x::Expr, inner, outer) = outer(Expr(x.head, map(inner, x.args)...))
@@ -94,5 +97,6 @@ include("cell_expansion.jl")
 include("render.jl")
 include("utilities.jl")
 include("ojs_define.jl")
+include("notebook_metadata.jl")
 
 end
