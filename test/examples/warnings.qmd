@@ -1,0 +1,23 @@
+---
+title: Warnings
+---
+
+```{julia}
+#| warning: false
+@info "info"
+@warn "warn"
+@error "error"
+```
+
+```{julia}
+@info "info"
+@warn "warn"
+@error "error"
+```
+
+```{julia}
+#| warning: true
+@info "info"
+@warn "warn"
+@error "error"
+```

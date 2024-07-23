@@ -83,6 +83,7 @@ end
 # Imports.
 
 import InteractiveUtils
+import Logging
 import Pkg
 import REPL
 
