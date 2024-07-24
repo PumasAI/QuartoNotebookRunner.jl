@@ -4,12 +4,14 @@ function worker_init(f::File, options::Dict)
         return quote
             push!(LOAD_PATH, $(project))
 
-            let QNW = Base.require(
-                    Base.PkgId(
-                        Base.UUID("38328d9c-a911-4051-bc06-3f7f556ffeda"),
-                        "QuartoNotebookWorker",
-                    ),
-                )
+            let QNW = task_local_storage(:QUARTO_NOTEBOOK_WORKER_OPTIONS, $(options)) do
+                    Base.require(
+                        Base.PkgId(
+                            Base.UUID("38328d9c-a911-4051-bc06-3f7f556ffeda"),
+                            "QuartoNotebookWorker",
+                        ),
+                    )
+                end
                 global refresh!(args...) = QNW.refresh!($(f.path), $(options), args...)
                 global render(args...; kwargs...) = QNW.render(args...; kwargs...)
             end

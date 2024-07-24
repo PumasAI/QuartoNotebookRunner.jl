@@ -245,11 +245,13 @@ function test(; exeflags = String[])
         write(
             file,
             """
+            pushfirst!(LOAD_PATH, "@stdlib")
+            import Pkg
+            popfirst!(LOAD_PATH)
+
             cd($(repr(QNW)))
 
             pushfirst!(LOAD_PATH, $(repr(project)))
-
-            import Pkg
             Pkg.test("QuartoNotebookWorker")
             """,
         )

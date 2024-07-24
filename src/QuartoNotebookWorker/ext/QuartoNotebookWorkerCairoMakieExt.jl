@@ -14,10 +14,15 @@ function configure()
         kwargs = Dict{Symbol,Any}()
     end
     if fm.fig_format == "pdf"
-        CairoMakie.activate!(; type = "png", kwargs...)
+        kwargs[:type] = "png"
     else
-        CairoMakie.activate!(; type = fm.fig_format, kwargs...)
+        if isa(fm.fig_format, AbstractString)
+            kwargs[:type] = fm.fig_format
+        end
     end
+    CairoMakie.activate!(; kwargs...)
+
+    return nothing
 end
 
 function __init__()

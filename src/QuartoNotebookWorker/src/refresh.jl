@@ -24,13 +24,25 @@ function refresh!(path, original_options, options = original_options)
     return nothing
 end
 
+function rget(dict, keys, default)
+    value = dict
+    for key in keys
+        if haskey(value, key)
+            value = value[key]
+        else
+            return default
+        end
+    end
+    return value
+end
+
 function _figure_metadata()
     options = NotebookState.OPTIONS[]
 
-    fig_width_inch = options["format"]["execute"]["fig-width"]
-    fig_height_inch = options["format"]["execute"]["fig-height"]
-    fig_format = options["format"]["execute"]["fig-format"]
-    fig_dpi = options["format"]["execute"]["fig-dpi"]
+    fig_width_inch = rget(options, ("format", "execute", "fig-width"), nothing)
+    fig_height_inch = rget(options, ("format", "execute", "fig-height"), nothing)
+    fig_format = rget(options, ("format", "execute", "fig-format"), nothing)
+    fig_dpi = rget(options, ("format", "execute", "fig-dpi"), nothing)
 
     if fig_format == "retina"
         fig_format = "svg"

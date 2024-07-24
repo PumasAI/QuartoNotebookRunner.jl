@@ -326,7 +326,8 @@ function render_mimetypes(value, cell_options; inline::Bool = false)
     # what the package defines itself.
     value = _mimetype_wrapper(value)
 
-    to_format = NotebookState.OPTIONS[]["format"]["pandoc"]["to"]
+    options = NotebookState.OPTIONS[]
+    to_format = rget(options, ("format", "pandoc", "to"), nothing)
 
     result = Dict{String,@NamedTuple{error::Bool, data::Vector{UInt8}}}()
     # Some output formats that we want to write to need different
