@@ -77,8 +77,9 @@ function _render_thunk(
         # to the server. Cell expansion is recursive.
         return _flatmap(expansion) do cell
             wrapped = function ()
-                return QuartoNotebookWorker.Packages.IOCapture.capture(
+                return io_capture(
                     cell.thunk;
+                    cell_options = cell.options,
                     rethrow = InterruptException,
                     color = true,
                 )
@@ -197,7 +198,8 @@ function include_str(
         # Note: IO capturing combines stdout and stderr into a single
         # `.output`, but Jupyter notebook spec appears to want them
         # separate. Revisit this if it causes issues.
-        return Packages.IOCapture.capture(;
+        return io_capture(;
+            cell_options = cell_options,
             rethrow = InterruptException,
             color = true,
             io_context = _io_context(cell_options),
@@ -237,6 +239,23 @@ function include_str(
             )
         else
             rethrow(err)
+        end
+    end
+end
+
+function io_capture(f; cell_options, kws...)
+    warning = get(cell_options, "warning", true)
+    capture() = Packages.IOCapture.capture(f; kws...)
+    if warning
+        return capture()
+    else
+        logger = Logging.global_logger()
+        current_level = Logging.min_enabled_level(logger)
+        try
+            Logging.disable_logging(Logging.Error)
+            return capture()
+        finally
+            Logging.disable_logging(current_level - 1)
         end
     end
 end
