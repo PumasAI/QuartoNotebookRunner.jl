@@ -953,7 +953,19 @@ function extract_cell_options(source::AbstractString; file::AbstractString, line
                   """
             error(msg)
         end
-        isa(options, Dict) || error("Cell attributes must be a dictionary.")
+        if !isa(options, Dict)
+            msg = """
+                  Invalid cell attributes type at $(file):$(line):
+
+                  ```{julia}
+                  $source
+                  ```
+
+                  Expected a dictionary, got $(typeof(options)). Check for
+                  syntax errors in the YAML block at the start of this cell.
+                  """
+            error(msg)
+        end
         return options
     end
 end

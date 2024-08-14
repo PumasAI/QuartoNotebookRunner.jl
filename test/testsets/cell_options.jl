@@ -55,6 +55,17 @@ end
 
             text = """
                    ```{julia}
+                   #| invalid:true
+                   ```
+                   """
+            @test_throws_message "file.qmd:1" QuartoNotebookRunner.extract_cell_options(
+                text;
+                file = "file.qmd",
+                line = 1,
+            )
+
+            text = """
+                   ```{julia}
                    a = 1
                    ```
                    """
@@ -81,7 +92,7 @@ end
             server = QuartoNotebookRunner.Server()
 
             buffer = IOBuffer()
-            @test_throws_message "Cell attributes must be a dictionary." QuartoNotebookRunner.run!(
+            @test_throws_message "Invalid cell attributes type at" QuartoNotebookRunner.run!(
                 server,
                 notebook;
                 output = buffer,
