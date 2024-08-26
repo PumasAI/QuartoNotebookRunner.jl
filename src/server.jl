@@ -170,6 +170,7 @@ function _extract_relevant_options(file_frontmatter::Dict, options::Dict)
     fig_format_default = get(file_frontmatter, "fig-format", nothing)
     fig_dpi_default = get(file_frontmatter, "fig-dpi", nothing)
     error_default = get(get(D, file_frontmatter, "execute"), "error", true)
+    eval_default = get(get(D, file_frontmatter, "execute"), "eval", true)
     daemon_default = get(get(D, file_frontmatter, "execute"), "daemon", true)
 
     pandoc_to_default = nothing
@@ -185,6 +186,7 @@ function _extract_relevant_options(file_frontmatter::Dict, options::Dict)
             fig_format = fig_format_default,
             fig_dpi = fig_dpi_default,
             error = error_default,
+            eval = eval_default,
             pandoc_to = pandoc_to_default,
             julia = julia_default,
             daemon = daemon_default,
@@ -198,6 +200,7 @@ function _extract_relevant_options(file_frontmatter::Dict, options::Dict)
         fig_format = get(execute, "fig-format", fig_format_default)
         fig_dpi = get(execute, "fig-dpi", fig_dpi_default)
         error = get(execute, "error", error_default)
+        eval = get(execute, "eval", eval_default)
         daemon = get(execute, "daemon", daemon_default)
 
         pandoc = get(D, format, "pandoc")
@@ -221,6 +224,7 @@ function _extract_relevant_options(file_frontmatter::Dict, options::Dict)
             fig_format,
             fig_dpi,
             error,
+            eval,
             pandoc_to,
             julia = julia_merged,
             daemon,
@@ -235,6 +239,7 @@ function _options_template(;
     fig_format,
     fig_dpi,
     error,
+    eval,
     pandoc_to,
     julia,
     daemon,
@@ -249,6 +254,7 @@ function _options_template(;
                 "fig-format" => fig_format,
                 "fig-dpi" => fig_dpi,
                 "error" => error,
+                "eval" => eval,
                 "daemon" => daemon,
             ),
             "pandoc" => D("to" => pandoc_to),
@@ -310,6 +316,8 @@ raw_markdown_chunks(file::File) =
 raw_markdown_chunks(path::String) =
     raw_markdown_chunks_from_string(path, read(path, String))
 
+struct Unset end
+
 function raw_markdown_chunks_from_string(path::String, markdown::String)
     raw_chunks = []
     pars = Parser()
@@ -333,8 +341,8 @@ function raw_markdown_chunks_from_string(path::String, markdown::String)
             # all other options seem to be quarto-rendering related, like where to put figure captions etc.
             source = node.literal
             cell_options = extract_cell_options(source; file = path, line = line)
-            evaluate = get(cell_options, "eval", true)
-            if !(evaluate isa Bool)
+            evaluate = get(cell_options, "eval", Unset())
+            if !(evaluate isa Union{Bool,Unset})
                 error(
                     "Cannot handle an `eval` code cell option with value $(repr(evaluate)), only true or false.",
                 )
@@ -446,8 +454,8 @@ function raw_script_chunks(path::String)
             if type == :code
 
                 cell_options = extract_cell_options(source; file = path, line = start_line)
-                evaluate = get(cell_options, "eval", true)
-                if !(evaluate isa Bool)
+                evaluate = get(cell_options, "eval", Unset())
+                if !(evaluate isa Union{Bool,Unset})
                     error(
                         "Cannot handle an `eval` code cell option with value $(repr(evaluate)), only true or false.",
                     )
@@ -570,6 +578,10 @@ function Base.showerror(io::IO, e::EvaluationError)
     end
 end
 
+should_eval(chunk, global_eval::Bool) =
+    chunk.type === :code &&
+    (chunk.evaluate === true || (chunk.evaluate === Unset() && global_eval))
+
 """
     evaluate_raw_cells!(f::File, chunks::Vector)
 
@@ -593,6 +605,7 @@ function evaluate_raw_cells!(
 
     error_metadata = NamedTuple{(:kind, :file, :traceback),Tuple{Symbol,String,String}}[]
     allow_error_global = options["format"]["execute"]["error"]
+    global_eval::Bool = options["format"]["execute"]["eval"]
 
     wd = try
         pwd()
@@ -601,12 +614,12 @@ function evaluate_raw_cells!(
     end
     header = "Running $(relpath(f.path, wd))"
 
-    chunks_to_evaluate = sum(c -> c.type === :code && c.evaluate, chunks)
+    chunks_to_evaluate = sum(c -> should_eval(c, global_eval), chunks)
     ith_chunk_to_evaluate = 1
 
     @maybe_progress showprogress "$header" for (nth, chunk) in enumerate(chunks)
         if chunk.type === :code
-            if !chunk.evaluate
+            if !should_eval(chunk, global_eval)
                 # Cells that are not evaluated are not executed, but they are
                 # still included in the notebook.
                 push!(
