@@ -1,0 +1,20 @@
+---
+title: PythonCall integration
+julia:
+    exeflags: ["--project=PythonCall"]
+---
+
+This should fail since we didn't import PythonCall yet.
+
+```{python}
+import re
+```
+
+```{julia}
+using PythonCall
+```
+
+```{python}
+import re
+words = re.findall("[a-zA-Z]+", "PythonCall.jl is very useful!")
+```
