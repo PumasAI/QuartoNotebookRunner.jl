@@ -1,0 +1,21 @@
+---
+title: Cell Options
+engine: julia
+execute:
+    eval: false
+---
+
+```{julia}
+println("shouldn't run")
+```
+
+```{julia}
+#| eval: false
+println("shouldn't run either")
+```
+
+```{julia}
+#| eval: true
+println("should run")
+```
+
