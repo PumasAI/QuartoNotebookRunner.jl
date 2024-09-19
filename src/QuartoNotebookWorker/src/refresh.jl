@@ -5,12 +5,11 @@ function refresh!(path, original_options, options = original_options)
     if haskey(options, "project") && haskey(options["project"], "execute-dir")
         ed = options["project"]["execute-dir"]
         if ed == "directory"
-            println("cd(dirname(path))")
             cd(dirname(path))
         elseif ed == "project"
             # TODO: this doesn't seem right. How does one get the root path of the project here?
             # Maybe piggyback on `options` with some ridiculous identifier?
-            println("cd(NotebookState.PROJECT[])")
+            # We can't rely on `pwd`, because the notebook can change that.
             if isfile(NotebookState.PROJECT[])
                 cd(dirname(NotebookState.PROJECT[]))
             elseif isdir(NotebookState.PROJECT[])
@@ -19,7 +18,6 @@ function refresh!(path, original_options, options = original_options)
                 @warn "Project path not found: $(NotebookState.PROJECT[])"
             end
         else
-            println("cd(abspath(options[\"execute-dir\"])) => cd($(abspath(ed)))")
             cd(abspath(ed))
         end
     else
