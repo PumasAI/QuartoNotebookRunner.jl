@@ -14,6 +14,8 @@ function refresh!(path, original_options, options = original_options)
                 cd(dirname(NotebookState.PROJECT[]))
             elseif isdir(NotebookState.PROJECT[])
                 cd(NotebookState.PROJECT[])
+            elseif isdir(ed)
+                cd(ed)
             else
                 @warn "Project path not found: $(NotebookState.PROJECT[])"
             end
