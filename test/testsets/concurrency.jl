@@ -5,7 +5,7 @@
     @test_nowarn @sync begin
         for i = 1:20
             Threads.@spawn begin
-                run!(s, file)
+                run!(s, file; showprogress = false)
                 # files may be closed already by another task, that's ok
                 close!(s, file)
             end
