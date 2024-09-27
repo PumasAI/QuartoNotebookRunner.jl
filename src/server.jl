@@ -318,7 +318,8 @@ function raw_markdown_chunks_from_string(path::String, markdown::String)
     terminal_line = 1
     code_cells = false
     for (node, enter) in ast
-        if enter && (is_julia_toplevel(node) || is_python_toplevel(node) || is_r_toplevel(node))
+        if enter &&
+           (is_julia_toplevel(node) || is_python_toplevel(node) || is_r_toplevel(node))
             code_cells = true
             line = node.sourcepos[1][1]
             md = join(source_lines[terminal_line:(line-1)], "\n")
