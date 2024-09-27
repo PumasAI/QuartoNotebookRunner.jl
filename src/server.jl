@@ -936,9 +936,7 @@ function wrap_with_python_boilerplate(code)
     """
     @isdefined(PythonCall) && PythonCall isa Module && Base.PkgId(PythonCall).uuid == Base.UUID("6099a3de-0909-46bc-b1f4-468b9a2dfc0d") || error("PythonCall must be imported to execute Python code cells with QuartoNotebookRunner")
     let
-        code = \"""
-        $code
-        \"""
+        code = "$code"
 
         ast = PythonCall.pyimport("ast")
         tree = ast.parse(code)
