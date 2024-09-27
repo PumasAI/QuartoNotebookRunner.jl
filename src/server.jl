@@ -935,7 +935,56 @@ end
 function wrap_with_python_boilerplate(code)
     """
     @isdefined(PythonCall) && PythonCall isa Module && Base.PkgId(PythonCall).uuid == Base.UUID("6099a3de-0909-46bc-b1f4-468b9a2dfc0d") || error("PythonCall must be imported to execute Python code cells with QuartoNotebookRunner")
-    @py $code
+    let
+        code = \"""
+        $code
+        \"""
+
+        ast = PythonCall.pyimport("ast")
+        tree = ast.parse(code)
+
+        body = tree.body
+        
+        result = nothing
+        if body !== nothing
+            for (i, node) in enumerate(body)
+                nodecode = PythonCall.pyconvert(String, ast.unparse(node))
+                if i < length(body)
+                    PythonCall.pyexec(nodecode, Main.Notebook)
+                else
+                    eval_allowed_nodes = (
+                        ast.Expression,  # A wrapper for expressions in eval context
+                        ast.Expr,
+                        ast.BinOp,       # Binary operations like 1 + 1
+                        ast.BoolOp,      # Boolean operations like "and", "or"
+                        ast.Call,        # Function call like my_func()
+                        ast.Compare,     # Comparisons like a > b
+                        ast.Constant,    # Constants like numbers, strings (Python 3.8+)
+                        ast.Dict,        # Dictionary literals
+                        ast.List,        # List literals
+                        ast.Name,        # Variable names
+                        ast.Set,         # Set literals
+                        ast.Tuple,       # Tuple literals
+                        ast.UnaryOp,     # Unary operations like -1
+                        ast.Lambda       # Lambda functions
+                    )
+                    if any(t -> PythonCall.pyisinstance(node, t), eval_allowed_nodes)
+                        result = PythonCall.pyeval(Any, nodecode, Main.Notebook)
+                    else
+                        PythonCall.pyexec(nodecode, Main.Notebook)
+                        if PythonCall.pyisinstance(node, ast.Assign)
+                            for target in node.targets
+                                # TODO: how to know whether it's a single value or a one-element tuple?
+                                # currently throwing away results 2 to n
+                                result = PythonCall.pyeval(Any, ast.unparse(target), Main.Notebook)
+                            end
+                        end
+                    end
+                end
+            end
+        end
+        result
+    end
     """
 end
 
