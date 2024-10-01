@@ -71,7 +71,7 @@ jobs:
       - uses: julia-actions/setup-julia@a0a0978e28861c11a3490cee468f87d5b568851a # v2.5.0
         with:
           version: ${{ matrix.version }}
-      - uses: julia-actions/cache@8608484607cba0bdb5437a7bad85d6502499d029 # v2.0.4
+      - uses: julia-actions/cache@824243901fb567ccb490b0d0e2483ccecde46834 # v2.0.5
 
       - uses: r-lib/actions/setup-r@e6be4b3706e0f39bc7a4cf4496a5f2c4cb840040 # v2.10.1
         with:
