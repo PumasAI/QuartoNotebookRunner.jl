@@ -326,7 +326,8 @@ function raw_markdown_chunks_from_string(path::String, markdown::String)
     terminal_line = 1
     code_cells = false
     for (node, enter) in ast
-        if enter && (is_julia_toplevel(node) || is_r_toplevel(node))
+        if enter &&
+           (is_julia_toplevel(node) || is_python_toplevel(node) || is_r_toplevel(node))
             code_cells = true
             line = node.sourcepos[1][1]
             md = join(source_lines[terminal_line:(line-1)], "\n")
@@ -349,6 +350,7 @@ function raw_markdown_chunks_from_string(path::String, markdown::String)
             end
             language =
                 is_julia_toplevel(node) ? :julia :
+                is_python_toplevel(node) ? :python :
                 is_r_toplevel(node) ? :r : error("Unhandled code block language")
             push!(
                 raw_chunks,
@@ -788,6 +790,28 @@ function evaluate_raw_cells!(
                         # We also need to hide the real code cell in this case, which contains possible formatting
                         # settings in its YAML front-matter and which can therefore not be omitted entirely.
                         cell_options["echo"] = false
+                    elseif chunk.language === :python
+                        # Same reasoning as :r
+                        push!(
+                            cells,
+                            (;
+                                id = string(
+                                    expand_cell ? string(nth, "_", mth) : string(nth),
+                                    "_code_prefix",
+                                ),
+                                cell_type = :markdown,
+                                metadata = (;),
+                                source = process_cell_source(
+                                    """
+           ```python
+           $(strip_cell_options(chunk.source))
+           ```
+           """,
+                                    Dict(),
+                                ),
+                            ),
+                        )
+                        cell_options["echo"] = false
                     end
 
                     source = expand_cell ? remote.code : chunk.source
@@ -806,9 +830,9 @@ function evaluate_raw_cells!(
                 end
             end
         elseif chunk.type === :markdown
-            marker = r"{(?:julia|r)} "
+            marker = r"{(?:julia|r|python)} "
             source = chunk.source
-            if contains(chunk.source, r"`{(?:julia|r)} ")
+            if contains(chunk.source, r"`{(?:julia|r|python)} ")
                 parser = Parser()
                 for (node, enter) in parser(chunk.source)
                     if enter && node.t isa CommonMark.Code
@@ -816,6 +840,8 @@ function evaluate_raw_cells!(
                             source_code = replace(node.literal, marker => "")
                             if startswith(node.literal, "{r}")
                                 source_code = wrap_with_r_boilerplate(source_code)
+                            elseif startswith(node.literal, "{python}")
+                                source_code = wrap_with_python_boilerplate(source_code)
                             end
                             expr = :(render(
                                 $(source_code),
@@ -920,6 +946,60 @@ function strip_cell_options(source::AbstractString)
     join(lines[keep_from:end])
 end
 
+function wrap_with_python_boilerplate(code)
+    """
+    @isdefined(PythonCall) && PythonCall isa Module && Base.PkgId(PythonCall).uuid == Base.UUID("6099a3de-0909-46bc-b1f4-468b9a2dfc0d") || error("PythonCall must be imported to execute Python code cells with QuartoNotebookRunner")
+    let
+        code = "$code"
+
+        ast = PythonCall.pyimport("ast")
+        tree = ast.parse(code)
+
+        body = tree.body
+        
+        result = nothing
+        if body !== nothing
+            for (i, node) in enumerate(body)
+                nodecode = PythonCall.pyconvert(String, ast.unparse(node))
+                if i < length(body)
+                    PythonCall.pyexec(nodecode, Main.Notebook)
+                else
+                    eval_allowed_nodes = (
+                        ast.Expression,  # A wrapper for expressions in eval context
+                        ast.Expr,
+                        ast.BinOp,       # Binary operations like 1 + 1
+                        ast.BoolOp,      # Boolean operations like "and", "or"
+                        ast.Call,        # Function call like my_func()
+                        ast.Compare,     # Comparisons like a > b
+                        ast.Constant,    # Constants like numbers, strings (Python 3.8+)
+                        ast.Dict,        # Dictionary literals
+                        ast.List,        # List literals
+                        ast.Name,        # Variable names
+                        ast.Set,         # Set literals
+                        ast.Tuple,       # Tuple literals
+                        ast.UnaryOp,     # Unary operations like -1
+                        ast.Lambda       # Lambda functions
+                    )
+                    if any(t -> PythonCall.pyisinstance(node, t), eval_allowed_nodes)
+                        result = PythonCall.pyeval(Any, nodecode, Main.Notebook)
+                    else
+                        PythonCall.pyexec(nodecode, Main.Notebook)
+                        if PythonCall.pyisinstance(node, ast.Assign)
+                            for target in node.targets
+                                # TODO: how to know whether it's a single value or a one-element tuple?
+                                # currently throwing away results 2 to n
+                                result = PythonCall.pyeval(Any, ast.unparse(target), Main.Notebook)
+                            end
+                        end
+                    end
+                end
+            end
+        end
+        result
+    end
+    """
+end
+
 function wrap_with_r_boilerplate(code)
     """
     @isdefined(RCall) && RCall isa Module && Base.PkgId(RCall).uuid == Base.UUID("6f49c342-dc21-5d91-9882-a32aef131414") || error("RCall must be imported to execute R code cells with QuartoNotebookRunner")
@@ -934,6 +1014,8 @@ function transform_source(chunk)
         chunk.source
     elseif chunk.language === :r
         wrap_with_r_boilerplate(chunk.source)
+    elseif chunk.language === :python
+        wrap_with_python_boilerplate(chunk.source)
     else
         error("Unhandled code chunk language $(chunk.language)")
     end
@@ -1075,6 +1157,11 @@ Return `true` if `node` is a Julia toplevel code block.
 is_julia_toplevel(node) =
     node.t isa CommonMark.CodeBlock &&
     node.t.info == "{julia}" &&
+    node.parent.t isa CommonMark.Document
+
+is_python_toplevel(node) =
+    node.t isa CommonMark.CodeBlock &&
+    node.t.info == "{python}" &&
     node.parent.t isa CommonMark.Document
 
 is_r_toplevel(node) =
