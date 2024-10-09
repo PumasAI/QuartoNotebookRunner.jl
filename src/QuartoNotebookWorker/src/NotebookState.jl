@@ -12,7 +12,6 @@ function __init__()
     if ccall(:jl_generating_output, Cint, ()) == 0
         PROJECT[] = Base.active_project()
         OPTIONS[] = task_local_storage(:QUARTO_NOTEBOOK_WORKER_OPTIONS, Dict{String,Any}())
-        define_notebook_module!()
     end
 end
 
