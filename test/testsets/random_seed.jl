@@ -2,7 +2,8 @@ include("../utilities/prelude.jl")
 
 @testset "seeded random numbers are consistent across runs" begin
     mktempdir() do dir
-        content = read(joinpath(@__DIR__, "../examples/random_seed/random_seed.qmd"), String)
+        content =
+            read(joinpath(@__DIR__, "../examples/random_seed/random_seed.qmd"), String)
         cd(dir) do
             server = QuartoNotebookRunner.Server()
             write("notebook.qmd", content)
