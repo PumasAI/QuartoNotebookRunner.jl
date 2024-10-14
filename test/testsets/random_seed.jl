@@ -6,16 +6,13 @@ include("../utilities/prelude.jl")
         cd(dir) do
             server = QuartoNotebookRunner.Server()
             write("notebook.qmd", content)
-            ipynb = "notebook.ipynb"
-            outputfiles = ["first.ipynb", "second.ipynb"]
-            jsons = map(outputfiles) do output
+
+            jsons = map(1:2) do _
                 QuartoNotebookRunner.run!(
                     server,
                     "notebook.qmd";
-                    output,
                     showprogress = false,
                 )
-                JSON3.read(output)
             end
 
             _output(cell) = only(cell.outputs).data["text/plain"]
@@ -23,6 +20,8 @@ include("../utilities/prelude.jl")
             @test tryparse(Float64, _output(jsons[1].cells[2])) !== nothing
             @test tryparse(Float64, _output(jsons[1].cells[4])) !== nothing
             @test tryparse(Float64, _output(jsons[1].cells[6])) !== nothing
+
+            @test length(unique([_output(jsons[1].cells[i]) for i in [2, 4, 6]])) == 3
 
             @test _output(jsons[1].cells[2]) == _output(jsons[2].cells[2])
             @test _output(jsons[1].cells[4]) == _output(jsons[2].cells[4])
