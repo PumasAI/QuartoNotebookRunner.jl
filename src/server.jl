@@ -94,8 +94,8 @@ end
 
 function remote_eval_fetch_channeled(worker, expr)
     code = quote
-        put!(var"__stable_execution_task_channel_in", $(QuoteNode(expr)))
-        take!(var"__stable_execution_task_channel_out")
+        put!(stable_execution_task_channel_in, $(QuoteNode(expr)))
+        take!(stable_execution_task_channel_out)
     end
     return Malt.remote_eval_fetch(worker, code)
 end
