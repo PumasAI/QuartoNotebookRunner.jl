@@ -2,7 +2,7 @@ include("../utilities/prelude.jl")
 
 @testset "seeded random numbers are consistent across runs" begin
     mktempdir() do dir
-        content = read(joinpath(@__DIR__, "../examples/random_seed.qmd"), String)
+        content = read(joinpath(@__DIR__, "../examples/random_seed/random_seed.qmd"), String)
         cd(dir) do
             server = QuartoNotebookRunner.Server()
             write("notebook.qmd", content)
@@ -11,15 +11,7 @@ include("../utilities/prelude.jl")
                 QuartoNotebookRunner.run!(server, "notebook.qmd"; showprogress = false)
             end
 
-            function _output(cell)
-                try
-                    only(cell.outputs).data["text/plain"]
-                catch e
-                    @error "extracting outputs failed"
-                    display(cell)
-                    rethrow(e)
-                end
-            end
+            _output(cell) = only(cell.outputs).data["text/plain"]
 
             @test tryparse(Float64, _output(jsons[1].cells[2])) !== nothing
             @test tryparse(Float64, _output(jsons[1].cells[4])) !== nothing
