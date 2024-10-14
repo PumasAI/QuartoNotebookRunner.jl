@@ -8,11 +8,7 @@ include("../utilities/prelude.jl")
             write("notebook.qmd", content)
 
             jsons = map(1:2) do _
-                QuartoNotebookRunner.run!(
-                    server,
-                    "notebook.qmd";
-                    showprogress = false,
-                )
+                QuartoNotebookRunner.run!(server, "notebook.qmd"; showprogress = false)
             end
 
             _output(cell) = only(cell.outputs).data["text/plain"]
