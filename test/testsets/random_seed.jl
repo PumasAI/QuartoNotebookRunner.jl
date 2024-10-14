@@ -11,7 +11,15 @@ include("../utilities/prelude.jl")
                 QuartoNotebookRunner.run!(server, "notebook.qmd"; showprogress = false)
             end
 
-            _output(cell) = only(cell.outputs).data["text/plain"]
+            function _output(cell)
+                try
+                    only(cell.outputs).data["text/plain"]
+                catch e
+                    @error "extracting outputs failed"
+                    display(cell)
+                    rethrow(e)
+                end
+            end
 
             @test tryparse(Float64, _output(jsons[1].cells[2])) !== nothing
             @test tryparse(Float64, _output(jsons[1].cells[4])) !== nothing
