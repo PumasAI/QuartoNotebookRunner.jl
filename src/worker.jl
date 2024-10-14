@@ -4,8 +4,8 @@ function worker_init(f::File, options::Dict)
         return quote
             # issue #192
             # Malt itself uses a new task for each `remote_eval` and because of this, random number streams
-            # are not consistens across runs even if seeded, as each task introduces a new state for its
-            # task-local RNG. As a workaround, we use feed all `remote_eval` requests through these channels, such
+            # are not consistent across runs even if seeded, as each task introduces a new state for its
+            # task-local RNG. As a workaround, we feed all `remote_eval` requests through these channels, such
             # that the task executing code is always the same.
             const stable_execution_task_channel_out = Channel()
             const stable_execution_task_channel_in = Channel() do chan
