@@ -92,6 +92,14 @@ end
 
 # Implementation.
 
+function remote_eval_fetch_channeled(worker, expr)
+    code = quote
+        put!(stable_execution_task_channel_in, $(QuoteNode(expr)))
+        take!(stable_execution_task_channel_out)
+    end
+    return Malt.remote_eval_fetch(worker, code)
+end
+
 function init!(file::File, options::Dict)
     worker = file.worker
     Malt.remote_eval_fetch(worker, worker_init(file, options))
@@ -106,7 +114,7 @@ function refresh!(file::File, options::Dict)
         init!(file, options)
     end
     expr = :(refresh!($(options)))
-    Malt.remote_eval_fetch(file.worker, expr)
+    remote_eval_fetch_channeled(file.worker, expr)
 end
 
 """
@@ -648,7 +656,7 @@ function evaluate_raw_cells!(
                     $(chunk.cell_options),
                 ))
 
-                worker_results, expand_cell = Malt.remote_eval_fetch(f.worker, expr)
+                worker_results, expand_cell = remote_eval_fetch_channeled(f.worker, expr)
 
                 # When the result of the cell evaluation is a cell expansion
                 # then we insert the original cell contents before the expanded
@@ -827,7 +835,7 @@ function evaluate_raw_cells!(
                             # inline evaluation since you can't pass cell
                             # options and so `expand` will always be `false`.
                             worker_results, expand_cell =
-                                Malt.remote_eval_fetch(f.worker, expr)
+                                remote_eval_fetch_channeled(f.worker, expr)
                             expand_cell && error("inline code cells cannot be expanded")
                             remote = only(worker_results)
                             if !isnothing(remote.error)
@@ -888,7 +896,7 @@ function evaluate_params!(f, params::Dict{String})
         :(@eval getfield(Main, :Notebook) const $(Symbol(key::String)) = $value)
     end
     expr = Expr(:block, exprs...)
-    Malt.remote_eval_fetch(f.worker, expr)
+    remote_eval_fetch_channeled(f.worker, expr)
     return
 end
 
