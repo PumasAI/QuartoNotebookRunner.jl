@@ -11,8 +11,13 @@
 >
 > Starting from the **pre-release** [`v1.5.29`](https://github.com/quarto-dev/quarto-cli/releases/tag/v1.5.29)
 > this engine is available out-of-the-box with `quarto` when you set `engine: julia` in
-> your Quarto notebook files (setting it project-wide via `_quarto.yml` [is not yet supported](https://github.com/quarto-dev/quarto-cli/issues/3157)). You don't need to follow the developer instructions
-> below.
+> your Quarto Markdown files. You don't need to follow the developer instructions below. Note, however, the following Quarto upstream issues.
+>
+> #### [Scripts with the percent format](https://github.com/quarto-dev/quarto-cli/issues/10034)
+> QuartoNotebookRunner can process Julia scripts annotated with the [percent format](https://jupytext.readthedocs.io/en/latest/formats-scripts.html#the-percent-format) (see this [`test file`](test/examples/cell_types.jl) for an example). However, at the moment, Quarto [mistakenly assigns the Jupyter engine](https://github.com/quarto-dev/quarto-cli/issues/10034#issuecomment-2174251544) as soon as the percent format is detected, even if the Julia engine is explicitly set in the script header. A somewhat unsatisfactory workaround is to move the code of interest to a Quarto Markdown file. Alternatively, it is still possible to render individual Julia scripts using QuartoNotebookRunner directly, as described in the [Usage](#usage) section below. Quarto projects including Julia scripts can not be rendered until the upstream issue is resolved.
+>
+> #### [Project-wide engine](https://github.com/quarto-dev/quarto-cli/issues/3157)
+> If you are working with [Quarto Projects](https://quarto.org/docs/projects/quarto-projects.html), be aware that Quarto is failing to set the project-wide engine given in the `_quarto.yml` project file. A simple workaround is to set the Julia engine in each Quarto Markdown file of your project.
 
 ## Developer Documentation
 
