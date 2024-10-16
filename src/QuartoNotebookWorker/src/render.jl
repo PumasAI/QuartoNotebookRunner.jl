@@ -119,12 +119,24 @@ function _render_thunk(
     end
 end
 
-# Setting the `helpmode` module isn't an option on Julia 1.6 so we need to
-# manually replace `Main` with the module we want.
 function _helpmode(code::AbstractString, mod::Module)
-    ex = REPL.helpmode(code)
-    return postwalk(ex) do x
-        return x == Main ? mod : x
+    @static if VERSION < v"1.11.0"
+        # Earlier versions of Julia don't have the `helpmode` method that takes
+        # `io`, `code`, `mod` and so we have to manually alter the returned
+        # expression instead.
+        ex = REPL.helpmode(code)
+        ex = postwalk(ex) do x
+            return x == Main ? mod : x
+        end
+        # helpmode embeds object references to `stdout` into the expression, but
+        # since we are capturing the output it refers to a different stream. We
+        # need to replace the first `stdout` reference with `:stdout` and remove
+        # the argument from the other call so that it uses the redirected one.
+        ex.args[2] = :stdout
+        deleteat!(ex.args[end].args, 3)
+        return ex
+    else
+        return :(Core.eval($(mod), $(REPL).helpmode(stdout, $(code), $(mod))))
     end
 end
 
@@ -138,15 +150,6 @@ function _process_code(
     if startswith(code, help_regex)
         code = String(chomp(replace(code, help_regex => ""; count = 1)))
         ex = _helpmode(code, mod)
-
-        # helpmode embeds object references to `stdout` into the
-        # expression, but since we are capturing the output it refers to
-        # a different stream. We need to replace the first `stdout`
-        # reference with `:stdout` and remove the argument from the
-        # other call so that it uses the redirected one.
-        ex.args[2] = :stdout
-        deleteat!(ex.args[end].args, 3)
-
         return Expr(:toplevel, ex)
     end
 
@@ -166,19 +169,16 @@ function _process_code(
     pkg_regex = r"^\s*\]"
     if startswith(code, pkg_regex)
         code = String(chomp(replace(code, pkg_regex => ""; count = 1)))
-        return Expr(
-            :toplevel,
-            :(
-                let printed = $(Pkg).REPLMode.PRINTED_REPL_WARNING[]
-                    $(Pkg).REPLMode.PRINTED_REPL_WARNING[] = true
-                    try
-                        $(Pkg).REPLMode.do_cmd($(Pkg).REPLMode.MiniREPL(), $code)
-                    finally
-                        $(Pkg).REPLMode.PRINTED_REPL_WARNING[] = printed
-                    end
+        return Expr(:toplevel, :(
+            let printed = $(Pkg).REPLMode.PRINTED_REPL_WARNING[]
+                $(Pkg).REPLMode.PRINTED_REPL_WARNING[] = true
+                try
+                    $(Pkg).REPLMode.@pkg_str $code
+                finally
+                    $(Pkg).REPLMode.PRINTED_REPL_WARNING[] = printed
                 end
-            ),
-        )
+            end
+        ))
     end
 
     return _parseall(code; filename, lineno)
