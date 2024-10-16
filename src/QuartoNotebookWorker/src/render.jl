@@ -119,10 +119,11 @@ function _render_thunk(
     end
 end
 
-# Setting the `helpmode` module isn't an option on Julia 1.6 so we need to
-# manually replace `Main` with the module we want.
 function _helpmode(code::AbstractString, mod::Module)
     @static if VERSION < v"1.11.0"
+        # Earlier versions of Julia don't have the `helpmode` method that takes
+        # `io`, `code`, `mod` and so we have to manually alter the returned
+        # expression instead.
         ex = REPL.helpmode(code)
         ex = postwalk(ex) do x
             return x == Main ? mod : x
