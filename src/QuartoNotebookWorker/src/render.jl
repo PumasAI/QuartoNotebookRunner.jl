@@ -57,7 +57,7 @@ function _render_thunk(
             return ((;
                 code = "", # an expanded cell that errored can't have returned code
                 cell_options = Dict{String,Any}(), # or options
-                results = Dict{String,@NamedTuple{error::Bool, data::Vector{UInt8}}}(),
+                results = Dict{String,@NamedTuple{error::Bool,data::Vector{UInt8}}}(),
                 display_results,
                 output = captured.output,
                 error = string(typeof(error)),
@@ -294,7 +294,7 @@ function clean_bt_str(is_error::Bool, bt, err, prefix = "", mimetype = false)
 
     if mimetype
         non_worker = findfirst(x -> contains(String(x.file), @__FILE__), bt)
-        bt = bt[1:max(something(non_worker, length(bt)) - 3, 0)]
+        bt = bt[1:max(something(non_worker, length(bt))-3, 0)]
     end
 
     buf = IOBuffer()
@@ -329,7 +329,7 @@ function render_mimetypes(value, cell_options; inline::Bool = false)
     options = NotebookState.OPTIONS[]
     to_format = rget(options, ("format", "pandoc", "to"), nothing)
 
-    result = Dict{String,@NamedTuple{error::Bool, data::Vector{UInt8}}}()
+    result = Dict{String,@NamedTuple{error::Bool,data::Vector{UInt8}}}()
     # Some output formats that we want to write to need different
     # handling of valid MIME types. Currently `docx` and `typst`. When
     # we detect that the `to` format is one of these then we select a
@@ -417,7 +417,7 @@ function render_mimetypes(value, cell_options; inline::Bool = false)
     return result
 end
 render_mimetypes(value::Nothing, cell_options; inline::Bool = false) =
-    Dict{String,@NamedTuple{error::Bool, data::Vector{UInt8}}}()
+    Dict{String,@NamedTuple{error::Bool,data::Vector{UInt8}}}()
 
 
 # Our custom MIME types need special handling. They get rendered to
