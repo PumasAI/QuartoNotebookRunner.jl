@@ -1017,7 +1017,7 @@ values. We do here rather than in the worker because we don't want to have to
 define additional functions in the worker and import `Base64` there. The worker
 just has to provide bytes.
 """
-function process_results(dict::Dict{String,@NamedTuple{error::Bool, data::Vector{UInt8}}})
+function process_results(dict::Dict{String,@NamedTuple{error::Bool,data::Vector{UInt8}}})
     funcs = Dict(
         "application/json" => json_reader,
         "application/pdf" => Base64.base64encode,
