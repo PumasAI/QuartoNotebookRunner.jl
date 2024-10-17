@@ -60,15 +60,15 @@ jobs:
             os: windows-latest
           # Performance regressions on Julia 1.11 on Windows. Currently not
           # viable to run the test suite there.
-          - version: "1.11"
-            os: windows-latest
+          # - version: "1.11"
+          #   os: windows-latest
         include:
           - version: "1.7"
             os: macos-13
           - version: "1.7"
             os: windows-latest
-          - version: "1.10"
-            os: windows-latest
+          # - version: "1.10"
+          #   os: windows-latest
     steps:
       - uses: actions/checkout@d632683dd7b4114ad314bca15554477dd762a938 # v4.2.0
         with:
