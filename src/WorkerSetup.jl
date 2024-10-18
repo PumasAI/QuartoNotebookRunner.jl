@@ -24,7 +24,7 @@ import TOML
 # Vendored packages.
 
 import IOCapture
-import PackageExtensionCompat
+import Requires
 
 # Dependency detection.
 
@@ -103,7 +103,7 @@ end
 const VENDORED_PACKAGES = package_information([
     # This contains the entry point files for each vendored package.
     IOCapture,
-    PackageExtensionCompat,
+    Requires,
 ])
 
 # So that we key the loader environment on the vendored package versions.

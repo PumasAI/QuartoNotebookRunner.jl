@@ -1,7 +1,7 @@
 module QuartoNotebookWorkerMakieExt
 
 import QuartoNotebookWorker
-import Makie
+import ..Makie
 
 function configure()
     fm = QuartoNotebookWorker._figure_metadata()

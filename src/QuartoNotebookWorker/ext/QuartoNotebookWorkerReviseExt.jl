@@ -1,6 +1,6 @@
 module QuartoNotebookWorkerReviseExt
 
-import Revise
+import ..Revise
 import QuartoNotebookWorker
 
 function __init__()

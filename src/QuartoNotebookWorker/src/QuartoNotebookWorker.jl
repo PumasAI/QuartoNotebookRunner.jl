@@ -72,12 +72,49 @@ include("packages.jl")
 
 end
 
-# Handle older versions of Julia that don't have support for package extensions.
-# Note that this macro must be called in the root-module of a package, otherwise
-# `pathof(__module__)` will be `nothing`.
-import .Packages.PackageExtensionCompat: @require_extensions
+# TODO: currently we cannot use package extensions for this code that is loaded
+# via `Requires.jl` since we appear to have encountered a potential bug with
+# the combination of a system image that contains dependencies that are
+# referenced below, versions of Julia from  1.10.5 onwards, and package
+# extensions that triggers cyclic dependency check errors even though they
+# appear, at least on the surface, to be false positives.
+import .Packages.Requires
 function __init__()
-    @require_extensions
+    Requires.@require CairoMakie = "13f3f980-e62b-5c42-98c6-ff1f3baf88f0" include(
+        "../ext/QuartoNotebookWorkerCairoMakieExt.jl",
+    )
+    Requires.@require DataFrames = "a93c6f00-e57d-5684-b7b6-d8193f3e46c0" begin
+        Requires.@require Tables = "bd369af6-aec1-5ad0-b16a-f7cc5008161c" include(
+            "../ext/QuartoNotebookWorkerDataFramesTablesExt.jl",
+        )
+    end
+    Requires.@require JSON = "682c06a0-de6a-54ab-a142-c8b1cf79cde6" include(
+        "../ext/QuartoNotebookWorkerJSONExt.jl",
+    )
+    Requires.@require LaTeXStrings = "b964fa9f-0449-5b57-a5c2-d3ea65f4040f" include(
+        "../ext/QuartoNotebookWorkerLaTeXStringsExt.jl",
+    )
+    Requires.@require Makie = "ee78f7c6-11fb-53f2-987a-cfe4a2b5a57a" include(
+        "../ext/QuartoNotebookWorkerMakieExt.jl",
+    )
+    Requires.@require PlotlyBase = "a03496cd-edff-5a9b-9e67-9cda94a718b5" include(
+        "../ext/QuartoNotebookWorkerPlotlyBaseExt.jl",
+    )
+    Requires.@require PlotlyJS = "f0f68f2c-4968-5e81-91da-67840de0976a" include(
+        "../ext/QuartoNotebookWorkerPlotlyJSExt.jl",
+    )
+    Requires.@require Plots = "91a5bcdd-55d7-5caf-9e0b-520d859cae80" include(
+        "../ext/QuartoNotebookWorkerPlotsExt.jl",
+    )
+    Requires.@require RCall = "6f49c342-dc21-5d91-9882-a32aef131414" include(
+        "../ext/QuartoNotebookWorkerRCallExt.jl",
+    )
+    Requires.@require Revise = "295af30f-e4ad-537b-8983-00126c2a3abe" include(
+        "../ext/QuartoNotebookWorkerReviseExt.jl",
+    )
+    Requires.@require SymPyCore = "458b697b-88f0-4a86-b56b-78b75cfb3531" include(
+        "../ext/QuartoNotebookWorkerSymPyCoreExt.jl",
+    )
 end
 
 # Imports.

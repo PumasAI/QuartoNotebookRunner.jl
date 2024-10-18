@@ -1,7 +1,7 @@
 module QuartoNotebookWorkerLaTeXStringsExt
 
 import QuartoNotebookWorker as QNW
-import LaTeXStrings as LS
+import ..LaTeXStrings as LS
 
 QNW._mimetype_wrapper(s::LS.LaTeXString) = LaTeXStringWrapper(s)
 

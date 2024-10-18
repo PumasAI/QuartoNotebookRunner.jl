@@ -1,7 +1,7 @@
 module QuartoNotebookWorkerPlotsExt
 
 import QuartoNotebookWorker
-import Plots
+import ..Plots
 
 function configure()
     fm = QuartoNotebookWorker._figure_metadata()
