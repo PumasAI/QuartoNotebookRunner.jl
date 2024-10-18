@@ -1,7 +1,7 @@
 module QuartoNotebookWorkerSymPyCoreExt
 
 import QuartoNotebookWorker as QNW
-import SymPyCore as SPC
+import ..SymPyCore as SPC
 
 QNW._mimetype_wrapper(s::SPC.SymbolicObject) = SymWrapper(s)
 QNW._mimetype_wrapper(s::AbstractArray{<:SPC.Sym}) = SymWrapper(s)

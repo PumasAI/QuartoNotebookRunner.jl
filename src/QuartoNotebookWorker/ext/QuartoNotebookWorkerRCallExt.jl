@@ -1,7 +1,7 @@
 module QuartoNotebookWorkerRCallExt
 
 import QuartoNotebookWorker
-import RCall
+import ..RCall
 
 const RCall_temp_files_ref = Ref{String}()
 const rcalljl_device_ref = Ref{Symbol}(:png)

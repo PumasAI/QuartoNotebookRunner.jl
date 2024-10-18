@@ -1,7 +1,7 @@
 module QuartoNotebookWorkerJSONExt
 
 import QuartoNotebookWorker
-import JSON
+import ..JSON
 
 function QuartoNotebookWorker._ojs_define(::QuartoNotebookWorker.OJSDefine, kwargs)
     contents = QuartoNotebookWorker.ojs_convert(kwargs)
