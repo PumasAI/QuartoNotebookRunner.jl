@@ -15,14 +15,19 @@ include("../utilities/prelude.jl")
 
     file = joinpath(@__DIR__, "../examples/exeflags_merging.qmd")
 
-    withenv("QUARTONOTEBOOKRUNNER_EXEFLAGS" => "[\"--project=/set_via_env\", \"--threads=3\"]") do
+    withenv(
+        "QUARTONOTEBOOKRUNNER_EXEFLAGS" => "[\"--project=/set_via_env\", \"--threads=3\"]",
+    ) do
         server = QuartoNotebookRunner.Server()
         json = QuartoNotebookRunner.run!(server, file; showprogress = false)
         @test contains(json.cells[2].outputs[1].text, "set_via_env")
         @test json.cells[4].outputs[1].text == "3"
         close!(server)
 
-        with_replacement_file(file, "[]" => "[\"--project=/override_via_frontmatter\"]") do newfile
+        with_replacement_file(
+            file,
+            "[]" => "[\"--project=/override_via_frontmatter\"]",
+        ) do newfile
             server = QuartoNotebookRunner.Server()
             json = QuartoNotebookRunner.run!(server, newfile; showprogress = false)
             @test contains(json.cells[2].outputs[1].text, "override_via_frontmatter")

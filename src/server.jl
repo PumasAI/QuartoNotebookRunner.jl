@@ -64,7 +64,8 @@ function _extract_timeout(merged_options)
 end
 
 function _exeflags_and_env(options)
-    env_exeflags = JSON3.read(get(ENV, "QUARTONOTEBOOKRUNNER_EXEFLAGS", "[]"), Vector{String})
+    env_exeflags =
+        JSON3.read(get(ENV, "QUARTONOTEBOOKRUNNER_EXEFLAGS", "[]"), Vector{String})
     options_exeflags = map(String, options["format"]["metadata"]["julia"]["exeflags"])
     # We want to be able to override exeflags that are defined via environment variable,
     # but leave the remaining flags intact (for example override number of threads but leave sysimage).
