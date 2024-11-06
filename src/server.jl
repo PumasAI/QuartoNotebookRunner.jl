@@ -547,7 +547,7 @@ function default_frontmatter()
     env = JSON3.read(get(ENV, "QUARTONOTEBOOKRUNNER_ENV", "[]"), Vector{String})
     return D(
         "fig-format" => "png",
-        "julia" => D("env" => env),
+        "julia" => D("env" => env, "exeflags" => []),
         "execute" => D("error" => true),
     )
 end
