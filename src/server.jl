@@ -64,7 +64,14 @@ function _extract_timeout(merged_options)
 end
 
 function _exeflags_and_env(options)
-    exeflags = map(String, options["format"]["metadata"]["julia"]["exeflags"])
+    env_exeflags =
+        JSON3.read(get(ENV, "QUARTONOTEBOOKRUNNER_EXEFLAGS", "[]"), Vector{String})
+    options_exeflags = map(String, options["format"]["metadata"]["julia"]["exeflags"])
+    # We want to be able to override exeflags that are defined via environment variable,
+    # but leave the remaining flags intact (for example override number of threads but leave sysimage).
+    # We can do this by adding the options exeflags after the env exeflags.
+    # Julia will ignore earlier uses of the same flag.
+    exeflags = [env_exeflags; options_exeflags]
     env = map(String, options["format"]["metadata"]["julia"]["env"])
     # Use `--project=@.` if neither `JULIA_PROJECT=...` nor `--project=...` are specified
     if !any(startswith("JULIA_PROJECT="), env) && !any(startswith("--project="), exeflags)
@@ -537,11 +544,10 @@ end
 
 function default_frontmatter()
     D = Dict{String,Any}
-    exeflags = JSON3.read(get(ENV, "QUARTONOTEBOOKRUNNER_EXEFLAGS", "[]"), Vector{String})
     env = JSON3.read(get(ENV, "QUARTONOTEBOOKRUNNER_ENV", "[]"), Vector{String})
     return D(
         "fig-format" => "png",
-        "julia" => D("exeflags" => exeflags, "env" => env),
+        "julia" => D("env" => env, "exeflags" => []),
         "execute" => D("error" => true),
     )
 end
