@@ -11,11 +11,14 @@ test_example(joinpath(@__DIR__, "../../examples/integrations/RCall.qmd")) do jso
           Dict("width" => 600, "height" => 450)
 end
 
-test_example(joinpath(@__DIR__, "../../examples/integrations/RCallSVG.qmd")) do json
-    cells = json["cells"]
-    cell = cells[4]
-    output = cell["outputs"][1]
+# Don't run this on macOS CI, since that appears to be missing the required libs.
+if !(get(ENV, "CI", "false") == "true" && Sys.isapple())
+    test_example(joinpath(@__DIR__, "../../examples/integrations/RCallSVG.qmd")) do json
+        cells = json["cells"]
+        cell = cells[4]
+        output = cell["outputs"][1]
 
-    @test !isempty(output["data"]["image/svg+xml"])
-    @test isempty(cell["outputs"][1]["metadata"])
+        @test !isempty(output["data"]["image/svg+xml"])
+        @test isempty(cell["outputs"][1]["metadata"])
+    end
 end
