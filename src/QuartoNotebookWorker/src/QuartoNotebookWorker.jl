@@ -86,6 +86,7 @@ import InteractiveUtils
 import Logging
 import Pkg
 import REPL
+import Random
 
 # Includes.
 
