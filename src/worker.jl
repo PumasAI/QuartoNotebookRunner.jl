@@ -17,6 +17,26 @@ function worker_init(f::File, options::Dict)
 
             push!(LOAD_PATH, $(project))
 
+            # When a manifest already exists ensure the environment is able to
+            # be precompiled with the version of Julia that is using it. If we
+            # just proceed to import `QuartoNotebookWorker` directly then these
+            # potential errors are not passed back to the server process, thus
+            # hiding the issues.
+            let
+                _isfile(::Any) = false
+                _isfile(s::AbstractString) = Base.isfile(s)
+                project = Base.active_project()
+                if _isfile(project)
+                    manifest = Base.project_file_manifest_path(project)
+                    if _isfile(manifest)
+                        pushfirst!(LOAD_PATH, "@stdlib")
+                        import Pkg
+                        popfirst!(LOAD_PATH)
+                        Pkg.precompile(; strict = true) # Throws an error when it fails.
+                    end
+                end
+            end
+
             let QNW = task_local_storage(:QUARTO_NOTEBOOK_WORKER_OPTIONS, $(options)) do
                     Base.require(
                         Base.PkgId(
