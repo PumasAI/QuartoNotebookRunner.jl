@@ -1,7 +1,7 @@
 module QuartoNotebookWorkerPlotlyBaseExt
 
 import QuartoNotebookWorker
-import PlotlyBase
+import ..PlotlyBase
 
 struct PlotlyBasePlotWithoutRequireJS
     plot::PlotlyBase.Plot
