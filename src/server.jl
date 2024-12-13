@@ -8,6 +8,8 @@ mutable struct File
     lock::ReentrantLock
     timeout::Float64
     timeout_timer::Union{Nothing,Timer}
+    run_started::Union{Nothing,Dates.DateTime}
+    run_finished::Union{Nothing,Dates.DateTime}
 
     function File(path::String, options::Union{String,Dict{String,Any}})
         if isfile(path)
@@ -22,7 +24,7 @@ mutable struct File
                 timeout = _extract_timeout(merged_options)
 
                 worker = cd(() -> Malt.Worker(; exeflags, env), dirname(path))
-                file = new(worker, path, exeflags, env, ReentrantLock(), timeout, nothing)
+                file = new(worker, path, exeflags, env, ReentrantLock(), timeout, nothing, nothing, nothing)
                 init!(file, merged_options)
                 return file
             else
@@ -1110,7 +1112,10 @@ function run!(
             close(file.timeout_timer)
             file.timeout_timer = nothing
         end
+        file.run_started = Dates.now()
+        file.run_finished = nothing
         result = evaluate!(file, output; showprogress, options, markdown, chunk_callback)
+        file.run_finished = Dates.now()
         if file.timeout > 0
             file.timeout_timer = Timer(file.timeout) do _
                 close!(server, file.path)
