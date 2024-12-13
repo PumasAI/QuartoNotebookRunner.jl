@@ -44,7 +44,7 @@ should match the following schema:
 
 ```json
 {
-    type: "run" | "close" | "stop" | "isopen" | "isready"
+    type: "run" | "close" | "stop" | "isopen" | "isready" | "workers"
     content: string | { file: string, options: string | { ... } }
 }
 ```
@@ -76,6 +76,12 @@ A description of the message types:
 
  -  `isready` - Returns `true` if the server is ready to accept commands. Should
     never return `false`.
+
+-   `workers` - Returns a vector of objects where each object has the following fields
+        - `path: string`: The path to the worker's input file
+        - `run_started?: string`: A datetime string specifying the current or last run's start time
+        - `run_finished?: string`: A datetime string specifying the current or last run's finish time
+        - `timeout: number`: The timeout duration in seconds that has been set for the worker
 """
 function serve(;
     port = nothing,
@@ -222,8 +228,12 @@ function _handle_response(
     @debug "debugging" request notebooks = collect(keys(notebooks.workers))
     type = request.type
 
-    type in ("close", "run", "isopen") ||
+    type in ("close", "run", "isopen", "workers") ||
         return _write_json(socket, _log_error("Unknown request type: $type"))
+
+    if type == "workers"
+        return _write_json(socket, workers_status(notebooks))
+    end
 
     file = _get_file(request.content)
 
@@ -418,5 +428,18 @@ if !isdefined(Base, :errormonitor)
         end
         Base._wait2(t, t2)
         return t
+    end
+end
+
+function workers_status(server::Server)
+    lock(server.lock) do
+        map(values(server.workers)) do file::File
+            (;
+                file.path,
+                file.run_started,
+                file.run_finished,
+                file.timeout,
+            )
+        end
     end
 end
