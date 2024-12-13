@@ -21,6 +21,7 @@ module QuartoNotebookRunner
 import Base64
 import CommonMark
 import Compat
+import Dates
 import IOCapture
 import InteractiveUtils
 import IterTools
