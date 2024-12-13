@@ -162,7 +162,7 @@ function serve(;
                 break
             end
             if !isnothing(socket)
-                Threads.@spawn while isopen(socket)
+                subtask = Threads.@spawn while isopen(socket)
                     @debug "Waiting for request"
                     data = readline(socket; keep = true)
                     if isempty(data)
@@ -202,6 +202,7 @@ function serve(;
                         end
                     end
                 end
+                errormonitor(subtask)
             end
         end
         @debug "Server closed."
