@@ -77,11 +77,15 @@ A description of the message types:
  -  `isready` - Returns `true` if the server is ready to accept commands. Should
     never return `false`.
 
--   `workers` - Returns a vector of objects where each object has the following fields
-        - `path: string`: The path to the worker's input file
-        - `run_started?: string`: A datetime string specifying the current or last run's start time
-        - `run_finished?: string`: A datetime string specifying the current or last run's finish time
-        - `timeout: number`: The timeout duration in seconds that has been set for the worker
+-   `workers` - Returns a vector of objects with the following schema:
+        ```ts
+        {
+            path: string // The path to the worker's input file
+            run_started?: string // A datetime string specifying the current or last run's start time
+            run_finished?: string // A datetime string specifying the current or last run's finish time
+            timeout: number // The timeout duration in seconds that has been set for the worker
+        }
+        ```
 """
 function serve(;
     port = nothing,
@@ -232,6 +236,7 @@ function _handle_response(
         return _write_json(socket, _log_error("Unknown request type: $type"))
 
     if type == "workers"
+        error("Some error occurred sadly")
         return _write_json(socket, workers_status(notebooks))
     end
 
