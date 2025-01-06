@@ -6,6 +6,7 @@ import JSON3
 import JSONSchema
 import NodeJS_18_jll
 import quarto_jll
+import Dates
 
 if !@isdefined(SCHEMA)
     SCHEMA = JSONSchema.Schema(
