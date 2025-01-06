@@ -236,7 +236,6 @@ function _handle_response(
         return _write_json(socket, _log_error("Unknown request type: $type"))
 
     if type == "workers"
-        error("Some error occurred sadly")
         return _write_json(socket, workers_status(notebooks))
     end
 
