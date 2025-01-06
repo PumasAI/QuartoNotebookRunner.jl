@@ -24,7 +24,17 @@ mutable struct File
                 timeout = _extract_timeout(merged_options)
 
                 worker = cd(() -> Malt.Worker(; exeflags, env), dirname(path))
-                file = new(worker, path, exeflags, env, ReentrantLock(), timeout, nothing, nothing, nothing)
+                file = new(
+                    worker,
+                    path,
+                    exeflags,
+                    env,
+                    ReentrantLock(),
+                    timeout,
+                    nothing,
+                    nothing,
+                    nothing,
+                )
                 init!(file, merged_options)
                 return file
             else

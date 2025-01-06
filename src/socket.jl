@@ -438,12 +438,7 @@ end
 function workers_status(server::Server)
     lock(server.lock) do
         map(values(server.workers)) do file::File
-            (;
-                file.path,
-                file.run_started,
-                file.run_finished,
-                file.timeout,
-            )
+            (; file.path, file.run_started, file.run_finished, file.timeout)
         end
     end
 end
