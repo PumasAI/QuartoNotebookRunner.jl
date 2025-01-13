@@ -1,0 +1,43 @@
+name: Pluto backend tests
+
+# Controls when the action will run. Triggers the workflow on push or pull request
+# events but only for the main branch
+on:
+    workflow_dispatch:
+    push:
+        paths-ignore:
+            - '**.md'
+        branches:
+            - main
+    pull_request:
+        paths-ignore:
+            - '**.md'
+
+# A workflow run is made up of one or more jobs that can run sequentially or in parallel
+jobs:
+    test:
+        runs-on: ${{ matrix.os }}
+        timeout-minutes: 25
+
+        strategy:
+            # Without setting this, a failing test cancels all others
+            fail-fast: false
+            matrix:
+                # We test quite a lot of versions because we do some OS and version specific things unfortunately
+                julia-version: ['1.6', '1.7', '1.8', '1.9', '1.10', 'nightly'] # "~1.11.0-0", 
+                os: [ubuntu-latest, macOS-latest, windows-latest]
+
+        steps:
+            # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
+            - uses: actions/checkout@v4
+
+            # Makes thes `julia` command available
+            - uses: julia-actions/setup-julia@v2
+              with:
+                  version: ${{ matrix.julia-version }}
+                  arch: ${{ (matrix.julia-version == '1.6' || matrix.julia-version == '1.7') && 'x64' || runner.arch }}
+
+            - uses: julia-actions/cache@v2
+
+            # 🚗
+            - uses: julia-actions/julia-runtest@v1

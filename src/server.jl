@@ -21,7 +21,9 @@ mutable struct File
                 exeflags, env = _exeflags_and_env(merged_options)
                 timeout = _extract_timeout(merged_options)
 
-                worker = cd(() -> Malt.Worker(; exeflags, env), dirname(path))
+                exe, _exeflags = _julia_exe(exeflags)
+                worker =
+                    cd(() -> Malt.Worker(; exe, exeflags = _exeflags, env), dirname(path))
                 file = new(worker, path, exeflags, env, ReentrantLock(), timeout, nothing)
                 init!(file, merged_options)
                 return file
@@ -36,6 +38,26 @@ mutable struct File
             throw(ArgumentError("file does not exist: $path"))
         end
     end
+end
+
+function _julia_exe(exeflags)
+    # Find the `julia` executable to use for this worker process. If the
+    # `juliaup` command is available, we can use plain `julia` if a channel has
+    # been provided in the exeflags. The channel exeflag is dropped from the
+    # exeflags vector so that it isn't provided twice, the second of which
+    # would be treated as a file name.
+    if all(!isnothing, Sys.which.(("juliaup", "julia")))
+        indices = findall(startswith("+"), exeflags)
+        if length(indices) == 1
+            # Pull out the channel from the exeflags.
+            channel = exeflags[only(indices)]
+            exeflags = exeflags[setdiff(1:end, indices)]
+            return `julia $channel`, exeflags
+        end
+    end
+    # Just use the current `julia` if there is no `juliaup` command available
+    # or no channel provided.
+    return Base.julia_cmd()[1], exeflags
 end
 
 function _extract_timeout(merged_options)
@@ -116,7 +138,9 @@ function refresh!(file::File, options::Dict)
     exeflags, env = _exeflags_and_env(options)
     if exeflags != file.exeflags || env != file.env || !Malt.isrunning(file.worker) # the worker might have been killed on another task
         Malt.stop(file.worker)
-        file.worker = cd(() -> Malt.Worker(; exeflags, env), dirname(file.path))
+        exe, _exeflags = _julia_exe(exeflags)
+        file.worker =
+            cd(() -> Malt.Worker(; exe, exeflags = _exeflags, env), dirname(file.path))
         file.exeflags = exeflags
         init!(file, options)
     end
@@ -151,17 +175,18 @@ function evaluate!(
         merged_options = _extract_relevant_options(file_frontmatter, options)
         cells =
             evaluate_raw_cells!(f, raw_chunks, merged_options; showprogress, chunk_callback)
+        version = _get_julia_version(f)
         data = (
             metadata = (
                 kernelspec = (
-                    display_name = "Julia $(VERSION)",
+                    display_name = "Julia $(version)",
                     language = "julia",
-                    name = "julia-$(VERSION)",
+                    name = "julia-$(version)",
                 ),
                 kernel_info = (name = "julia",),
                 language_info = (
                     name = "julia",
-                    version = VERSION,
+                    version = version,
                     codemirror_mode = "julia",
                 ),
             ),
@@ -174,6 +199,10 @@ function evaluate!(
         throw(ArgumentError("file does not exist: $(path)"))
     end
 end
+
+# The version of `julia` for a particular notebook file might not be the same
+# as the runner process, so query the worker for this value.
+_get_julia_version(f::File) = remote_eval_fetch_channeled(f.worker, :(string(VERSION)))
 
 function _extract_relevant_options(file_frontmatter::Dict, options::Dict)
     D = Dict{String,Any}

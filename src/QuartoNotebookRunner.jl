@@ -26,7 +26,7 @@ import InteractiveUtils
 import IterTools
 import JSON3
 import Logging
-import Malt
+include("vendor/Malt/src/Malt.jl")
 import PrecompileTools
 import ProgressLogging
 import REPL

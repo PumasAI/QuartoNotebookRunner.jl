@@ -74,9 +74,15 @@ jobs:
         with:
           persist-credentials: false
 
-      - uses: julia-actions/setup-julia@5c9647d97b78a5debe5164e9eec09d653d29bd71 # v2.6.1
+      - uses: julia-actions/install-juliaup@1da6847c869cd68e3a32b8f52fe8f005b8cd5ece # v2.2.1
         with:
-          version: ${{ matrix.version }}
+          channel: "${{ matrix.version }}"
+
+      # These versions of `julia` are used for the cross-version notebook tests.
+      - run: juliaup add 1.9.4
+      - run: juliaup add 1.10.7
+      - run: juliaup add 1.11.2
+
       - uses: julia-actions/cache@824243901fb567ccb490b0d0e2483ccecde46834 # v2.0.5
 
       - uses: r-lib/actions/setup-r@473c68190595b311a74f208fba61a8d8c0d4c247 # v2.11.1

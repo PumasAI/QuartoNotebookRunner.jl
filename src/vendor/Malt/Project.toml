@@ -1,0 +1,23 @@
+name = "Malt"
+uuid = "36869731-bdee-424d-aa32-cab38c994e3b"
+authors = ["Sergio Alejandro Vargas <savargasqu+git@unal.edu.co>"]
+version = "1.1.2"
+
+[deps]
+Distributed = "8ba89e20-285c-5b6f-9357-94700520ee1b"
+Logging = "56ddb016-857b-54e1-b83d-db4d58db5568"
+RelocatableFolders = "05181044-ff0b-4ac5-8273-598c1e38db00"
+Serialization = "9e88b42a-f829-5b0c-bbe9-9e923198166b"
+Sockets = "6462fe0b-24de-5631-8697-dd941f90decc"
+
+[compat]
+RelocatableFolders = "1"
+julia = "^1.6"
+
+[extras]
+BenchmarkTools = "6e4b80f9-dd63-53aa-95a3-0cdb28fa8baf"
+Random = "9a3f8284-a2c9-5f02-9a11-845980a1fd5c"
+Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
+
+[targets]
+test = ["Test", "BenchmarkTools", "Random"]
