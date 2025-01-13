@@ -38,6 +38,3 @@ QuartoNotebookWorkerPlotsExt = "Plots"
 QuartoNotebookWorkerRCallExt = "RCall"
 QuartoNotebookWorkerReviseExt = "Revise"
 QuartoNotebookWorkerSymPyCoreExt = "SymPyCore"
-
-[preferences.QuartoNotebookWorker]
-packages = []

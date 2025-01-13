@@ -1,0 +1,17 @@
+name = "PackageExtensionCompatDemo"
+uuid = "6a51c5f7-2f3b-4a27-a2db-c88606578f51"
+authors = ["Christopher Doris <github.com/cjdoris>"]
+version = "0.1.0"
+
+[deps]
+# We need PackageExtensionCompat in order to get the @require_extensions macro.
+PackageExtensionCompat = "65ce6f38-6b18-4e1d-a461-8949797d7930"
+
+[weakdeps]
+# The package weakly depends on `Example` because it is used by the `ExampleExt` extension.
+# You must include all extension dependencies here.
+Example = "7876af07-990d-54b4-ab0e-23690620f79a"
+
+[extensions]
+# This defines an extension called `ExampleExt` which is loaded when `Example` is loaded.
+ExampleExt = ["Example"]
