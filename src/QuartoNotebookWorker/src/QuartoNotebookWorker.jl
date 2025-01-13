@@ -22,8 +22,8 @@ import TOML
 is_precompiling() = ccall(:jl_generating_output, Cint, ()) == 1
 
 const packages = let
-    project = TOML.parsefile(joinpath(@__DIR__, "..", "Project.toml"))
-    uuid = Base.UUID(project["uuid"])
+    # project = TOML.parsefile(joinpath(@__DIR__, "..", "Project.toml"))
+    uuid = Base.UUID("38328d9c-a911-4051-bc06-3f7f556ffeda") # project["uuid"])
     key = "packages"
     is_precompiling() && Base.record_compiletime_preference(uuid, key)
     Base.get_preferences(uuid)[key]
