@@ -1,8 +1,31 @@
 function refresh!(path, original_options, options = original_options)
-    # Current directory should always start out as the directory of the
-    # notebook file, which is not necessarily right initially if the parent
-    # process was started from a different directory to the notebook.
-    cd(dirname(path))
+    # We check the `execute-dir` key in the options,
+    if haskey(options, "project") && haskey(options["project"], "execute-dir")
+        ed = options["project"]["execute-dir"]
+        if ed == "directory"
+            cd(dirname(path))
+        elseif ed == "project"
+            # TODO: this doesn't seem right. How does one get the root path of the project here?
+            # Maybe piggyback on `options` with some ridiculous identifier?
+            # We can't rely on `pwd`, because the notebook can change that.
+            if isfile(NotebookState.PROJECT[])
+                cd(dirname(NotebookState.PROJECT[]))
+            elseif isdir(NotebookState.PROJECT[])
+                cd(NotebookState.PROJECT[])
+            elseif isdir(ed)
+                cd(ed)
+            else
+                @warn "Project path not found: $(NotebookState.PROJECT[])"
+            end
+        else
+            cd(abspath(ed))
+        end
+    else
+        # Current directory should always start out as the directory of the
+        # notebook file, which is not necessarily right initially if the parent
+        # process was started from a different directory to the notebook.
+        cd(dirname(path))
+    end
 
     # Reset back to the original project environment if it happens to
     # have changed during cell evaluation.
