@@ -85,6 +85,8 @@ jobs:
           r-version: "4.3"
       - run: echo "LD_LIBRARY_PATH=$(R RHOME)/lib:$LD_LIBRARY_PATH" >> $GITHUB_ENV
         if: matrix.os == 'ubuntu-latest'
+      - run: julia -e 'cp("/usr/lib/x86_64-linux-gnu/libstdc++.so.6", joinpath(dirname(Sys.BINDIR), "lib", "julia", "libstdc++.so.6"); force = true)' 
+        if: matrix.os == 'ubuntu-latest' && matrix.version == '1.6'
 
       # TODO: use quarto_jll for integration tests once modern enough versions are available
       - uses: quarto-dev/quarto-actions/setup@87b35bb88b36317fa36b5189e9553b4164a5c5a3 # v2.1.6

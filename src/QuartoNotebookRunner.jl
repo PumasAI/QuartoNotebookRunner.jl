@@ -21,7 +21,6 @@ module QuartoNotebookRunner
 import Base64
 import CommonMark
 import Compat
-import IOCapture
 import InteractiveUtils
 import IterTools
 import JSON3
