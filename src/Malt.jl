@@ -6,6 +6,7 @@ these functions are not stable.
 module Malt
 
 import BSON
+import Pkg
 import TOML
 using Sockets: Sockets
 
@@ -119,6 +120,11 @@ mutable struct Worker <: AbstractWorker
 
             if port === nothing
                 Base.kill(proc, Base.SIGTERM)
+
+                # First we check whether the command that we tried to start the
+                # worker with would actually work. This throws if it doesn't.
+                _validate_worker_cmd(exe, exeflags)
+
                 err_output = read(errors_log_file, String)
                 if isnothing(manifest_error)
                     # Generic error reporting when we've not received a port
@@ -225,6 +231,26 @@ function _validate_worker_process_manifest(
         end
 
         return message
+    end
+
+    # Versions before Julia 1.8 do not have access to this function, so we skip
+    # the check for them.
+    @static if isdefined(Pkg.Operations, :is_manifest_current)
+        project_toml_file = get(metadata, "project", "")
+        if isfile(project_toml_file)
+            env_cache = Pkg.Types.EnvCache(project_toml_file)
+            if Pkg.Operations.is_manifest_current(env_cache) === false
+                message = """
+                The notebook environment is out-of-sync.
+
+                project_toml = $(repr(project_toml_file))
+                manifest_toml = $(repr(manifest_toml_file))
+
+                Run `Pkg.resolve()` for this environment to ensure the manifest file
+                is consistent with the project file and then rerun this notebook.
+                """
+            end
+        end
     end
 end
 
@@ -349,6 +375,45 @@ function _get_worker_cmd(; exe, env, exeflags)
     )
     env = vcat(Base.byteenv(defaults), Base.byteenv(env))
     return addenv(`$exe --startup-file=no $exeflags $(String(startup_file))`, env)
+end
+
+# Checks whether a `julia` command (including it's program flags and juliaup
+# channel) are runnable. Throws an error when not runnable.
+function _validate_worker_cmd(exe, exeflags)
+    cmd = `$exe --startup-file=no $exeflags`
+    stdout, stderr = IOBuffer(), IOBuffer()
+    # When `--version` is appended to the end of any `julia` command it
+    # overrides all other flags and just returns the version number so that we
+    # don't actually start a Julia process. But it does validate all the flags
+    # so we can report problems to the user related to bad flags, or unknown
+    # `juliaup` channels.
+    if success(pipeline(`$cmd --version`; stdout, stderr))
+        version = String(take!(stdout))
+        if startswith(version, "julia version")
+            return nothing
+        else
+            # Ideally this never gets hit, but if it does we at least ask the
+            # user to report the bug so we can resolve it.
+            error(
+                "Failed to collect Julia version even though `julia --version` ran successfully. Please report this bug.",
+            )
+        end
+    else
+        # This drops all the included environment variables from the error
+        # printout below. If left in they swamp the output and make it hard to
+        # tell where the exeflags are.
+        exe_no_env = setenv(cmd, nothing)
+        cmd_error = rstrip(String(take!(stderr)))
+        error("""
+              Failed to run Julia worker process with the provided command:
+
+              $(exe_no_env)
+
+              The error produced by trying to run this command is shown below:
+
+              $(cmd_error)
+              """)
+    end
 end
 
 ## We use tuples instead of structs for messaging so the worker doesn't need to load additional modules.
