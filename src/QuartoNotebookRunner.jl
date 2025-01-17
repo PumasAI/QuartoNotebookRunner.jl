@@ -18,6 +18,7 @@ module QuartoNotebookRunner
 
 # Imports.
 
+import BSON
 import Base64
 import CommonMark
 import Compat
@@ -25,7 +26,6 @@ import InteractiveUtils
 import IterTools
 import JSON3
 import Logging
-import Malt
 import PrecompileTools
 import ProgressLogging
 import REPL
@@ -41,6 +41,7 @@ export Server, render, run!, close!
 
 # Includes.
 
+include("Malt.jl")
 include("WorkerSetup.jl")
 include("server.jl")
 include("socket.jl")

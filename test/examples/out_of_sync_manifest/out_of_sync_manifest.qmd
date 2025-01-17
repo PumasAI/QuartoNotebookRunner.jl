@@ -1,0 +1,7 @@
+---
+title: Out of sync manifest
+---
+
+```{julia}
+VERSION
+```

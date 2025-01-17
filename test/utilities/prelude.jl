@@ -29,7 +29,10 @@ if !@isdefined(SCHEMA)
             @test json["nbformat"] == 4
             @test json["nbformat_minor"] == 5
             @test json["metadata"]["language_info"]["name"] == "julia"
-            @test json["metadata"]["language_info"]["version"] == "$VERSION"
+            @test isa(
+                VersionNumber(json["metadata"]["language_info"]["version"]),
+                VersionNumber,
+            )
             @test json["metadata"]["language_info"]["codemirror_mode"] == "julia"
             @test json["metadata"]["kernel_info"]["name"] == "julia"
             @test startswith(json["metadata"]["kernelspec"]["name"], "julia")

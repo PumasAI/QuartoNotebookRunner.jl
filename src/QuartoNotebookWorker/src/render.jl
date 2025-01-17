@@ -293,8 +293,8 @@ function clean_bt_str(is_error::Bool, bt, err, prefix = "", mimetype = false)
     bt = bt[1:something(top_level, length(bt))]
 
     if mimetype
-        non_worker = findfirst(x -> contains(String(x.file), @__FILE__), bt)
-        bt = bt[1:max(something(non_worker, length(bt)) - 3, 0)]
+        non_worker = findfirst(_non_worker_stackframe_marker, bt)
+        bt = bt[1:max(something(non_worker, length(bt)) - 1, 0)]
     end
 
     buf = IOBuffer()
@@ -381,9 +381,16 @@ function render_mimetypes(value, cell_options; inline::Bool = false)
             buffer = IOBuffer()
             try
                 if inline && mime == "text/plain"
-                    Base.@invokelatest print(with_context(buffer, cell_options), value)
+                    Base.@invokelatest __print_barrier__(
+                        with_context(buffer, cell_options),
+                        value,
+                    )
                 else
-                    Base.@invokelatest show(with_context(buffer, cell_options), mime, value)
+                    Base.@invokelatest __show_barrier__(
+                        with_context(buffer, cell_options),
+                        mime,
+                        value,
+                    )
                 end
             catch error
                 backtrace = catch_backtrace()
@@ -419,6 +426,15 @@ end
 render_mimetypes(value::Nothing, cell_options; inline::Bool = false) =
     Dict{String,@NamedTuple{error::Bool, data::Vector{UInt8}}}()
 
+# These methods are used to mark the location within stacktraces that marks the
+# end of user-code. This is used by the `clean_bt_str` function to strip
+# stackframes un-related to user code. No inlining is essential here.
+@noinline __show_barrier__(io, mime, value) = Base.show(io, mime, value)
+@noinline __print_barrier__(io, value) = Base.print(io, value)
+
+_non_worker_stackframe_marker(frame) =
+    contains(String(frame.file), @__FILE__) &&
+    frame.func in (:__print_barrier__, :__show_barrier__)
 
 # Our custom MIME types need special handling. They get rendered to
 # `text/markdown` blocks with the original content wrapped in a raw
