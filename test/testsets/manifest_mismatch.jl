@@ -8,7 +8,7 @@ include("../utilities/prelude.jl")
         s = Server()
         path = joinpath(@__DIR__, "../examples/manifest_mismatch/manifest_mismatch.qmd")
         if VERSION < v"1.8"
-            @test_throws ErrorException QuartoNotebookRunner.run!(s, path)
+            @test_throws QuartoNotebookRunner.UserError QuartoNotebookRunner.run!(s, path)
         else
             @test_throws "expected_julia_version = \"1.8.5\"" QuartoNotebookRunner.run!(
                 s,

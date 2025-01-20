@@ -5,6 +5,8 @@ these functions are not stable.
 """
 module Malt
 
+import ..QuartoNotebookRunner: UserError
+
 import BSON
 import Pkg
 import TOML
@@ -142,7 +144,7 @@ mutable struct Worker <: AbstractWorker
                     # that one out instead of the generic one since it may be
                     # relevant to the user. It includes the `err_output` as
                     # well, so nothing is lost.
-                    error(manifest_error)
+                    throw(UserError(manifest_error))
                 end
             end
 
@@ -176,7 +178,7 @@ mutable struct Worker <: AbstractWorker
         # shutdown would not be graceful.
         if !isnothing(manifest_error)
             stop(w)
-            error(manifest_error)
+            throw(UserError(manifest_error))
         end
 
         return w
@@ -404,15 +406,15 @@ function _validate_worker_cmd(exe, exeflags)
         # tell where the exeflags are.
         exe_no_env = setenv(cmd, nothing)
         cmd_error = rstrip(String(take!(stderr)))
-        error("""
-              Failed to run Julia worker process with the provided command:
+        throw(UserError("""
+                        Failed to run Julia worker process with the provided command:
 
-              $(exe_no_env)
+                        $(exe_no_env)
 
-              The error produced by trying to run this command is shown below:
+                        The error produced by trying to run this command is shown below:
 
-              $(cmd_error)
-              """)
+                        $(cmd_error)
+                        """))
     end
 end
 

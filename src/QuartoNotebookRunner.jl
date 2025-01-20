@@ -41,6 +41,7 @@ export Server, render, run!, close!
 
 # Includes.
 
+include("UserError.jl")
 include("Malt.jl")
 include("WorkerSetup.jl")
 include("server.jl")
