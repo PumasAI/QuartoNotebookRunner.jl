@@ -1,0 +1,20 @@
+name: "Enforce changelog"
+on:
+  pull_request:
+      types: [opened, synchronize, reopened, ready_for_review, labeled, unlabeled]
+
+jobs:
+  changelog:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: julia-actions/setup-julia@5c9647d97b78a5debe5164e9eec09d653d29bd71 # v2.6.1
+        with:
+          version: '1'
+      - uses: dangoslen/changelog-enforcer@204e7d3ef26579f4cd0fd759c57032656fdf23c7 # v3.6.1
+        with:
+          changeLogPath: 'CHANGELOG.md'
+          skipLabels: 'skip-changelog'
+      - run: julia --project=.ci -e 'using Pkg; Pkg.instantiate()'
+      - run: julia --project=.ci .ci/changelog.jl
+      - run: git diff --exit-code
