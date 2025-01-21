@@ -181,6 +181,8 @@ mutable struct Worker <: AbstractWorker
             throw(UserError(manifest_error))
         end
 
+        _manifest_in_sync_check(w)
+
         return w
     end
 end
@@ -213,7 +215,7 @@ function _validate_worker_process_manifest(
     # ones, just skip the check. To revisit if we encounter issues with this.
     isempty(expected_julia_version) && return nothing
 
-    if actual_julia_version != expected_julia_version
+    if !_compare_versions(actual_julia_version, expected_julia_version)
         message = """
         Julia version mismatch in notebook file, see details below.
 
@@ -234,27 +236,24 @@ function _validate_worker_process_manifest(
 
         return message
     end
+end
 
-    # Versions before Julia 1.8 do not have access to this function, so we skip
-    # the check for them.
-    @static if isdefined(Pkg.Operations, :is_manifest_current)
-        project_toml_file = get(metadata, "project", "")
-        if isfile(project_toml_file)
-            env_cache = Pkg.Types.EnvCache(project_toml_file)
-            if Pkg.Operations.is_manifest_current(env_cache) === false
-                message = """
-                The notebook environment is out-of-sync.
-
-                project_toml = $(repr(project_toml_file))
-                manifest_toml = $(repr(manifest_toml_file))
-
-                Run `Pkg.resolve()` for this environment to ensure the manifest file
-                is consistent with the project file and then rerun this notebook.
-                """
-            end
-        end
+# This check needs to happen on the worker process since the hashing of the
+# project is `julia`-version dependent. Additionally we can only run it once
+# the worker package is loaded since it needs `Pkg` available to run.
+function _manifest_in_sync_check(w::Worker)
+    msg = remote_eval_fetch(w, :(Main.QuartoNotebookWorker._manifest_in_sync()))
+    if !isnothing(msg)
+        stop(w)
+        throw(UserError(msg))
     end
 end
+
+_compare_versions(a::AbstractString, b::AbstractString) =
+    _compare_versions(tryparse(VersionNumber, a), tryparse(VersionNumber, b))
+_compare_versions(a::VersionNumber, b::VersionNumber) =
+    a.major == b.major && a.minor == b.minor && a.patch == b.patch
+_compare_versions(a, b) = false
 
 Base.summary(io::IO, w::Worker) =
     write(io, "Malt.Worker on port $(w.port) with PID $(w.proc_pid)")

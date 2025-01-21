@@ -98,5 +98,6 @@ include("render.jl")
 include("utilities.jl")
 include("ojs_define.jl")
 include("notebook_metadata.jl")
+include("manifest_validation.jl")
 
 end
