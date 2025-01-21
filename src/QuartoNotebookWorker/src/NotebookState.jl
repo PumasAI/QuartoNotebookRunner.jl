@@ -8,13 +8,6 @@ const PROJECT = Ref("")
 const OPTIONS = Ref(Dict{String,Any}())
 const CELL_OPTIONS = Ref(Dict{String,Any}())
 
-function __init__()
-    if ccall(:jl_generating_output, Cint, ()) == 0
-        PROJECT[] = Base.active_project()
-        OPTIONS[] = task_local_storage(:QUARTO_NOTEBOOK_WORKER_OPTIONS, Dict{String,Any}())
-    end
-end
-
 function reset_active_project!()
     PROJECT[] == Base.active_project() || Pkg.activate(PROJECT[]; io = devnull)
 end
