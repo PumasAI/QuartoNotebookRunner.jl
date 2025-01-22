@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+## [v0.12.0] - 2025-01-22
+
 ### Added
 
 - Support running different Julia versions in notebook processes [#232]
@@ -270,6 +272,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 [v0.11.5]: https://github.com/PumasAI/QuartoNotebookRunner.jl/releases/tag/v0.11.5
 [v0.11.6]: https://github.com/PumasAI/QuartoNotebookRunner.jl/releases/tag/v0.11.6
 [v0.11.7]: https://github.com/PumasAI/QuartoNotebookRunner.jl/releases/tag/v0.11.7
+[v0.12.0]: https://github.com/PumasAI/QuartoNotebookRunner.jl/releases/tag/v0.12.0
 [#9]: https://github.com/PumasAI/QuartoNotebookRunner.jl/issues/9
 [#11]: https://github.com/PumasAI/QuartoNotebookRunner.jl/issues/11
 [#14]: https://github.com/PumasAI/QuartoNotebookRunner.jl/issues/14
