@@ -50,14 +50,17 @@ function _julia_exe(exeflags)
     # would be treated as a file name.
     if all(!isnothing, Sys.which.(("juliaup", "julia")))
         indices = findall(startswith("+"), exeflags)
-        if length(indices) == 1
-            # Pull out the channel from the exeflags.
-            channel = exeflags[only(indices)]
-            exeflags = exeflags[setdiff(1:end, indices)]
-            return `julia $channel`, exeflags
-        else
+        if isempty(indices)
             # Use the default `julia` channel set for `juliaup`.
             return `julia`, exeflags
+        else
+            # Pull out the channel from the exeflags. Since we merge in
+            # exeflags from the `QUARTONOTEBOOKRUNNER_EXEFLAGS` environment
+            # variable, we can't just drop the first element of the exeflags
+            # since there may be more than one provided. Keep the last one.
+            channel = exeflags[last(indices)]
+            exeflags = exeflags[setdiff(1:end, indices)]
+            return `julia $channel`, exeflags
         end
     end
     # Just use the current `julia` if there is no `juliaup` command available.

@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+### Fixed
+
+- When several Juliaup channels are provided the last one is used [#238]
+
 ## [v0.12.0] - 2025-01-22
 
 ### Added
@@ -333,3 +337,4 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 [#209]: https://github.com/PumasAI/QuartoNotebookRunner.jl/issues/209
 [#211]: https://github.com/PumasAI/QuartoNotebookRunner.jl/issues/211
 [#232]: https://github.com/PumasAI/QuartoNotebookRunner.jl/issues/232
+[#238]: https://github.com/PumasAI/QuartoNotebookRunner.jl/issues/238
