@@ -8,3 +8,4 @@ Manifest.toml
 *.jls
 .DS_Store
 !/test/assets/*
+!/src/QuartoNotebookWorker/src/vendor/Manifest.toml
