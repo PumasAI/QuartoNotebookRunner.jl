@@ -15,3 +15,10 @@ test_example(joinpath(@__DIR__, "../examples/julia-1.11.2.qmd")) do json
     @test cells[end]["outputs"][1]["data"]["text/plain"] == repr(v"1.11.2")
     @test json["metadata"]["language_info"]["version"] == "1.11.2"
 end
+withenv("QUARTONOTEBOOKRUNNER_EXEFLAGS" => "[\"+1.9.4\"]") do
+    test_example(joinpath(@__DIR__, "../examples/julia-1.11.2.qmd")) do json
+        cells = json["cells"]
+        @test cells[end]["outputs"][1]["data"]["text/plain"] == repr(v"1.11.2")
+        @test json["metadata"]["language_info"]["version"] == "1.11.2"
+    end
+end
