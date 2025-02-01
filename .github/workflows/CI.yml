@@ -100,7 +100,7 @@ jobs:
           version: pre-release
 
       - uses: julia-actions/julia-buildpkg@e3eb439fad4f9aba7da2667e7510e4a46ebc46e1 # v1.7.0
-      - uses: julia-actions/julia-runtest@1e03e0122a598a569004c1e26950e2547b350ec0 # v1.11.1
+      - uses: julia-actions/julia-runtest@678da69444cd5f13d7e674a90cb4f534639a14f9 # v1.11.2
         with:
           depwarn: "yes"
       - uses: julia-actions/julia-processcoverage@03114f09f119417c3242a9fb6e0b722676aedf38 # v1.2.2
