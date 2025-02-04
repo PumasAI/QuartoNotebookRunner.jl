@@ -83,7 +83,7 @@ jobs:
       - run: juliaup add 1.10.7
       - run: juliaup add 1.11.2
 
-      - uses: julia-actions/cache@824243901fb567ccb490b0d0e2483ccecde46834 # v2.0.5
+      - uses: julia-actions/cache@2b1bf4d8a138668ac719ea7ca149b53ed8d8401e # v2.0.7
 
       - uses: r-lib/actions/setup-r@473c68190595b311a74f208fba61a8d8c0d4c247 # v2.11.1
         with:
@@ -100,12 +100,12 @@ jobs:
           version: pre-release
 
       - uses: julia-actions/julia-buildpkg@e3eb439fad4f9aba7da2667e7510e4a46ebc46e1 # v1.7.0
-      - uses: julia-actions/julia-runtest@1e03e0122a598a569004c1e26950e2547b350ec0 # v1.11.1
+      - uses: julia-actions/julia-runtest@678da69444cd5f13d7e674a90cb4f534639a14f9 # v1.11.2
         with:
           depwarn: "yes"
       - uses: julia-actions/julia-processcoverage@03114f09f119417c3242a9fb6e0b722676aedf38 # v1.2.2
         if: matrix.os == 'ubuntu-latest' && matrix.version == '1.11'
-      - uses: codecov/codecov-action@1e68e06f1dbfde0e4cefc87efeba9e4643565303 # v5.1.2
+      - uses: codecov/codecov-action@13ce06bfc6bbe3ecf90edbbf1bc32fe5978ca1d3 # v5.3.1
         if: matrix.os == 'ubuntu-latest' && matrix.version == '1.11'
         with:
           verbose: true
