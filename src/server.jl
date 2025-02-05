@@ -1152,7 +1152,7 @@ function png_image_metadata(bytes::Vector{UInt8})
         chunk === nothing && break
         chunk.type == b"IDAT" && break
         if chunk.type == b"pHYs"
-            is_in_meters = _load(Bool, chunk.data, 9)
+            is_in_meters = Bool(_load(UInt8, chunk.data, 9))
             is_in_meters || break
             x_px_per_meter = _load(UInt32, chunk.data, 1)
             y_px_per_meter = _load(UInt32, chunk.data, 5)
