@@ -345,3 +345,4 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 [#211]: https://github.com/PumasAI/QuartoNotebookRunner.jl/issues/211
 [#232]: https://github.com/PumasAI/QuartoNotebookRunner.jl/issues/232
 [#238]: https://github.com/PumasAI/QuartoNotebookRunner.jl/issues/238
+[#248]: https://github.com/PumasAI/QuartoNotebookRunner.jl/issues/248
