@@ -269,6 +269,7 @@ function _io_context(cell_options = Dict{String,Any}())
     return [
         :module => NotebookState.notebook_module(),
         :limit => true,
+        :color => Base.have_color,
         # This allows a `show` method implementation to check for
         # metadata that may be of relevance to it's rendering. For
         # example, if a `typst` table is rendered with a caption
