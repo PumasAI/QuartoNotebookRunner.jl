@@ -30,3 +30,11 @@ Logging:
 ```{julia}
 @error "error text" value=3
 ```
+
+```{julia}
+struct Color
+    text::String
+end
+Base.show(io::IO, c::Color) = printstyled(io, c.text; color = :red)
+Color("red")
+```
