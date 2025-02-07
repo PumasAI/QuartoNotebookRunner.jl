@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+## [v0.12.2] - 2025-02-07
+
 ### Added
 
 - QuartoNotebookRunner now corrects the png image size metadata it reports to quarto by the dpi stored in the file, if available. This will result in smaller visual image sizes for files with dpi > 96 [#248].
@@ -288,6 +290,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 [v0.11.7]: https://github.com/PumasAI/QuartoNotebookRunner.jl/releases/tag/v0.11.7
 [v0.12.0]: https://github.com/PumasAI/QuartoNotebookRunner.jl/releases/tag/v0.12.0
 [v0.12.1]: https://github.com/PumasAI/QuartoNotebookRunner.jl/releases/tag/v0.12.1
+[v0.12.2]: https://github.com/PumasAI/QuartoNotebookRunner.jl/releases/tag/v0.12.2
 [#9]: https://github.com/PumasAI/QuartoNotebookRunner.jl/issues/9
 [#11]: https://github.com/PumasAI/QuartoNotebookRunner.jl/issues/11
 [#14]: https://github.com/PumasAI/QuartoNotebookRunner.jl/issues/14

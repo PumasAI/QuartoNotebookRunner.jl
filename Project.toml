@@ -1,7 +1,7 @@
 name = "QuartoNotebookRunner"
 uuid = "4c0109c6-14e9-4c88-93f0-2b974d3468f4"
 authors = ["Michael Hatherly <michael@pumas.ai>", "Julius Krumbiegel <juliusk@pumas.ai>"]
-version = "0.12.1"
+version = "0.12.2"
 
 [deps]
 BSON = "fbb218c0-5317-5bc6-957e-2ee96dd4b1f0"
