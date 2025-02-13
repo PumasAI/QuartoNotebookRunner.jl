@@ -321,7 +321,12 @@ Base.showable(mime::MIME, w::WrapperType) = Base.showable(mime, w.value)
 
 # for inline code chunks, `inline` should be set to `true` which causes "text/plain" output like
 # what you'd get from `print` (Strings without quotes) and not from `show("text/plain", ...)`
-function render_mimetypes(value, cell_options; inline::Bool = false)
+function render_mimetypes(
+    value,
+    cell_options;
+    inline::Bool = false,
+    only::Union{String,Nothing} = nothing,
+)
     # Intercept objects prior to rendering so that we can wrap specific
     # types in our own `WrapperType` to customised rendering instead of
     # what the package defines itself.
@@ -378,7 +383,7 @@ function render_mimetypes(value, cell_options; inline::Bool = false)
         end
     end
     for mime in mimes
-        if showable(mime, value)
+        if showable(mime, value) && _matching_mimetype(mime, only)
             buffer = IOBuffer()
             try
                 if inline && mime == "text/plain"
@@ -424,8 +429,11 @@ function render_mimetypes(value, cell_options; inline::Bool = false)
     end
     return result
 end
-render_mimetypes(value::Nothing, cell_options; inline::Bool = false) =
+render_mimetypes(value::Nothing, cell_options; inline::Bool = false, only = nothing) =
     Dict{String,@NamedTuple{error::Bool, data::Vector{UInt8}}}()
+
+_matching_mimetype(mime::String, only::Nothing) = true
+_matching_mimetype(mime::String, only::String) = mime == only
 
 # These methods are used to mark the location within stacktraces that marks the
 # end of user-code. This is used by the `clean_bt_str` function to strip
