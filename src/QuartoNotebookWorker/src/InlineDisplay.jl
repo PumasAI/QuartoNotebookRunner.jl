@@ -13,6 +13,11 @@ struct InlineDisplay <: AbstractDisplay
     end
 end
 
+function Base.display(d::InlineDisplay, mime::MIME, x)
+    only = string(mime)
+    push!(d.queue, Base.@invokelatest render_mimetypes(x, d.cell_options; only))
+    return nothing
+end
 function Base.display(d::InlineDisplay, x)
     push!(d.queue, Base.@invokelatest render_mimetypes(x, d.cell_options))
     return nothing
