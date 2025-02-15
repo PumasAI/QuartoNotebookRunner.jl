@@ -57,3 +57,31 @@ else
 
     _fixline(x, line) = x isa LineNumberNode ? LineNumberNode(x.line + line - 1, x.file) : x
 end
+
+"""
+    remote_repl([port]) -> port_number
+
+Starts up a remote REPL server using `RemoteREPL.jl` in the notebook process.
+It requires manually importing `RemoteREPL` into your notebook.
+
+This can be useful for debugging `QuartoNotebookWorker` code directly in the
+notebook process that is running the `.qmd` file.
+
+Add the following to a cell in a notebook. Ensure that your notebook has
+`RemoteREPL` in it's package dependencies.
+
+```julia
+import RemoteREPL
+Main.QuartoNotebookWorker.remote_repl()
+```
+
+Run `quarto render` to start up the remote REPL. Subsequent renders will reuse
+the same server rather than starting up a new one. Check the notebook output
+for that cell which should list the port number that the server is running on.
+
+In a separate REPL import `RemoteREPL` and connect using `connect_repl`. Either
+provide the port number. If no port was provided in the `remote_repl` call then
+the default will be used.
+"""
+remote_repl(port::Union{Int,Nothing} = nothing) = _remote_repl(nothing, port)
+_remote_repl(::Any, port) = error("`RemoteREPL.jl` has not been loaded.")
