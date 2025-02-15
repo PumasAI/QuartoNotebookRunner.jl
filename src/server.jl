@@ -386,7 +386,8 @@ function raw_markdown_chunks_from_string(path::String, markdown::String)
     terminal_line = 1
     code_cells = false
     for (node, enter) in ast
-        if enter && (is_julia_toplevel(node) || is_r_toplevel(node))
+        if enter &&
+           (is_julia_toplevel(node) || is_python_toplevel(node) || is_r_toplevel(node))
             code_cells = true
             line = node.sourcepos[1][1]
             md = join(source_lines[terminal_line:(line-1)], "\n")
@@ -409,6 +410,7 @@ function raw_markdown_chunks_from_string(path::String, markdown::String)
             end
             language =
                 is_julia_toplevel(node) ? :julia :
+                is_python_toplevel(node) ? :python :
                 is_r_toplevel(node) ? :r : error("Unhandled code block language")
             push!(
                 raw_chunks,
@@ -820,6 +822,35 @@ function evaluate_raw_cells!(
 
                     cell_options = expand_cell ? remote.cell_options : Dict()
 
+                    if chunk.language === :python
+                        # Code cells always get the language of the notebook assigned, in this case julia,
+                        # so to render an R formatted cell, we need to do a workaround. We push a cell before
+                        # the actual code cell which contains a plain markdown block that wraps the code in ```r
+                        # for the formatting.
+                        push!(
+                            cells,
+                            (;
+                                id = string(
+                                    expand_cell ? string(nth, "_", mth) : string(nth),
+                                    "_code_prefix",
+                                ),
+                                cell_type = :markdown,
+                                metadata = (;),
+                                source = process_cell_source(
+                                    """
+           ```python
+           $(strip_cell_options(chunk.source))
+           ```
+           """,
+                                    Dict(),
+                                ),
+                            ),
+                        )
+                        # We also need to hide the real code cell in this case, which contains possible formatting
+                        # settings in its YAML front-matter and which can therefore not be omitted entirely.
+                        cell_options["echo"] = false
+                    end
+
                     if chunk.language === :r
                         # Code cells always get the language of the notebook assigned, in this case julia,
                         # so to render an R formatted cell, we need to do a workaround. We push a cell before
@@ -865,9 +896,9 @@ function evaluate_raw_cells!(
                 end
             end
         elseif chunk.type === :markdown
-            marker = r"{(?:julia|r)} "
+            marker = r"{(?:julia|python|r)} "
             source = chunk.source
-            if contains(chunk.source, r"`{(?:julia|r)} ")
+            if contains(chunk.source, r"`{(?:julia|python|r)} ")
                 parser = Parser()
                 for (node, enter) in parser(chunk.source)
                     if enter && node.t isa CommonMark.Code
@@ -875,6 +906,9 @@ function evaluate_raw_cells!(
                             source_code = replace(node.literal, marker => "")
                             if startswith(node.literal, "{r}")
                                 source_code = wrap_with_r_boilerplate(source_code)
+                            end
+                            if startswith(node.literal, "{python}")
+                                source_code = wrap_with_python_boilerplate(source_code)
                             end
                             expr = :(render(
                                 $(source_code),
@@ -988,11 +1022,21 @@ function wrap_with_r_boilerplate(code)
     """
 end
 
+function wrap_with_python_boilerplate(code)
+    """
+    Main.QuartoNotebookWorker.py\"\"\"
+    $code
+    \"\"\"
+    """
+end
+
 function transform_source(chunk)
     if chunk.language === :julia
         chunk.source
     elseif chunk.language === :r
         wrap_with_r_boilerplate(chunk.source)
+    elseif chunk.language === :python
+        wrap_with_python_boilerplate(chunk.source)
     else
         error("Unhandled code chunk language $(chunk.language)")
     end
@@ -1176,6 +1220,11 @@ Return `true` if `node` is a Julia toplevel code block.
 is_julia_toplevel(node) =
     node.t isa CommonMark.CodeBlock &&
     node.t.info == "{julia}" &&
+    node.parent.t isa CommonMark.Document
+
+is_python_toplevel(node) =
+    node.t isa CommonMark.CodeBlock &&
+    node.t.info == "{python}" &&
     node.parent.t isa CommonMark.Document
 
 is_r_toplevel(node) =
