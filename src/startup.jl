@@ -61,14 +61,16 @@ let temp = mktempdir()
     # "local" `QuartoNotebookWorker` package into this environment. `Pkg`
     # operations are logged to the `pkg.log` file that the server process can
     # read to provide feedback to the user if needed.
+    #
+    # `Pkg` is loaded outside of this closure otherwise the methods required do
+    # not exist in a new enough world age to be callable.
+    Pkg = Base.require(Base.PkgId(Base.UUID("44cfe95a-1eb2-52ea-b672-e2afdf69b78f"), "Pkg"))
     capture() do
         worker = joinpath(temp, "QuartoNotebookWorker")
         mkpath(worker)
         push!(LOAD_PATH, worker)
         open(joinpath(ENV["MALT_WORKER_TEMP_DIR"], "pkg.log"), "w") do io
             ap = Base.active_project()
-            id = Base.PkgId(Base.UUID("44cfe95a-1eb2-52ea-b672-e2afdf69b78f"), "Pkg")
-            Pkg = Base.require(id)
             try
                 Pkg.activate(worker; io)
                 Pkg.develop(; path = ENV["QUARTONOTEBOOKWORKER_PACKAGE"], io)
