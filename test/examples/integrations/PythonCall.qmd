@@ -1,0 +1,67 @@
+---
+title: PythonCall integration
+julia:
+    exeflags: ["--project=PythonCall"]
+---
+
+```{julia}
+using PythonCall
+```
+
+```{python}
+import re
+```
+
+```{python}
+words = re.findall("[a-zA-Z]+", "PythonCall.jl is very useful!")
+words
+```
+
+```{python}
+print(words)
+```
+
+```{julia}
+value = "value"
+```
+
+```{python}
+len($(value))
+```
+
+Inline python code: `{python} 'something'`.
+
+```{python}
+def f(x):
+    return x + 1
+```
+
+```{python}
+f(999)
+```
+
+```{julia}
+f(x) = x + 1
+n = 149
+```
+
+```{python}
+$(f)($n)
+```
+
+```{python}
+def f(x):
+    x / 0
+```
+
+```{python}
+f(1)
+```
+
+```{python}
+]
+```
+
+```{python}
+?help
+```

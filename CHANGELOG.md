@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+### Added
+
+- Support for `{python}` code evaluated using [`PythonCall.jl`](https://github.com/JuliaPy/PythonCall.jl) [#255]
+
 ## [v0.12.3] - 2025-02-14
 
 ### Fixed
@@ -362,3 +366,4 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 [#248]: https://github.com/PumasAI/QuartoNotebookRunner.jl/issues/248
 [#250]: https://github.com/PumasAI/QuartoNotebookRunner.jl/issues/250
 [#253]: https://github.com/PumasAI/QuartoNotebookRunner.jl/issues/253
+[#255]: https://github.com/PumasAI/QuartoNotebookRunner.jl/issues/255

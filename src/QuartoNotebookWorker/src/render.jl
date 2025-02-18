@@ -301,12 +301,18 @@ function clean_bt_str(is_error::Bool, bt, err, prefix = "", mimetype = false)
     buf = IOBuffer()
     buf_context = with_context(buf)
     print(buf_context, prefix)
-    Base.showerror(buf_context, err)
-    Base.show_backtrace(buf_context, bt)
+    _showerror(buf_context, err, bt)
 
     return take!(buf)
 end
 
+# `PythonCall` extension needs to override this part of stacktrace printing so
+# that it can print out just the Python part of the stacktrace. See the
+# `ext/QuartoNotebookWorkerPythonCall.jl` file for that implementation.
+function _showerror(io::IO, err, bt)
+    Base.showerror(io, err)
+    Base.show_backtrace(io, bt)
+end
 
 _mimetype_wrapper(@nospecialize(value)) = value
 
