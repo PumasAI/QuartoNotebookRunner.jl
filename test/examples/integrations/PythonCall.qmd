@@ -48,3 +48,20 @@ n = 149
 ```{python}
 $(f)($n)
 ```
+
+```{python}
+def f(x):
+    x / 0
+```
+
+```{python}
+f(1)
+```
+
+```{python}
+]
+```
+
+```{python}
+?help
+```
