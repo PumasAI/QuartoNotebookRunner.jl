@@ -39,8 +39,6 @@ jobs:
       contents: read
     runs-on: ${{ matrix.os }}
     timeout-minutes: 90
-    env:
-      JULIA_CONDAPKG_BACKEND: "Null"
     strategy:
       fail-fast: false
       matrix:
@@ -100,10 +98,6 @@ jobs:
       - uses: quarto-dev/quarto-actions/setup@8776aaf3ebefdda84c7654715823a205d047802a # v2.1.7
         with:
           version: pre-release
-
-      - uses: actions/setup-python@42375524e23c412d93fb67b49958b491fce71c38 # v5.4.0
-        with:
-          python-version: '3.13'
 
       - uses: julia-actions/julia-buildpkg@e3eb439fad4f9aba7da2667e7510e4a46ebc46e1 # v1.7.0
       - uses: julia-actions/julia-runtest@678da69444cd5f13d7e674a90cb4f534639a14f9 # v1.11.2

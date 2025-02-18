@@ -3,42 +3,6 @@
 
 # Step 1:
 #
-# Inject a sandbox environment into the `LOAD_PATH` such that it gets picked up
-# as the active project if there isn't one found in the rest of the
-# `LOAD_PATH`.
-#
-# It needs to appear ahead of the `QuartoNotebookWorker` environment so that it
-# shadows that environment since that is not a user-facing project directory,
-# and if a user was to perform `Pkg` operations they may affect that
-# environment. Instead we provide a temporary sandbox environment that gets
-# discarded when the notebook process exits.
-let sandbox = joinpath(mktempdir(), "QuartoSandbox")
-    mkpath(sandbox)
-    # The empty project file is key to making this the active environment if
-    # noting else is available if the rest of the `LOAD_PATH`.
-    touch(joinpath(sandbox, "Project.toml"))
-    push!(LOAD_PATH, sandbox)
-end
-
-# Step 2:
-#
-# This contains the worker package environment. It gets added to the LOAD_PATH
-# so that we can `require` it further down this file.
-push!(LOAD_PATH, ENV["QUARTONOTEBOOKWORKER_PACKAGE"])
-
-# Step 3:
-#
-# We also need to ensure that `@stdlib` is available on the LOAD_PATH so that
-# requiring the worker package does not attempt to load stdlib packages from
-# the wrong `julia` version. The errors that get thrown when this happens look
-# like deserialization errors due to differences in struct definitions, or
-# method signatures between different versions of Julia. This happens with
-# running `Pkg.test`, which drops `@stdlib` from the load path, but does not
-# happen if using `TestEnv.jl` to run tests in a REPL session via `include`.
-pushfirst!(LOAD_PATH, "@stdlib")
-
-# Step 4:
-#
 # Writes the error and stacktrace to the parent-provided log file rather than
 # stderr. An alternative would be to capture stderr from the parent when
 # starting this process, but then that swallows all stderr from then on. We
@@ -59,7 +23,67 @@ function capture(func)
     end
 end
 
-# Step 5:
+# Step 1:
+#
+# We need to ensure that `@stdlib` is available on the LOAD_PATH so that
+# requiring the worker package does not attempt to load stdlib packages from
+# the wrong `julia` version. The errors that get thrown when this happens look
+# like deserialization errors due to differences in struct definitions, or
+# method signatures between different versions of Julia. This happens with
+# running `Pkg.test`, which drops `@stdlib` from the load path, but does not
+# happen if using `TestEnv.jl` to run tests in a REPL session via `include`.
+pushfirst!(LOAD_PATH, "@stdlib")
+
+# Step 2:
+#
+# Inject a sandbox environment into the `LOAD_PATH` such that it gets picked up
+# as the active project if there isn't one found in the rest of the
+# `LOAD_PATH`.
+#
+# It needs to appear ahead of the `QuartoNotebookWorker` environment so that it
+# shadows that environment since that is not a user-facing project directory,
+# and if a user was to perform `Pkg` operations they may affect that
+# environment. Instead we provide a temporary sandbox environment that gets
+# discarded when the notebook process exits.
+let temp = mktempdir()
+    sandbox = joinpath(temp, "QuartoSandbox")
+    mkpath(sandbox)
+    # The empty project file is key to making this the active environment if
+    # noting else is available if the rest of the `LOAD_PATH`.
+    touch(joinpath(sandbox, "Project.toml"))
+    push!(LOAD_PATH, sandbox)
+
+    # Step 2b:
+    #
+    # We also need to ensure that the `QuartoNotebookWorker` package is
+    # available on the `LOAD_PATH`. This is done by creating another
+    # environment alongside the sandbox environment. We `Pkg.develop` the
+    # "local" `QuartoNotebookWorker` package into this environment. `Pkg`
+    # operations are logged to the `pkg.log` file that the server process can
+    # read to provide feedback to the user if needed.
+    #
+    # `Pkg` is loaded outside of this closure otherwise the methods required do
+    # not exist in a new enough world age to be callable.
+    Pkg = Base.require(Base.PkgId(Base.UUID("44cfe95a-1eb2-52ea-b672-e2afdf69b78f"), "Pkg"))
+    capture() do
+        worker = joinpath(temp, "QuartoNotebookWorker")
+        mkpath(worker)
+        push!(LOAD_PATH, worker)
+        open(joinpath(ENV["MALT_WORKER_TEMP_DIR"], "pkg.log"), "w") do io
+            ap = Base.active_project()
+            try
+                Pkg.activate(worker; io)
+                Pkg.develop(; path = ENV["QUARTONOTEBOOKWORKER_PACKAGE"], io)
+            finally
+                # Ensure that we switch the active project back afterwards.
+                Pkg.activate(ap; io)
+            end
+            flush(io)
+        end
+    end
+end
+
+# Step 3:
 #
 # The parent process needs some additional metadata about this `julia` process to
 # be able to provide relevant error messages to the user.
@@ -86,7 +110,7 @@ capture() do
     end
 end
 
-# Step 6:
+# Step 4:
 #
 # Now load in the worker package. This may trigger package precompilation on
 # first load, hence it is run under a `capture` should it fail to run.
@@ -99,13 +123,13 @@ const QuartoNotebookWorker = capture() do
     )
 end
 
-# Step 7:
+# Step 5:
 #
 # Ensures that the LOAD_PATH is returned to it's previous state without the
 # `@stdlib` that was pushed to it near the start of the file.
 popfirst!(LOAD_PATH)
 
-# Step 8:
+# Step 6:
 #
 # This calls into the main socket server loop, which does not terminate until
 # the process is finished off and the notebook needs closing. So anything
