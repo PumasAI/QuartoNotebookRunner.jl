@@ -261,11 +261,11 @@ function io_capture(f; cell_options, kws...)
 end
 
 # passing our module removes Main.Notebook noise when printing types etc.
-function with_context(io::IO, cell_options = Dict{String,Any}())
-    return IOContext(io, _io_context(cell_options)...)
+function with_context(io::IO, cell_options = Dict{String,Any}(), inline = false)
+    return IOContext(io, _io_context(cell_options, inline)...)
 end
 
-function _io_context(cell_options = Dict{String,Any}())
+function _io_context(cell_options = Dict{String,Any}(), inline = false)
     return [
         :module => NotebookState.notebook_module(),
         :limit => true,
@@ -279,7 +279,8 @@ function _io_context(cell_options = Dict{String,Any}())
         #
         # TODO: perhaps preprocess the metadata provided here rather
         # than just passing it through as-is.
-        :QuartoNotebookRunner => (; cell_options, options = NotebookState.OPTIONS[]),
+        :QuartoNotebookRunner =>
+            (; cell_options, options = NotebookState.OPTIONS[], inline),
     ]
 end
 
@@ -394,12 +395,12 @@ function render_mimetypes(
             try
                 if inline && mime == "text/plain"
                     Base.@invokelatest __print_barrier__(
-                        with_context(buffer, cell_options),
+                        with_context(buffer, cell_options, inline),
                         value,
                     )
                 else
                     Base.@invokelatest __show_barrier__(
-                        with_context(buffer, cell_options),
+                        with_context(buffer, cell_options, inline),
                         mime,
                         value,
                     )
