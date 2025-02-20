@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+### Added
+
+- Support for `execute.cache` frontmatter option, which allows notebooks to
+cache the output of cells and reuse them between runs. This is coarse-grained
+and the cache will be invalidated if any text within any executable cells is
+changed, if the frontmatter is changed, or if the `Project.toml` is changed.
+The cached output is stored in a `.cache` folder alongside the notebook where
+caching is enabled. Delete this folder to clear the cache. [#259]
+
 ## [v0.13.2] - 2025-02-24
 
 ### Fixed
@@ -386,5 +395,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 [#253]: https://github.com/PumasAI/QuartoNotebookRunner.jl/issues/253
 [#255]: https://github.com/PumasAI/QuartoNotebookRunner.jl/issues/255
 [#257]: https://github.com/PumasAI/QuartoNotebookRunner.jl/issues/257
+[#259]: https://github.com/PumasAI/QuartoNotebookRunner.jl/issues/259
 [#262]: https://github.com/PumasAI/QuartoNotebookRunner.jl/issues/262
 [#265]: https://github.com/PumasAI/QuartoNotebookRunner.jl/issues/265

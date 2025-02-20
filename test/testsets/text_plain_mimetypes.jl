@@ -1,7 +1,7 @@
 include("../utilities/prelude.jl")
 
 test_example(joinpath(@__DIR__, "../examples/text_plain_mimetypes.qmd")) do json
-    @test length(json["cells"]) == 8
+    @test length(json["cells"]) == 9
 
     cell = json["cells"][1]
     @test cell["cell_type"] == "markdown"

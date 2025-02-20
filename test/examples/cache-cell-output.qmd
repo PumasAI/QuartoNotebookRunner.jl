@@ -1,0 +1,10 @@
+---
+title: Cache cell output
+engine: julia
+execute:
+    cache: true
+---
+
+```{julia}
+time_ns()
+```
