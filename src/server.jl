@@ -3,6 +3,8 @@
 mutable struct File
     worker::Malt.Worker
     path::String
+    source_code_hash::UInt64
+    output_chunks::Vector
     exe::Cmd
     exeflags::Vector{String}
     env::Vector{String}
@@ -17,7 +19,7 @@ mutable struct File
                 path = isabspath(path) ? path : abspath(path)
 
                 options = _parsed_options(options)
-                _, file_frontmatter = raw_text_chunks(path)
+                _, _, file_frontmatter = raw_text_chunks(path)
                 merged_options = _extract_relevant_options(file_frontmatter, options)
                 exeflags, env = _exeflags_and_env(merged_options)
                 timeout = _extract_timeout(merged_options)
@@ -25,8 +27,18 @@ mutable struct File
                 exe, _exeflags = _julia_exe(exeflags)
                 worker =
                     cd(() -> Malt.Worker(; exe, exeflags = _exeflags, env), dirname(path))
-                file =
-                    new(worker, path, exe, exeflags, env, ReentrantLock(), timeout, nothing)
+                file = new(
+                    worker,
+                    path,
+                    hash(VERSION),
+                    [],
+                    exe,
+                    exeflags,
+                    env,
+                    ReentrantLock(),
+                    timeout,
+                    nothing,
+                )
                 init!(file, merged_options)
                 return file
             else
@@ -156,6 +168,8 @@ function refresh!(file::File, options::Dict)
         file.exe = exe
         file.exeflags = exeflags
         file.env = env
+        file.source_code_hash = hash(VERSION)
+        file.output_chunks = []
         init!(file, options)
     end
     remote_eval_fetch_channeled(file.worker, :(refresh!($(options)); revise_hook()))
@@ -184,10 +198,57 @@ function evaluate!(
     options = _parsed_options(options)
     path = abspath(f.path)
     if isfile(path)
-        raw_chunks, file_frontmatter = raw_text_chunks(f, markdown)
+        source_code_hash, raw_chunks, file_frontmatter = raw_text_chunks(f, markdown)
         merged_options = _extract_relevant_options(file_frontmatter, options)
-        cells =
-            evaluate_raw_cells!(f, raw_chunks, merged_options; showprogress, chunk_callback)
+
+        refresh!(f, merged_options)
+
+        # This is the results caching logic. When only the markdown has
+        # changed, e.g. the hash of all executable code blocks is the same as
+        # the previous run then we can reuse the previous cell outputs.
+        # Additionally, if the currently cached chunks is empty then we have a
+        # fresh session that has not yet populated the `output_chunks`.
+        if source_code_hash == f.source_code_hash && !isempty(f.output_chunks)
+            @debug "reusing previous cell outputs"
+            # All the executable code cells are the same as the previous
+            # render, so all we need to do is iterate over the markdown code
+            # (that doesn't contain inline executable code) and update the
+            # markdown cells with the new content.
+            lookup = Dict(string(nth) => chunk for (nth, chunk) in enumerate(raw_chunks))
+            for output_chunk in f.output_chunks
+                if haskey(lookup, output_chunk.id)
+                    new_raw_chunk = lookup[output_chunk.id]
+                    # Skip any markdown chunk if it contains potential inline
+                    # executable code otherwise they would be replaced with
+                    # their unexpanded raw chunk.
+                    if !contains(new_raw_chunk.source, r"`{(julia|python|r})")
+                        # Swap out any markdown chunks with their updated content.
+                        new_source = process_cell_source(new_raw_chunk.source)
+                        empty!(output_chunk.source)
+                        append!(output_chunk.source, new_source)
+                    end
+                end
+            end
+            cells = f.output_chunks
+        else
+            @debug "evaluating new cell outputs"
+            # When there has been any kind of change to any executable code
+            # blocks then we perform a complete rerun of the notebook. Further
+            # optimisations can be made to perform source code analysis in the
+            # worker process to determine if which cells need to be
+            # reevaluated.
+            cells = evaluate_raw_cells!(
+                f,
+                raw_chunks,
+                merged_options;
+                showprogress,
+                chunk_callback,
+            )
+            # Update the hash to the latest computed.
+            f.source_code_hash = source_code_hash
+            f.output_chunks = cells
+        end
+
         version = _get_julia_version(f)
         data = (
             metadata = (
@@ -380,8 +441,11 @@ struct Unset end
 
 function raw_markdown_chunks_from_string(path::String, markdown::String)
     raw_chunks = []
+    source_code_hash = hash(VERSION) # TODO: seed choice?
     pars = Parser()
     ast = pars(markdown; source = path)
+    file_fromtmatter = CommonMark.frontmatter(ast)
+    source_code_hash = hash(file_fromtmatter, source_code_hash)
     source_lines = collect(eachline(IOBuffer(markdown)))
     terminal_line = 1
     code_cells = false
@@ -395,6 +459,9 @@ function raw_markdown_chunks_from_string(path::String, markdown::String)
                 raw_chunks,
                 (type = :markdown, source = md, file = path, line = terminal_line),
             )
+            if contains(md, r"`{(julia|python|r})")
+                source_code_hash = hash(md, source_code_hash)
+            end
             terminal_line = node.sourcepos[2][1] + 1
 
             # currently, the only execution-relevant cell option is `eval` which controls if a code block is executed or not.
@@ -424,6 +491,7 @@ function raw_markdown_chunks_from_string(path::String, markdown::String)
                     cell_options,
                 ),
             )
+            source_code_hash = hash(source, source_code_hash)
         end
     end
     if terminal_line <= length(source_lines)
@@ -432,16 +500,22 @@ function raw_markdown_chunks_from_string(path::String, markdown::String)
             raw_chunks,
             (type = :markdown, source = md, file = path, line = terminal_line),
         )
+        if contains(md, r"`{(julia|python|r})")
+            source_code_hash = hash(md, source_code_hash)
+        end
     end
 
     # The case where the notebook has no code cells.
     if isempty(raw_chunks) && !code_cells
         push!(raw_chunks, (type = :markdown, source = markdown, file = path, line = 1))
+        if contains(markdown, r"`{(julia|python|r})")
+            source_code_hash = hash(markdown, source_code_hash)
+        end
     end
 
-    frontmatter = _recursive_merge(default_frontmatter(), CommonMark.frontmatter(ast))
+    frontmatter = _recursive_merge(default_frontmatter(), file_fromtmatter)
 
-    return raw_chunks, frontmatter
+    return source_code_hash, raw_chunks, frontmatter
 end
 
 _recursive_merge(x::AbstractDict...) = merge(_recursive_merge, x...)
@@ -499,6 +573,7 @@ function raw_script_chunks(path::String)
         push!(cell_markers, (length(lines) + 1, :unknown))
 
         raw_chunks = []
+        source_code_hash = hash(VERSION) # TODO: seed choice?
 
         frontmatter = Dict{String,Any}()
 
@@ -534,6 +609,7 @@ function raw_script_chunks(path::String)
                         cell_options,
                     ),
                 )
+                source_code_hash = hash(source, source_code_hash)
             elseif type == :markdown
                 try
                     text = Meta.parse(source)
@@ -583,7 +659,7 @@ function raw_script_chunks(path::String)
 
         frontmatter = _recursive_merge(frontmatter, default_frontmatter())
 
-        return raw_chunks, frontmatter
+        return source_code_hash, raw_chunks, frontmatter
     else
         throw(ArgumentError("file does not exist: $(path)"))
     end
@@ -659,7 +735,6 @@ function evaluate_raw_cells!(
     showprogress = true,
     chunk_callback = (i, n, c) -> nothing,
 )
-    refresh!(f, options)
     evaluate_params!(f, options["params"])
 
     cells = []
