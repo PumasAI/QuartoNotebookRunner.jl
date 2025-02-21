@@ -21,6 +21,7 @@ function worker_init(f::File, options::Dict)
             QNW.NotebookState.define_notebook_module!(Main)
             global refresh!(args...) = QNW.refresh!($(f.path), $(options), args...)
             global render(args...; kwargs...) = QNW.render(args...; kwargs...)
+            global revise_hook() = QNW.revise_hook()
         end
 
         nothing

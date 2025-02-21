@@ -24,6 +24,9 @@ function refresh!(path, original_options, options = original_options)
     return nothing
 end
 
+revise_hook() = _revise_hook(nothing)
+_revise_hook(::Any) = nothing
+
 function rget(dict, keys, default)
     value = dict
     for key in keys

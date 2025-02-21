@@ -155,10 +155,10 @@ function refresh!(file::File, options::Dict)
             cd(() -> Malt.Worker(; exe, exeflags = _exeflags, env), dirname(file.path))
         file.exe = exe
         file.exeflags = exeflags
+        file.env = env
         init!(file, options)
     end
-    expr = :(refresh!($(options)))
-    remote_eval_fetch_channeled(file.worker, expr)
+    remote_eval_fetch_channeled(file.worker, :(refresh!($(options)); revise_hook()))
 end
 
 """
