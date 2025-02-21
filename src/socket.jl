@@ -212,7 +212,50 @@ function serve(;
     return SocketServer(socket_server, notebook_server, port, task, key)
 end
 
-function _handle_response(
+if Preferences.@load_preference("enable_revise", false)
+    let mod = Ref{Module}(),
+        pkgid = Base.PkgId(Base.UUID("295af30f-e4ad-537b-8983-00126c2a3abe"), "Revise")
+
+        global function _try_revise()
+            if !isassigned(mod)
+                try
+                    mod[] = Base.require(pkgid)
+                    package_module = @__MODULE__
+                    _, package_files = Base.invokelatest(mod[].modulefiles, package_module)
+                    if !isnothing(package_files)
+                        Base.invokelatest(mod[].track, package_module, package_files)
+                    end
+                catch error
+                    return "Could not load `Revise`: $(error)"
+                end
+            end
+            if Base.invokelatest(!isempty, mod[].revision_queue)
+                try
+                    Base.invokelatest(_run_revise, mod[])
+                catch error
+                    return "Failed to run `Revise.revise`: $(error)"
+                end
+            end
+            return nothing
+        end
+    end
+
+    _run_revise(Revise) = Revise.revise(; throw = true)
+
+    @noinline function _handle_response(socket, args...)
+        revise_error = _try_revise()
+        if isnothing(revise_error)
+            return Base.invokelatest(_handle_response_internal, socket, args...)
+        else
+            return _write_json(socket, _log_error(revise_error))
+        end
+    end
+else
+    @inline _try_revise() = nothing
+    @inline _handle_response(args...) = _handle_response_internal(args...)
+end
+
+function _handle_response_internal(
     socket,
     notebooks::Server,
     request::@NamedTuple{type::String, content::Union{String,Dict{String,Any}}},
