@@ -110,7 +110,22 @@ capture() do
     end
 end
 
-# Step 4:
+# Step: 4
+#
+# Import `Revise` if the `QUARTO_ENABLE_REVISE` environment variable is set.
+# This happens prior to importing `QuartoNotebookWorker` so that `Revise` can
+# track the worker package, as well as anything that the user has loaded. This
+# setting is an internal setting and should not be used by end-users. They
+# should do a manual `import Revise` in their notebook if they need `Revise`
+# support.
+capture() do
+    if get(ENV, "QUARTO_ENABLE_REVISE", "false") == "true"
+        pkgid = Base.PkgId(Base.UUID("295af30f-e4ad-537b-8983-00126c2a3abe"), "Revise")
+        Base.require(pkgid)
+    end
+end
+
+# Step 5:
 #
 # Now load in the worker package. This may trigger package precompilation on
 # first load, hence it is run under a `capture` should it fail to run.
@@ -123,13 +138,13 @@ const QuartoNotebookWorker = capture() do
     )
 end
 
-# Step 5:
+# Step 6:
 #
 # Ensures that the LOAD_PATH is returned to it's previous state without the
 # `@stdlib` that was pushed to it near the start of the file.
 popfirst!(LOAD_PATH)
 
-# Step 6:
+# Step 7:
 #
 # This calls into the main socket server loop, which does not terminate until
 # the process is finished off and the notebook needs closing. So anything

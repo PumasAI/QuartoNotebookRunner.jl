@@ -21,3 +21,11 @@ processes then run:
 ```
 $ just close
 ```
+
+## `QuartoNotebookWorker` code revision
+
+To enable `Revise` for the `QuartoNotebookWorker` module, you must have
+`Revise` installed as a dependency in the notebook environment, it cannot be a
+global environment dependency since this is not path of the `LOAD_PATH` for
+notebooks. Then set the `QUARTO_ENABLE_REVISE=true` environment variable for
+your notebook in the `julia.env` frontmatter key.
