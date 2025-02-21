@@ -118,8 +118,9 @@ end
 # setting is an internal setting and should not be used by end-users. They
 # should do a manual `import Revise` in their notebook if they need `Revise`
 # support.
+const QUARTO_ENABLE_REVISE = get(ENV, "QUARTO_ENABLE_REVISE", "false") == "true"
 capture() do
-    if get(ENV, "QUARTO_ENABLE_REVISE", "false") == "true"
+    if QUARTO_ENABLE_REVISE
         pkgid = Base.PkgId(Base.UUID("295af30f-e4ad-537b-8983-00126c2a3abe"), "Revise")
         Base.require(pkgid)
     end
@@ -136,6 +137,27 @@ const QuartoNotebookWorker = capture() do
             "QuartoNotebookWorker",
         ),
     )
+end
+
+# Step 6:
+#
+# Define the notebook interface that the server process will call.
+render(args...; kwargs...) = QuartoNotebookWorker.render(args...; kwargs...)
+revise_hook() = @static QUARTO_ENABLE_REVISE ? QuartoNotebookWorker.revise_hook() : nothing
+
+# Issue #192
+#
+# Malt itself uses a new task for each `remote_eval` and because of
+# this, random number streams are not consistent across runs even if
+# seeded, as each task introduces a new state for its task-local RNG.
+# As a workaround, we feed all `remote_eval` requests through these
+# channels, such that the task executing code is always the same.
+const stable_execution_task_channel_out = Channel()
+const stable_execution_task_channel_in = Channel() do chan
+    for expr in chan
+        result = Core.eval(Main, expr)
+        put!(stable_execution_task_channel_out, result)
+    end
 end
 
 # Step 6:
