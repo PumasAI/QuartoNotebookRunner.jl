@@ -27,6 +27,7 @@ import IterTools
 import JSON3
 import Logging
 import PrecompileTools
+import Preferences
 import ProgressLogging
 import REPL
 import Random
