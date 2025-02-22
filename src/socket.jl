@@ -229,9 +229,9 @@ if Preferences.@load_preference("enable_revise", false)
                     return "Could not load `Revise`: $(error)"
                 end
             end
-            if Base.invokelatest(!isempty, mod[].revision_queue)
+            if !isempty(mod[].revision_queue)
                 try
-                    Base.invokelatest(_run_revise, mod[])
+                    Base.invokelatest(mod[].revise; throw = true)
                 catch error
                     return "Failed to run `Revise.revise`: $(error)"
                 end
@@ -239,8 +239,6 @@ if Preferences.@load_preference("enable_revise", false)
             return nothing
         end
     end
-
-    _run_revise(Revise) = Revise.revise(; throw = true)
 
     @noinline function _handle_response(socket, args...)
         revise_error = _try_revise()
