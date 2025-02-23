@@ -51,8 +51,16 @@ function _julia_exe(exeflags)
     if all(!isnothing, Sys.which.(("juliaup", "julia")))
         indices = findall(startswith("+"), exeflags)
         if isempty(indices)
-            # Use the default `julia` channel set for `juliaup`.
-            return `julia`, exeflags
+            quarto_julia = get(ENV, "QUARTO_JULIA", nothing)
+            if isnothing(quarto_julia)
+                # Use the default `julia` channel set for `juliaup`.
+                return `julia`, exeflags
+            else
+                # Use the `julia` binary that was specified in the environment
+                # variable that can be passed to `quarto` to pick the server
+                # process `julia` to use.
+                return `$quarto_julia`, exeflags
+            end
         else
             # Pull out the channel from the exeflags. Since we merge in
             # exeflags from the `QUARTONOTEBOOKRUNNER_EXEFLAGS` environment
