@@ -8,6 +8,7 @@ module Malt
 import ..QuartoNotebookRunner: UserError
 
 import BSON
+import IOCapture
 import Pkg
 import TOML
 using Sockets: Sockets
@@ -129,6 +130,17 @@ mutable struct Worker <: AbstractWorker
 
                 err_output = read(errors_log_file, String)
                 if isnothing(manifest_error)
+                    empty_result = IOCapture.capture(; rethrow = InterruptException) do
+                        run(_get_worker_cmd(; exe, env, exeflags, file = String(empty_file)))
+                    end
+                    if empty_result.error
+                        message = """
+                        Failed to start worker process.
+
+                        $(empty_result.output)
+                        """
+                        error(message)
+                    end
                     # Generic error reporting when we've not received a port
                     # number from the worker. This just prints out the error
                     # message and stacktrace that have come from the worker
@@ -367,15 +379,16 @@ end
 
 # The entire `src` dir should be relocatable, so that worker.jl can include("MsgType.jl").
 const startup_file = RelocatableFolders.@path joinpath(@__DIR__, "startup.jl")
+const empty_file = RelocatableFolders.@path joinpath(@__DIR__, "empty.jl")
 const worker_package = RelocatableFolders.@path joinpath(@__DIR__, "QuartoNotebookWorker")
 
-function _get_worker_cmd(; exe, env, exeflags)
+function _get_worker_cmd(; exe, env, exeflags, file = String(startup_file))
     defaults = Dict(
         "OPENBLAS_NUM_THREADS" => "1",
         "QUARTONOTEBOOKWORKER_PACKAGE" => String(worker_package),
     )
     env = vcat(Base.byteenv(defaults), Base.byteenv(env))
-    return addenv(`$exe --startup-file=no $exeflags $(String(startup_file))`, env)
+    return addenv(`$exe --startup-file=no $exeflags $file`, env)
 end
 
 # Checks whether a `julia` command (including it's program flags and juliaup
