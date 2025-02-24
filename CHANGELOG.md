@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+## [v0.13.2] - 2025-02-24
+
 ### Fixed
 
 - Fix missing display maths output in Typst. Works around inconsistency in handling of markdown math syntax between Quarto output formats [#262]
@@ -317,6 +319,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 [v0.12.3]: https://github.com/PumasAI/QuartoNotebookRunner.jl/releases/tag/v0.12.3
 [v0.13.0]: https://github.com/PumasAI/QuartoNotebookRunner.jl/releases/tag/v0.13.0
 [v0.13.1]: https://github.com/PumasAI/QuartoNotebookRunner.jl/releases/tag/v0.13.1
+[v0.13.2]: https://github.com/PumasAI/QuartoNotebookRunner.jl/releases/tag/v0.13.2
 [#9]: https://github.com/PumasAI/QuartoNotebookRunner.jl/issues/9
 [#11]: https://github.com/PumasAI/QuartoNotebookRunner.jl/issues/11
 [#14]: https://github.com/PumasAI/QuartoNotebookRunner.jl/issues/14
