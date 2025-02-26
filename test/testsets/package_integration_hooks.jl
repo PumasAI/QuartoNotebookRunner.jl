@@ -26,7 +26,7 @@ include("../utilities/prelude.jl")
                     "CairoMakie.qmd";
                     showprogress = false,
                 )
-                return json.cells[end].outputs[1].metadata["image/png"]
+                return json.cells[end-1].outputs[1].metadata["image/png"]
             end
 
             metadata = png_metadata()

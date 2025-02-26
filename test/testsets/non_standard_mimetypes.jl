@@ -26,7 +26,7 @@ include("../utilities/prelude.jl")
                 )
 
                 json = JSON3.read(ipynb)
-                markdown = json.cells[end].outputs[1].data["text/markdown"]
+                markdown = json.cells[end-1].outputs[1].data["text/markdown"]
                 @test contains(markdown, expected[format])
 
                 if !Sys.iswindows()

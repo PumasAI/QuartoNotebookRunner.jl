@@ -22,6 +22,7 @@ import BSON
 import Base64
 import CommonMark
 import Compat
+import Dates
 import InteractiveUtils
 import IterTools
 import JSON3

@@ -2,7 +2,7 @@ include("../utilities/prelude.jl")
 
 test_example(joinpath(@__DIR__, "../examples/display-mime.qmd")) do json
     cells = json["cells"]
-    @test length(cells) == 4
+    @test length(cells) == 5
     for each in (2, 4)
         cell = cells[each]
         outputs = cell["outputs"]

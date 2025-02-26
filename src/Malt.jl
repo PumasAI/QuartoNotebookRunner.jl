@@ -81,8 +81,10 @@ mutable struct Worker <: AbstractWorker
     current_message_id::MsgID
     expected_replies::Dict{MsgID,Channel{WorkerResult}}
 
+    manifest_file::String
+
     function Worker(; exe = Base.julia_cmd()[1], env = String[], exeflags = [])
-        proc, port, manifest_error = mktempdir() do temp_dir
+        proc, port, manifest_error, manifest_file = mktempdir() do temp_dir
             # The `errors.log` file is used by the worker process to pass back
             # any errors that occur during startup. This is used instead of
             # capturing the process's `stderr` via a pipe since we only need to
@@ -118,7 +120,7 @@ mutable struct Worker <: AbstractWorker
             # the worker is connected to the socket and if there is a mismatch
             # we call `stop` to gracefully close the worker. We cannot
             # gracefully close it until that point.
-            manifest_error =
+            manifest_file, manifest_error =
                 _validate_worker_process_manifest(metadata_toml_file, errors_log_file)
 
             if port === nothing
@@ -160,7 +162,7 @@ mutable struct Worker <: AbstractWorker
                 end
             end
 
-            return proc, port, manifest_error
+            return proc, port, manifest_error, manifest_file
         end
 
         # Connect
@@ -178,6 +180,7 @@ mutable struct Worker <: AbstractWorker
                 socket,
                 MsgID(0),
                 Dict{MsgID,Channel{WorkerResult}}(),
+                manifest_file,
             ),
         )
         atexit(() -> stop(w))
@@ -218,14 +221,15 @@ function _validate_worker_process_manifest(
 
     # When there is no manifest file yet then we don't need to report any
     # issues since there will be no resolver issues.
-    isfile(manifest_toml_file) || return nothing
+    isfile(manifest_toml_file) || return "", nothing
 
     manifest = TOML.parsefile(manifest_toml_file)
     expected_julia_version = get(manifest, "julia_version", "")
+    project_hash = get(manifest, "project_hash", "")
 
     # The older manifest format does not include the `julia_version`. For these
     # ones, just skip the check. To revisit if we encounter issues with this.
-    isempty(expected_julia_version) && return nothing
+    isempty(expected_julia_version) && return project_hash, nothing
 
     if !_compare_versions(actual_julia_version, expected_julia_version)
         message = """
@@ -246,8 +250,9 @@ function _validate_worker_process_manifest(
             message *= "\nERROR: $error_output"
         end
 
-        return message
+        return project_hash, message
     end
+    return project_hash, nothing
 end
 
 # This check needs to happen on the worker process since the hashing of the
