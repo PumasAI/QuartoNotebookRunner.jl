@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+## [v0.14.0] - 2025-02-26
+
 ### Added
 
 - Support for `execute.cache` frontmatter option, which allows notebooks to
@@ -329,6 +331,7 @@ caching is enabled. Delete this folder to clear the cache. [#259]
 [v0.13.0]: https://github.com/PumasAI/QuartoNotebookRunner.jl/releases/tag/v0.13.0
 [v0.13.1]: https://github.com/PumasAI/QuartoNotebookRunner.jl/releases/tag/v0.13.1
 [v0.13.2]: https://github.com/PumasAI/QuartoNotebookRunner.jl/releases/tag/v0.13.2
+[v0.14.0]: https://github.com/PumasAI/QuartoNotebookRunner.jl/releases/tag/v0.14.0
 [#9]: https://github.com/PumasAI/QuartoNotebookRunner.jl/issues/9
 [#11]: https://github.com/PumasAI/QuartoNotebookRunner.jl/issues/11
 [#14]: https://github.com/PumasAI/QuartoNotebookRunner.jl/issues/14
