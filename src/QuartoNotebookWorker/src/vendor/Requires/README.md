@@ -2,10 +2,6 @@
 
 For older versions of Julia, see https://github.com/MikeInnes/Requires.jl/blob/5683745f03cbea41f6f053182461173e236fdd94/README.md
 
-For Julia 1.9 and higher, Package Extensions is preferable;
-see
-[the Julia manual](https://docs.julialang.org/en/v1/manual/code-loading/#man-extensions).
-
 # Requires.jl
 
 [![Build Status](https://travis-ci.org/MikeInnes/Requires.jl.svg?branch=master)](https://travis-ci.org/MikeInnes/Requires.jl)
@@ -61,8 +57,6 @@ end
 if you wish to exploit precompilation for the new code.
 
 In the `@require` block, or any included files, you can use or import the package, but note that you must use the syntax `using .Gadfly` or `import .Gadfly`, rather than the usual syntax. Otherwise you will get a warning about Gadfly not being in dependencies.
-
-`@require`d packages can be added to the `test` environment of a Julia project for integration tests, or directly to the project to document compatible versions in the `[compat]` section of `Project.toml`.
 
 ## Demo
 
