@@ -95,7 +95,7 @@ jobs:
         if: matrix.os == 'ubuntu-latest' && matrix.version == '1.6'
 
       # TODO: use quarto_jll for integration tests once modern enough versions are available
-      - uses: quarto-dev/quarto-actions/setup@8776aaf3ebefdda84c7654715823a205d047802a # v2.1.7
+      - uses: quarto-dev/quarto-actions/setup@9e48da27e184aa238fcb49f5db75469626d43adb # v2.1.9
         with:
           version: pre-release
 
