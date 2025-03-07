@@ -6,6 +6,8 @@ struct SocketServer
     port::Int
     task::Task
     key::Base.UUID
+    timeout::Union{Nothing,Float64}
+    timeout_started_at::Ref{Union{Nothing,Dates.DateTime}}
 end
 
 Base.wait(s::SocketServer) = wait(s.task)
@@ -112,6 +114,7 @@ function serve(;
     end
 
     timer = Ref{Union{Timer,Nothing}}(nothing)
+    timeout_started_at = Ref{Union{Nothing,Dates.DateTime}}(nothing)
 
     function set_timer!()
         @debug "Timer set up"
@@ -130,6 +133,7 @@ function serve(;
                 close(socket_server)
             end
         end
+        timeout_started_at[] = Dates.now()
     end
 
     # this function is called under server.lock so we don't need further synchronization
@@ -149,6 +153,7 @@ function serve(;
                     @debug "Closing active timer"
                     close(timer[])
                     timer[] = nothing
+                    timeout_started_at[] = nothing
                 end
             end
             return
@@ -216,7 +221,7 @@ function serve(;
 
     errormonitor(task)
 
-    socket_server_ref[] = SocketServer(socket_server, notebook_server, port, task, key)
+    socket_server_ref[] = SocketServer(socket_server, notebook_server, port, task, key, timeout, timeout_started_at)
     return socket_server_ref[]
 end
 
@@ -512,65 +517,75 @@ function format_seconds(seconds)::String
 end
 
 function server_status(socketserver::SocketServer)
+    server_timeout = socketserver.timeout
+    timeout_started_at = socketserver.timeout_started_at[]
     server = socketserver.notebookserver
     lock(server.lock) do
         io = IOBuffer()
         current_time = Dates.now()
 
-        println(io, "  environment: $(replace(Base.active_project(), "Project.toml" => ""))")
-        println(io, "  runner version: $(Base.pkgversion(@__MODULE__))")
-        println(io, "  pid: $(Base.getpid())")
-        println(io, "  julia version: $(VERSION)")
-        println(io, "  port: $(socketserver.port)")
-        println(io, "  workers active: $(length(server.workers))")
+        println(io, "runner version: $(Base.pkgversion(@__MODULE__))")
+        println(io, "environment: $(replace(Base.active_project(), "Project.toml" => ""))")
+        println(io, "pid: $(Base.getpid())")
+        println(io, "port: $(socketserver.port)")
+        println(io, "julia version: $(VERSION)")
 
-        for (index, file) in enumerate(values(server.workers))
-            run_started = file.run_started
-            run_finished = file.run_finished
-            
-            if isnothing(run_started)
-                seconds_since_started = nothing
-            else
-                seconds_since_started = Dates.value(current_time - run_started) / 1000
+        print(io, "timeout: $(server_timeout === nothing ? "disabled" : format_seconds(server_timeout))")
+
+        if isempty(server.workers) && server_timeout !== nothing && timeout_started_at !== nothing
+            seconds_until_server_timeout = server_timeout - Dates.value(Dates.now() - timeout_started_at) / 1000
+            println(io, " ($(format_seconds(seconds_until_server_timeout)) left)")
+        else
+            println(io)
+            println(io, "workers active: $(length(server.workers))")
+
+            for (index, file) in enumerate(values(server.workers))
+                run_started = file.run_started
+                run_finished = file.run_finished
+                
+                if isnothing(run_started)
+                    seconds_since_started = nothing
+                else
+                    seconds_since_started = Dates.value(current_time - run_started) / 1000
+                end
+
+                if isnothing(run_started) || isnothing(run_finished)
+                    run_duration_seconds = nothing
+                else
+                    run_duration_seconds = Dates.value(run_finished - run_started) / 1000
+                end
+
+                if isnothing(run_finished)
+                    seconds_since_finished = nothing
+                else
+                    seconds_since_finished = Dates.value(current_time - run_finished) / 1000
+                end
+
+                if file.timeout > 0 && !isnothing(seconds_since_finished)
+                    time_until_timeout = file.timeout - seconds_since_finished
+                else
+                    time_until_timeout = nothing
+                end
+
+                run_started_str = isnothing(run_started) ? "-" : simple_date_time_string(run_started)
+                run_started_ago = isnothing(seconds_since_started) ? "" : " ($(format_seconds(seconds_since_started)) ago)"
+
+                run_finished_str = isnothing(run_finished) ? "-" : simple_date_time_string(run_finished)
+                run_duration_str = isnothing(run_duration_seconds) ? "" : " (took $(format_seconds(run_duration_seconds)))"
+
+                timeout_str = "$(format_seconds(file.timeout))"
+                time_until_timeout_str = isnothing(time_until_timeout) ? "" : " ($(format_seconds(time_until_timeout)) left)"
+
+                println(io, "  worker $(index):")
+                println(io, "    path: $(file.path)")
+                println(io, "    run started: $(run_started_str)$(run_started_ago)")
+                println(io, "    run finished: $(run_finished_str)$(run_duration_str)")
+                println(io, "    timeout: $(timeout_str)$(time_until_timeout_str)")
+                println(io, "    pid: $(file.worker.proc_pid)")
+                println(io, "    exe: $(file.exe)")
+                println(io, "    exeflags: $(file.exeflags)")
             end
-
-            if isnothing(run_started) || isnothing(run_finished)
-                run_duration_seconds = nothing
-            else
-                run_duration_seconds = Dates.value(run_finished - run_started) / 1000
-            end
-
-            if isnothing(run_finished)
-                seconds_since_finished = nothing
-            else
-                seconds_since_finished = Dates.value(current_time - run_finished) / 1000
-            end
-
-            if file.timeout > 0 && !isnothing(seconds_since_finished)
-                time_until_timeout = file.timeout - seconds_since_finished
-            else
-                time_until_timeout = nothing
-            end
-
-            run_started_str = isnothing(run_started) ? "-" : simple_date_time_string(run_started)
-            run_started_ago = isnothing(seconds_since_started) ? "" : " ($(format_seconds(seconds_since_started)) ago)"
-
-            run_finished_str = isnothing(run_finished) ? "-" : simple_date_time_string(run_finished)
-            run_duration_str = isnothing(run_duration_seconds) ? "" : " (took $(format_seconds(run_duration_seconds)))"
-
-            timeout_str = "$(format_seconds(file.timeout))"
-            time_until_timeout_str = isnothing(time_until_timeout) ? "" : " ($(format_seconds(time_until_timeout)) left)"
-
-            println(io, "    worker $(index):")
-            println(io, "      path: $(file.path)")
-            println(io, "      run started: $(run_started_str)$(run_started_ago)")
-            println(io, "      run finished: $(run_finished_str)$(run_duration_str)")
-            println(io, "      timeout: $(timeout_str)$(time_until_timeout_str)")
-            println(io, "      pid: $(file.worker.proc_pid)")
-            println(io, "      exe: $(file.exe)")
-            println(io, "      exeflags: $(file.exeflags)")
         end
-
         return String(take!(io))
     end
 end
