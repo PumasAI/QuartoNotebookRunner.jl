@@ -221,7 +221,15 @@ function serve(;
 
     errormonitor(task)
 
-    socket_server_ref[] = SocketServer(socket_server, notebook_server, port, task, key, timeout, timeout_started_at)
+    socket_server_ref[] = SocketServer(
+        socket_server,
+        notebook_server,
+        port,
+        task,
+        key,
+        timeout,
+        timeout_started_at,
+    )
     return socket_server_ref[]
 end
 
@@ -487,7 +495,9 @@ if !isdefined(Base, :errormonitor)
 end
 
 function is_same_day(date1, date2)::Bool
-    return Dates.year(date1) == Dates.year(date2) && Dates.month(date1) == Dates.month(date2) && Dates.day(date1) == Dates.day(date2)
+    return Dates.year(date1) == Dates.year(date2) &&
+           Dates.month(date1) == Dates.month(date2) &&
+           Dates.day(date1) == Dates.day(date2)
 end
 
 function simple_date_time_string(date)::String
@@ -495,7 +505,15 @@ function simple_date_time_string(date)::String
     if is_same_day(date, now)
         return string(Dates.hour(date), ":", Dates.minute(date), ":", Dates.second(date))
     else
-        return string(date, " ", Dates.hour(date), ":", Dates.minute(date), ":", Dates.second(date))
+        return string(
+            date,
+            " ",
+            Dates.hour(date),
+            ":",
+            Dates.minute(date),
+            ":",
+            Dates.second(date),
+        )
     end
 end
 
@@ -530,10 +548,16 @@ function server_status(socketserver::SocketServer)
         println(io, "port: $(socketserver.port)")
         println(io, "julia version: $(VERSION)")
 
-        print(io, "timeout: $(server_timeout === nothing ? "disabled" : format_seconds(server_timeout))")
+        print(
+            io,
+            "timeout: $(server_timeout === nothing ? "disabled" : format_seconds(server_timeout))",
+        )
 
-        if isempty(server.workers) && server_timeout !== nothing && timeout_started_at !== nothing
-            seconds_until_server_timeout = server_timeout - Dates.value(Dates.now() - timeout_started_at) / 1000
+        if isempty(server.workers) &&
+           server_timeout !== nothing &&
+           timeout_started_at !== nothing
+            seconds_until_server_timeout =
+                server_timeout - Dates.value(Dates.now() - timeout_started_at) / 1000
             println(io, " ($(format_seconds(seconds_until_server_timeout)) left)")
         else
             println(io)
@@ -542,7 +566,7 @@ function server_status(socketserver::SocketServer)
             for (index, file) in enumerate(values(server.workers))
                 run_started = file.run_started
                 run_finished = file.run_finished
-                
+
                 if isnothing(run_started)
                     seconds_since_started = nothing
                 else
@@ -567,14 +591,22 @@ function server_status(socketserver::SocketServer)
                     time_until_timeout = nothing
                 end
 
-                run_started_str = isnothing(run_started) ? "-" : simple_date_time_string(run_started)
-                run_started_ago = isnothing(seconds_since_started) ? "" : " ($(format_seconds(seconds_since_started)) ago)"
+                run_started_str =
+                    isnothing(run_started) ? "-" : simple_date_time_string(run_started)
+                run_started_ago =
+                    isnothing(seconds_since_started) ? "" :
+                    " ($(format_seconds(seconds_since_started)) ago)"
 
-                run_finished_str = isnothing(run_finished) ? "-" : simple_date_time_string(run_finished)
-                run_duration_str = isnothing(run_duration_seconds) ? "" : " (took $(format_seconds(run_duration_seconds)))"
+                run_finished_str =
+                    isnothing(run_finished) ? "-" : simple_date_time_string(run_finished)
+                run_duration_str =
+                    isnothing(run_duration_seconds) ? "" :
+                    " (took $(format_seconds(run_duration_seconds)))"
 
                 timeout_str = "$(format_seconds(file.timeout))"
-                time_until_timeout_str = isnothing(time_until_timeout) ? "" : " ($(format_seconds(time_until_timeout)) left)"
+                time_until_timeout_str =
+                    isnothing(time_until_timeout) ? "" :
+                    " ($(format_seconds(time_until_timeout)) left)"
 
                 println(io, "  worker $(index):")
                 println(io, "    path: $(file.path)")
@@ -589,4 +621,3 @@ function server_status(socketserver::SocketServer)
         return String(take!(io))
     end
 end
-
