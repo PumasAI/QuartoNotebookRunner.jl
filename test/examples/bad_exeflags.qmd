@@ -1,0 +1,9 @@
+---
+title: Bad exeflags
+julia:
+    exeflags: ["--unknown-flag"]
+---
+
+```{julia}
+VERSION
+```

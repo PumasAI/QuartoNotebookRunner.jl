@@ -1,0 +1,9 @@
+---
+title: Bad juliaup channel
+julia:
+    exeflags: ["+unknown"]
+---
+
+```{julia}
+VERSION
+```

@@ -223,7 +223,48 @@ function serve(;
     return SocketServer(socket_server, notebook_server, port, task, key)
 end
 
-function _handle_response(
+if Preferences.@load_preference("enable_revise", false)
+    let mod = Ref{Module}(),
+        pkgid = Base.PkgId(Base.UUID("295af30f-e4ad-537b-8983-00126c2a3abe"), "Revise")
+
+        global function _try_revise()
+            if !isassigned(mod)
+                try
+                    mod[] = Base.require(pkgid)
+                    package_module = @__MODULE__
+                    _, package_files = Base.invokelatest(mod[].modulefiles, package_module)
+                    if !isnothing(package_files)
+                        Base.invokelatest(mod[].track, package_module, package_files)
+                    end
+                catch error
+                    return "Could not load `Revise`: $(error)"
+                end
+            end
+            if !isempty(mod[].revision_queue)
+                try
+                    Base.invokelatest(mod[].revise; throw = true)
+                catch error
+                    return "Failed to run `Revise.revise`: $(error)"
+                end
+            end
+            return nothing
+        end
+    end
+
+    @noinline function _handle_response(socket, args...)
+        revise_error = _try_revise()
+        if isnothing(revise_error)
+            return Base.invokelatest(_handle_response_internal, socket, args...)
+        else
+            return _write_json(socket, _log_error(revise_error))
+        end
+    end
+else
+    @inline _try_revise() = nothing
+    @inline _handle_response(args...) = _handle_response_internal(args...)
+end
+
+function _handle_response_internal(
     socket,
     notebooks::Server,
     request::@NamedTuple{type::String, content::Union{String,Dict{String,Any}}},
@@ -312,6 +353,12 @@ end
 function _log_error(message, error, backtrace)
     @error message exception = (error, backtrace)
     return (; error = message, juliaError = sprint(Base.showerror, error, backtrace))
+end
+# A `UserError` comes from an expected location and doesn't need us to show the
+# stacktrace to the user, so skip it.
+function _log_error(message, error::QuartoNotebookRunner.UserError, backtrace)
+    @error message exception = (error, backtrace)
+    return (; error = message, juliaError = sprint(Base.showerror, error))
 end
 # EvaluationErrors don't send their local backtrace because only the contained
 # notebook-related errors are interesting for the user

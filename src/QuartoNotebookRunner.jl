@@ -18,17 +18,17 @@ module QuartoNotebookRunner
 
 # Imports.
 
+import BSON
 import Base64
 import CommonMark
 import Compat
 import Dates
-import IOCapture
 import InteractiveUtils
 import IterTools
 import JSON3
 import Logging
-import Malt
 import PrecompileTools
+import Preferences
 import ProgressLogging
 import REPL
 import Random
@@ -43,6 +43,8 @@ export Server, render, run!, close!
 
 # Includes.
 
+include("UserError.jl")
+include("Malt.jl")
 include("WorkerSetup.jl")
 include("server.jl")
 include("socket.jl")

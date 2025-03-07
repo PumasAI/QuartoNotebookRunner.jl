@@ -2,4 +2,8 @@
 CairoMakie = "13f3f980-e62b-5c42-98c6-ff1f3baf88f0"
 DataFrames = "a93c6f00-e57d-5684-b7b6-d8193f3e46c0"
 Latexify = "23fbe1c1-3f47-55db-b15f-69d7ec21a316"
+Makie = "ee78f7c6-11fb-53f2-987a-cfe4a2b5a57a"
 PrettyTables = "08abe8d2-0d0c-5749-adfa-8a2ac140af0d"
+
+[compat]
+Makie = "= 0.22.1"

@@ -74,29 +74,39 @@ jobs:
         with:
           persist-credentials: false
 
-      - uses: julia-actions/setup-julia@5c9647d97b78a5debe5164e9eec09d653d29bd71 # v2.6.1
+      - uses: julia-actions/install-juliaup@1da6847c869cd68e3a32b8f52fe8f005b8cd5ece # v2.2.1
         with:
-          version: ${{ matrix.version }}
-      - uses: julia-actions/cache@824243901fb567ccb490b0d0e2483ccecde46834 # v2.0.5
+          channel: "${{ matrix.version }}"
 
-      - uses: r-lib/actions/setup-r@473c68190595b311a74f208fba61a8d8c0d4c247 # v2.11.1
+      # These versions of `julia` are used for the cross-version notebook tests.
+      - run: juliaup add 1.9.4
+      - run: juliaup add 1.10.7
+      - run: juliaup add 1.11.2
+
+      - uses: julia-actions/cache@2b1bf4d8a138668ac719ea7ca149b53ed8d8401e # v2.0.7
+
+      - uses: r-lib/actions/setup-r@14a7e741c1cb130261263aa1593718ba42cf443b # v2.11.2
         with:
           use-public-rspm: true
           r-version: "4.3"
       - run: echo "LD_LIBRARY_PATH=$(R RHOME)/lib:$LD_LIBRARY_PATH" >> $GITHUB_ENV
         if: matrix.os == 'ubuntu-latest'
+      - run: julia -e 'cp("/usr/lib/x86_64-linux-gnu/libstdc++.so.6", joinpath(dirname(Sys.BINDIR), "lib", "julia", "libstdc++.so.6"); force = true)' 
+        if: matrix.os == 'ubuntu-latest' && matrix.version == '1.6'
 
       # TODO: use quarto_jll for integration tests once modern enough versions are available
-      - uses: quarto-dev/quarto-actions/setup@87b35bb88b36317fa36b5189e9553b4164a5c5a3 # v2.1.6
+      - uses: quarto-dev/quarto-actions/setup@9e48da27e184aa238fcb49f5db75469626d43adb # v2.1.9
         with:
           version: pre-release
 
       - uses: julia-actions/julia-buildpkg@e3eb439fad4f9aba7da2667e7510e4a46ebc46e1 # v1.7.0
-      - uses: julia-actions/julia-runtest@1e03e0122a598a569004c1e26950e2547b350ec0 # v1.11.1
+      - uses: julia-actions/julia-runtest@678da69444cd5f13d7e674a90cb4f534639a14f9 # v1.11.2
         with:
           depwarn: "yes"
       - uses: julia-actions/julia-processcoverage@03114f09f119417c3242a9fb6e0b722676aedf38 # v1.2.2
-      - uses: codecov/codecov-action@015f24e6818733317a2da2edd6290ab26238649a # v5.0.7
+        if: matrix.os == 'ubuntu-latest' && matrix.version == '1.11'
+      - uses: codecov/codecov-action@0565863a31f2c772f9f0395002a31e3f06189574 # v5.4.0
+        if: matrix.os == 'ubuntu-latest' && matrix.version == '1.11'
         with:
           verbose: true
           files: lcov.info

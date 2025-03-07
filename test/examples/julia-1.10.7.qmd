@@ -1,0 +1,8 @@
+---
+julia:
+    exeflags: ["+1.10.7"]
+---
+
+```{julia}
+VERSION
+```

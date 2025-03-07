@@ -3,6 +3,9 @@
 mutable struct File
     worker::Malt.Worker
     path::String
+    source_code_hash::UInt64
+    output_chunks::Vector
+    exe::Cmd
     exeflags::Vector{String}
     env::Vector{String}
     lock::ReentrantLock
@@ -18,15 +21,21 @@ mutable struct File
                 path = isabspath(path) ? path : abspath(path)
 
                 options = _parsed_options(options)
-                _, file_frontmatter = raw_text_chunks(path)
+                _, _, file_frontmatter = raw_text_chunks(path)
                 merged_options = _extract_relevant_options(file_frontmatter, options)
                 exeflags, env = _exeflags_and_env(merged_options)
                 timeout = _extract_timeout(merged_options)
 
-                worker = cd(() -> Malt.Worker(; exeflags, env), dirname(path))
+
+                exe, _exeflags = _julia_exe(exeflags)
+                worker =
+                    cd(() -> Malt.Worker(; exe, exeflags = _exeflags, env), dirname(path))
                 file = new(
                     worker,
                     path,
+                    hash(VERSION),
+                    [],
+                    exe,
                     exeflags,
                     env,
                     ReentrantLock(),
@@ -48,6 +57,40 @@ mutable struct File
             throw(ArgumentError("file does not exist: $path"))
         end
     end
+end
+
+function _julia_exe(exeflags)
+    # Find the `julia` executable to use for this worker process. If the
+    # `juliaup` command is available, we can use plain `julia` if a channel has
+    # been provided in the exeflags. The channel exeflag is dropped from the
+    # exeflags vector so that it isn't provided twice, the second of which
+    # would be treated as a file name.
+    if all(!isnothing, Sys.which.(("juliaup", "julia")))
+        indices = findall(startswith("+"), exeflags)
+        if isempty(indices)
+            quarto_julia = get(ENV, "QUARTO_JULIA", nothing)
+            if isnothing(quarto_julia)
+                # Use the default `julia` channel set for `juliaup`.
+                return `julia`, exeflags
+            else
+                # Use the `julia` binary that was specified in the environment
+                # variable that can be passed to `quarto` to pick the server
+                # process `julia` to use.
+                return `$quarto_julia`, exeflags
+            end
+        else
+            # Pull out the channel from the exeflags. Since we merge in
+            # exeflags from the `QUARTONOTEBOOKRUNNER_EXEFLAGS` environment
+            # variable, we can't just drop the first element of the exeflags
+            # since there may be more than one provided. Keep the last one.
+            channel = exeflags[last(indices)]
+            exeflags = exeflags[setdiff(1:end, indices)]
+            return `julia $channel`, exeflags
+        end
+    end
+    # Just use the current `julia` if there is no `juliaup` command available.
+    bin = Base.julia_cmd()[1]
+    return `$bin`, exeflags
 end
 
 function _extract_timeout(merged_options)
@@ -87,7 +130,11 @@ function _exeflags_and_env(options)
     env = map(String, options["format"]["metadata"]["julia"]["env"])
     # Use `--project=@.` if neither `JULIA_PROJECT=...` nor `--project=...` are specified
     if !any(startswith("JULIA_PROJECT="), env) && !any(startswith("--project="), exeflags)
-        push!(exeflags, "--project=@.")
+        # Set it via the env variable since this is the "weakest" form of
+        # setting it, which allows for an implicit `--project=` provided by a
+        # custom linked `juliaup` channel to override it, e.g `julia
+        # +CustomChannel` that is a link to `julia +channel --project=@global`.
+        pushfirst!(env, "JULIA_PROJECT=@.")
     end
     # if exeflags already contains '--color=no', the 'no' will prevail
     pushfirst!(exeflags, "--color=yes")
@@ -128,12 +175,88 @@ function refresh!(file::File, options::Dict)
     exeflags, env = _exeflags_and_env(options)
     if exeflags != file.exeflags || env != file.env || !Malt.isrunning(file.worker) # the worker might have been killed on another task
         Malt.stop(file.worker)
-        file.worker = cd(() -> Malt.Worker(; exeflags, env), dirname(file.path))
+        exe, _exeflags = _julia_exe(exeflags)
+        file.worker =
+            cd(() -> Malt.Worker(; exe, exeflags = _exeflags, env), dirname(file.path))
+        file.exe = exe
         file.exeflags = exeflags
+        file.env = env
+        file.source_code_hash = hash(VERSION)
+        file.output_chunks = []
         init!(file, options)
     end
-    expr = :(refresh!($(options)))
-    remote_eval_fetch_channeled(file.worker, expr)
+    remote_eval_fetch_channeled(file.worker, :(refresh!($(options)); revise_hook()))
+end
+
+function _cache_file(f::File, source_code_hash)
+    path = joinpath(dirname(f.path), ".cache")
+    hs = string(hash(f.worker.manifest_file, source_code_hash); base = 62)
+    return joinpath(path, "$(basename(f.path)).$hs.json")
+end
+
+function _gc_cache_files(dir::AbstractString)
+    # Check all available caches, removing all but the 3 most recent per qmd file.
+    if isdir(dir)
+        EntryT = @NamedTuple{
+            timestamp::Dates.DateTime,
+            file::String,
+            qnr_schema_version::VersionNumber,
+        }
+        CachesT = Vector{EntryT}
+        qmds = Dict{String,CachesT}()
+        for file in readdir(dir; join = true)
+            if endswith(file, ".json")
+                try
+                    json = JSON3.read(file, EntryT)
+                    caches = get!(CachesT, qmds, json.file)
+                    push!(caches, (; json..., file))
+                catch error
+                    @debug "invalid cache file, skipping" error
+                end
+            end
+        end
+        for v in values(qmds)
+            sort!(v, by = x -> x.timestamp, rev = true)
+            for each in v[4:end]
+                rm(each.file; force = true)
+            end
+        end
+    end
+end
+
+const SCHEMA_VERSION = v"1.0.0"
+
+function load_from_file!(f::File, source_code_hash)
+    # Only load from file cache on initial load, not once the file is populated
+    # with chunks.
+    if isempty(f.output_chunks)
+        file = _cache_file(f, source_code_hash)
+        if isfile(file)
+            try
+                json = JSON3.read(file, @NamedTuple{cells::Vector{NamedTuple}})
+                f.output_chunks = json.cells
+                f.source_code_hash = source_code_hash
+            catch error
+                @debug "invalid cache file, skipping" error
+            end
+        end
+        # Perform a garbage collection of the oldest cache files.
+        _gc_cache_files(dirname(file))
+    end
+    return nothing
+end
+
+function save_to_file!(f::File)
+    file = _cache_file(f, f.source_code_hash)
+    dir = dirname(file)
+    isdir(dir) || mkpath(dir)
+    json = (;
+        cells = f.output_chunks,
+        timestamp = Dates.now(),
+        file = f.path,
+        qnr_schema_version = SCHEMA_VERSION,
+    )
+    write_json(file, json)
 end
 
 """
@@ -159,21 +282,79 @@ function evaluate!(
     options = _parsed_options(options)
     path = abspath(f.path)
     if isfile(path)
-        raw_chunks, file_frontmatter = raw_text_chunks(f, markdown)
+        source_code_hash, raw_chunks, file_frontmatter = raw_text_chunks(f, markdown)
         merged_options = _extract_relevant_options(file_frontmatter, options)
-        cells =
-            evaluate_raw_cells!(f, raw_chunks, merged_options; showprogress, chunk_callback)
+
+        # A change of parameter values must invalidate the source code hash.
+        source_code_hash = hash(merged_options["params"], source_code_hash)
+
+        refresh!(f, merged_options)
+
+        enabled_cache = merged_options["format"]["execute"]["cache"] == true
+        enabled_cache && load_from_file!(f, source_code_hash)
+
+        # This is the results caching logic. When only the markdown has
+        # changed, e.g. the hash of all executable code blocks is the same as
+        # the previous run then we can reuse the previous cell outputs.
+        # Additionally, if the currently cached chunks is empty then we have a
+        # fresh session that has not yet populated the `output_chunks`.
+        if enabled_cache &&
+           source_code_hash == f.source_code_hash &&
+           !isempty(f.output_chunks)
+            @debug "reusing previous cell outputs"
+            # All the executable code cells are the same as the previous
+            # render, so all we need to do is iterate over the markdown code
+            # (that doesn't contain inline executable code) and update the
+            # markdown cells with the new content.
+            lookup = Dict(string(nth) => chunk for (nth, chunk) in enumerate(raw_chunks))
+            for output_chunk in f.output_chunks
+                if haskey(lookup, output_chunk.id)
+                    new_raw_chunk = lookup[output_chunk.id]
+                    # Skip any markdown chunk if it contains potential inline
+                    # executable code otherwise they would be replaced with
+                    # their unexpanded raw chunk.
+                    if !contains(new_raw_chunk.source, r"`{(?:julia|python|r)} ")
+                        # Swap out any markdown chunks with their updated content.
+                        new_source = process_cell_source(new_raw_chunk.source)
+                        empty!(output_chunk.source)
+                        append!(output_chunk.source, new_source)
+                    end
+                end
+            end
+            cells = f.output_chunks
+        else
+            @debug "evaluating new cell outputs"
+            # When there has been any kind of change to any executable code
+            # blocks then we perform a complete rerun of the notebook. Further
+            # optimisations can be made to perform source code analysis in the
+            # worker process to determine if which cells need to be
+            # reevaluated.
+            cells = evaluate_raw_cells!(
+                f,
+                raw_chunks,
+                merged_options;
+                showprogress,
+                chunk_callback,
+            )
+            # Update the hash to the latest computed.
+            f.source_code_hash = source_code_hash
+            f.output_chunks = cells
+
+            enabled_cache && save_to_file!(f)
+        end
+
+        version = _get_julia_version(f)
         data = (
             metadata = (
                 kernelspec = (
-                    display_name = "Julia $(VERSION)",
+                    display_name = "Julia $(version)",
                     language = "julia",
-                    name = "julia-$(VERSION)",
+                    name = "julia-$(version)",
                 ),
                 kernel_info = (name = "julia",),
                 language_info = (
                     name = "julia",
-                    version = VERSION,
+                    version = version,
                     codemirror_mode = "julia",
                 ),
             ),
@@ -185,6 +366,13 @@ function evaluate!(
     else
         throw(ArgumentError("file does not exist: $(path)"))
     end
+end
+
+# The version of `julia` for a particular notebook file might not be the same
+# as the runner process, so query the worker for this value.
+function _get_julia_version(f::File)
+    cmd = `$(f.exe) --version`
+    return last(split(readchomp(cmd)))
 end
 
 function _extract_relevant_options(file_frontmatter::Dict, options::Dict)
@@ -199,6 +387,7 @@ function _extract_relevant_options(file_frontmatter::Dict, options::Dict)
     error_default = get(get(D, file_frontmatter, "execute"), "error", true)
     eval_default = get(get(D, file_frontmatter, "execute"), "eval", true)
     daemon_default = get(get(D, file_frontmatter, "execute"), "daemon", true)
+    cache_default = get(get(D, file_frontmatter, "execute"), "cache", false)
 
     pandoc_to_default = nothing
 
@@ -218,6 +407,7 @@ function _extract_relevant_options(file_frontmatter::Dict, options::Dict)
             julia = julia_default,
             daemon = daemon_default,
             params = params_default,
+            cache = cache_default,
         )
     else
         format = get(D, options, "format")
@@ -229,6 +419,7 @@ function _extract_relevant_options(file_frontmatter::Dict, options::Dict)
         error = get(execute, "error", error_default)
         eval = get(execute, "eval", eval_default)
         daemon = get(execute, "daemon", daemon_default)
+        cache = get(execute, "cache", cache_default)
 
         pandoc = get(D, format, "pandoc")
         pandoc_to = get(pandoc, "to", pandoc_to_default)
@@ -256,6 +447,7 @@ function _extract_relevant_options(file_frontmatter::Dict, options::Dict)
             julia = julia_merged,
             daemon,
             params = params_merged,
+            cache,
         )
     end
 end
@@ -271,6 +463,7 @@ function _options_template(;
     julia,
     daemon,
     params,
+    cache,
 )
     D = Dict{String,Any}
     return D(
@@ -283,6 +476,7 @@ function _options_template(;
                 "error" => error,
                 "eval" => eval,
                 "daemon" => daemon,
+                "cache" => cache,
             ),
             "pandoc" => D("to" => pandoc_to),
             "metadata" => D("julia" => julia),
@@ -347,13 +541,17 @@ struct Unset end
 
 function raw_markdown_chunks_from_string(path::String, markdown::String)
     raw_chunks = []
+    source_code_hash = hash(VERSION)
     pars = Parser()
     ast = pars(markdown; source = path)
+    file_fromtmatter = CommonMark.frontmatter(ast)
+    source_code_hash = hash(file_fromtmatter, source_code_hash)
     source_lines = collect(eachline(IOBuffer(markdown)))
     terminal_line = 1
     code_cells = false
     for (node, enter) in ast
-        if enter && (is_julia_toplevel(node) || is_r_toplevel(node))
+        if enter &&
+           (is_julia_toplevel(node) || is_python_toplevel(node) || is_r_toplevel(node))
             code_cells = true
             line = node.sourcepos[1][1]
             md = join(source_lines[terminal_line:(line-1)], "\n")
@@ -361,6 +559,9 @@ function raw_markdown_chunks_from_string(path::String, markdown::String)
                 raw_chunks,
                 (type = :markdown, source = md, file = path, line = terminal_line),
             )
+            if contains(md, r"`{(?:julia|python|r)} ")
+                source_code_hash = hash(md, source_code_hash)
+            end
             terminal_line = node.sourcepos[2][1] + 1
 
             # currently, the only execution-relevant cell option is `eval` which controls if a code block is executed or not.
@@ -376,6 +577,7 @@ function raw_markdown_chunks_from_string(path::String, markdown::String)
             end
             language =
                 is_julia_toplevel(node) ? :julia :
+                is_python_toplevel(node) ? :python :
                 is_r_toplevel(node) ? :r : error("Unhandled code block language")
             push!(
                 raw_chunks,
@@ -389,6 +591,7 @@ function raw_markdown_chunks_from_string(path::String, markdown::String)
                     cell_options,
                 ),
             )
+            source_code_hash = hash(source, source_code_hash)
         end
     end
     if terminal_line <= length(source_lines)
@@ -397,16 +600,35 @@ function raw_markdown_chunks_from_string(path::String, markdown::String)
             raw_chunks,
             (type = :markdown, source = md, file = path, line = terminal_line),
         )
+        if contains(md, r"`{(?:julia|python|r)} ")
+            source_code_hash = hash(md, source_code_hash)
+        end
     end
 
     # The case where the notebook has no code cells.
     if isempty(raw_chunks) && !code_cells
         push!(raw_chunks, (type = :markdown, source = markdown, file = path, line = 1))
+        if contains(markdown, r"`{(?:julia|python|r)} ")
+            source_code_hash = hash(markdown, source_code_hash)
+        end
     end
 
-    frontmatter = _recursive_merge(default_frontmatter(), CommonMark.frontmatter(ast))
+    # When there is a code block at the very end of the notebook we normalise
+    # it by adding a blank markdown chunk afterwards. This allows the code that
+    # tracks source code hashes and performs the chunk mutations that swap out
+    # cached values to not have to worry about special casing whether there is
+    # a code block or markdown at the end. This results in more straightforward
+    # code there.
+    if raw_chunks[end].type == :code
+        push!(
+            raw_chunks,
+            (type = :markdown, source = "", file = path, line = terminal_line),
+        )
+    end
 
-    return raw_chunks, frontmatter
+    frontmatter = _recursive_merge(default_frontmatter(), file_fromtmatter)
+
+    return source_code_hash, raw_chunks, frontmatter
 end
 
 _recursive_merge(x::AbstractDict...) = merge(_recursive_merge, x...)
@@ -464,6 +686,7 @@ function raw_script_chunks(path::String)
         push!(cell_markers, (length(lines) + 1, :unknown))
 
         raw_chunks = []
+        source_code_hash = hash(VERSION)
 
         frontmatter = Dict{String,Any}()
 
@@ -499,6 +722,7 @@ function raw_script_chunks(path::String)
                         cell_options,
                     ),
                 )
+                source_code_hash = hash(source, source_code_hash)
             elseif type == :markdown
                 try
                     text = Meta.parse(source)
@@ -548,7 +772,7 @@ function raw_script_chunks(path::String)
 
         frontmatter = _recursive_merge(frontmatter, default_frontmatter())
 
-        return raw_chunks, frontmatter
+        return source_code_hash, raw_chunks, frontmatter
     else
         throw(ArgumentError("file does not exist: $(path)"))
     end
@@ -624,7 +848,6 @@ function evaluate_raw_cells!(
     showprogress = true,
     chunk_callback = (i, n, c) -> nothing,
 )
-    refresh!(f, options)
     evaluate_params!(f, options["params"])
 
     cells = []
@@ -787,6 +1010,35 @@ function evaluate_raw_cells!(
 
                     cell_options = expand_cell ? remote.cell_options : Dict()
 
+                    if chunk.language === :python
+                        # Code cells always get the language of the notebook assigned, in this case julia,
+                        # so to render an R formatted cell, we need to do a workaround. We push a cell before
+                        # the actual code cell which contains a plain markdown block that wraps the code in ```r
+                        # for the formatting.
+                        push!(
+                            cells,
+                            (;
+                                id = string(
+                                    expand_cell ? string(nth, "_", mth) : string(nth),
+                                    "_code_prefix",
+                                ),
+                                cell_type = :markdown,
+                                metadata = (;),
+                                source = process_cell_source(
+                                    """
+           ```python
+           $(strip_cell_options(chunk.source))
+           ```
+           """,
+                                    Dict(),
+                                ),
+                            ),
+                        )
+                        # We also need to hide the real code cell in this case, which contains possible formatting
+                        # settings in its YAML front-matter and which can therefore not be omitted entirely.
+                        cell_options["echo"] = false
+                    end
+
                     if chunk.language === :r
                         # Code cells always get the language of the notebook assigned, in this case julia,
                         # so to render an R formatted cell, we need to do a workaround. We push a cell before
@@ -832,9 +1084,9 @@ function evaluate_raw_cells!(
                 end
             end
         elseif chunk.type === :markdown
-            marker = r"{(?:julia|r)} "
+            marker = r"{(?:julia|python|r)} "
             source = chunk.source
-            if contains(chunk.source, r"`{(?:julia|r)} ")
+            if contains(chunk.source, r"`{(?:julia|python|r)} ")
                 parser = Parser()
                 for (node, enter) in parser(chunk.source)
                     if enter && node.t isa CommonMark.Code
@@ -842,6 +1094,9 @@ function evaluate_raw_cells!(
                             source_code = replace(node.literal, marker => "")
                             if startswith(node.literal, "{r}")
                                 source_code = wrap_with_r_boilerplate(source_code)
+                            end
+                            if startswith(node.literal, "{python}")
+                                source_code = wrap_with_python_boilerplate(source_code)
                             end
                             expr = :(render(
                                 $(source_code),
@@ -955,11 +1210,21 @@ function wrap_with_r_boilerplate(code)
     """
 end
 
+function wrap_with_python_boilerplate(code)
+    """
+    Main.QuartoNotebookWorker.py\"\"\"
+    $code
+    \"\"\"
+    """
+end
+
 function transform_source(chunk)
     if chunk.language === :julia
         chunk.source
     elseif chunk.language === :r
         wrap_with_r_boilerplate(chunk.source)
+    elseif chunk.language === :python
+        wrap_with_python_boilerplate(chunk.source)
     else
         error("Unhandled code chunk language $(chunk.language)")
     end
@@ -1010,6 +1275,7 @@ function extract_cell_options(source::AbstractString; file::AbstractString, line
 end
 
 function process_inline_results(dict::Dict)
+    isempty(dict) && return ""
     # A reduced set of mimetypes are available for inline use.
     for (mime, func) in ["text/markdown" => String, "text/plain" => _escape_markdown]
         if haskey(dict, mime)
@@ -1082,15 +1348,57 @@ function png_image_metadata(bytes::Vector{UInt8})
         throw(ArgumentError("Not a png file"))
     end
 
-    chunk_type = @view bytes[13:16]
-    if chunk_type != b"IHDR"
-        error("PNG file must start with IHDR chunk, started with $chunk_type")
+    chunk_start::Int = 9
+
+    _load(T, bytes, index) = ntoh(reinterpret(T, @view(bytes[index:index+sizeof(T)-1]))[])
+
+    function read_chunk!()
+        chunk_start > lastindex(bytes) && return nothing
+        chunk_data_length = _load(UInt32, bytes, chunk_start)
+        type = @view(bytes[chunk_start+4:chunk_start+7])
+        data = @view(bytes[chunk_start+8:chunk_start+8+chunk_data_length-1])
+        result = (; chunk_start, type, data)
+
+        # advance the chunk_start state variable
+        chunk_start += 4 + 4 + chunk_data_length + 4 # length, type, data, crc
+
+        return result
     end
 
-    width = Int(ntoh(reinterpret(UInt32, @view(bytes[17:20]))[]))
-    height = Int(ntoh(reinterpret(UInt32, @view(bytes[21:24]))[]))
+    chunk = read_chunk!()
+    if chunk === nothing
+        error("PNG file had no chunks")
+    end
+    if chunk.type != b"IHDR"
+        error("PNG file must start with IHDR chunk, started with $(chunk.type)")
+    end
 
-    (; width, height)
+    width = Int(_load(UInt32, chunk.data, 1))
+    height = Int(_load(UInt32, chunk.data, 5))
+
+    # if the png reports a physical pixel size, i.e., it has a pHYs chunk
+    # with the pixels per meter unit flag set, correct the basic width and height
+    # by those physical pixel sizes so that quarto receives the intended size
+    # in CSS pixels
+    while true
+        chunk = read_chunk!()
+        chunk === nothing && break
+        chunk.type == b"IDAT" && break
+        if chunk.type == b"pHYs"
+            is_in_meters = Bool(_load(UInt8, chunk.data, 9))
+            is_in_meters || break
+            x_px_per_meter = _load(UInt32, chunk.data, 1)
+            y_px_per_meter = _load(UInt32, chunk.data, 5)
+            # it seems sensible to round the final image size to full CSS pixels,
+            # especially given that png doesn't store dpi but px per meter
+            # in an integer format, losing some precision
+            width = round(Int, width / x_px_per_meter * (96 / 0.0254))
+            height = round(Int, height / y_px_per_meter * (96 / 0.0254))
+            break
+        end
+    end
+
+    return (; width, height)
 end
 
 """
@@ -1101,6 +1409,11 @@ Return `true` if `node` is a Julia toplevel code block.
 is_julia_toplevel(node) =
     node.t isa CommonMark.CodeBlock &&
     node.t.info == "{julia}" &&
+    node.parent.t isa CommonMark.Document
+
+is_python_toplevel(node) =
+    node.t isa CommonMark.CodeBlock &&
+    node.t.info == "{python}" &&
     node.parent.t isa CommonMark.Document
 
 is_r_toplevel(node) =
@@ -1246,6 +1559,7 @@ function close!(server::Server, path::String)
             Malt.stop(file.worker)
             lock(server.lock) do
                 pop!(server.workers, file.path)
+                _gc_cache_files(joinpath(dirname(path), ".cache"))
                 on_change(server)
             end
             GC.gc()

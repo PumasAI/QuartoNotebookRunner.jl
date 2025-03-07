@@ -118,6 +118,17 @@ environment then those will be loaded into the interactive worker process as
 well to aid in debugging. Editing code within the `src/QuartoNotebookWorker`
 folder will reflect the changes in the REPL via `Revise` in the normal way.
 
+You can also start up a remote REPL connection to an already running notebook
+process using [`RemoteREPL.jl`](https://github.com/JuliaWeb/RemoteREPL.jl).
+Import `RemoteREPL` into a notebook cell and run
+`Main.QuartoNotebookWorker.remote_repl()`. Then in a separate REPL run
+`RemoteREPL.connect_repl()` to connect to the notebook process for debugging.
+
+### Integration with `Revise.jl`
+
+See [revise/README.md](./revise/README.md) for information on how to use
+`Revise` with this package while developing changes.
+
 ### Adding package "integrations"
 
 Some packages require custom integrations to be written to make them behave as

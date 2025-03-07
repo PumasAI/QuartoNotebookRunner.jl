@@ -261,14 +261,15 @@ function io_capture(f; cell_options, kws...)
 end
 
 # passing our module removes Main.Notebook noise when printing types etc.
-function with_context(io::IO, cell_options = Dict{String,Any}())
-    return IOContext(io, _io_context(cell_options)...)
+function with_context(io::IO, cell_options = Dict{String,Any}(), inline = false)
+    return IOContext(io, _io_context(cell_options, inline)...)
 end
 
-function _io_context(cell_options = Dict{String,Any}())
+function _io_context(cell_options = Dict{String,Any}(), inline = false)
     return [
         :module => NotebookState.notebook_module(),
         :limit => true,
+        :color => Base.have_color,
         # This allows a `show` method implementation to check for
         # metadata that may be of relevance to it's rendering. For
         # example, if a `typst` table is rendered with a caption
@@ -278,7 +279,8 @@ function _io_context(cell_options = Dict{String,Any}())
         #
         # TODO: perhaps preprocess the metadata provided here rather
         # than just passing it through as-is.
-        :QuartoNotebookRunner => (; cell_options, options = NotebookState.OPTIONS[]),
+        :QuartoNotebookRunner =>
+            (; cell_options, options = NotebookState.OPTIONS[], inline),
     ]
 end
 
@@ -293,19 +295,25 @@ function clean_bt_str(is_error::Bool, bt, err, prefix = "", mimetype = false)
     bt = bt[1:something(top_level, length(bt))]
 
     if mimetype
-        non_worker = findfirst(x -> contains(String(x.file), @__FILE__), bt)
-        bt = bt[1:max(something(non_worker, length(bt)) - 3, 0)]
+        non_worker = findfirst(_non_worker_stackframe_marker, bt)
+        bt = bt[1:max(something(non_worker, length(bt)) - 1, 0)]
     end
 
     buf = IOBuffer()
     buf_context = with_context(buf)
     print(buf_context, prefix)
-    Base.showerror(buf_context, err)
-    Base.show_backtrace(buf_context, bt)
+    _showerror(buf_context, err, bt)
 
     return take!(buf)
 end
 
+# `PythonCall` extension needs to override this part of stacktrace printing so
+# that it can print out just the Python part of the stacktrace. See the
+# `ext/QuartoNotebookWorkerPythonCall.jl` file for that implementation.
+function _showerror(io::IO, err, bt)
+    Base.showerror(io, err)
+    Base.show_backtrace(io, bt)
+end
 
 _mimetype_wrapper(@nospecialize(value)) = value
 
@@ -320,7 +328,12 @@ Base.showable(mime::MIME, w::WrapperType) = Base.showable(mime, w.value)
 
 # for inline code chunks, `inline` should be set to `true` which causes "text/plain" output like
 # what you'd get from `print` (Strings without quotes) and not from `show("text/plain", ...)`
-function render_mimetypes(value, cell_options; inline::Bool = false)
+function render_mimetypes(
+    value,
+    cell_options;
+    inline::Bool = false,
+    only::Union{String,Nothing} = nothing,
+)
     # Intercept objects prior to rendering so that we can wrap specific
     # types in our own `WrapperType` to customised rendering instead of
     # what the package defines itself.
@@ -377,13 +390,20 @@ function render_mimetypes(value, cell_options; inline::Bool = false)
         end
     end
     for mime in mimes
-        if showable(mime, value)
+        if showable(mime, value) && _matching_mimetype(mime, only)
             buffer = IOBuffer()
             try
                 if inline && mime == "text/plain"
-                    Base.@invokelatest print(with_context(buffer, cell_options), value)
+                    Base.@invokelatest __print_barrier__(
+                        with_context(buffer, cell_options, inline),
+                        value,
+                    )
                 else
-                    Base.@invokelatest show(with_context(buffer, cell_options), mime, value)
+                    Base.@invokelatest __show_barrier__(
+                        with_context(buffer, cell_options, inline),
+                        mime,
+                        value,
+                    )
                 end
             catch error
                 backtrace = catch_backtrace()
@@ -416,9 +436,21 @@ function render_mimetypes(value, cell_options; inline::Bool = false)
     end
     return result
 end
-render_mimetypes(value::Nothing, cell_options; inline::Bool = false) =
+render_mimetypes(value::Nothing, cell_options; inline::Bool = false, only = nothing) =
     Dict{String,@NamedTuple{error::Bool, data::Vector{UInt8}}}()
 
+_matching_mimetype(mime::String, only::Nothing) = true
+_matching_mimetype(mime::String, only::String) = mime == only
+
+# These methods are used to mark the location within stacktraces that marks the
+# end of user-code. This is used by the `clean_bt_str` function to strip
+# stackframes un-related to user code. No inlining is essential here.
+@noinline __show_barrier__(io, mime, value) = Base.show(io, mime, value)
+@noinline __print_barrier__(io, value) = Base.print(io, value)
+
+_non_worker_stackframe_marker(frame) =
+    contains(String(frame.file), @__FILE__) &&
+    frame.func in (:__print_barrier__, :__show_barrier__)
 
 # Our custom MIME types need special handling. They get rendered to
 # `text/markdown` blocks with the original content wrapped in a raw

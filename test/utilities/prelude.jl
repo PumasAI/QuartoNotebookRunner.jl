@@ -13,14 +13,24 @@ if !@isdefined(SCHEMA)
         open(JSON3.read, joinpath(@__DIR__, "../schema/nbformat.v4.schema.json")),
     )
 
-    function test_example(f, each)
+    function test_example(f, each, options = Dict{String,Any}())
         examples = joinpath(@__DIR__, "../examples")
         name = relpath(each, pwd())
-        @info "Testing $name"
+        if isempty(options)
+            @info "Testing $name"
+        else
+            @info "Testing $name (extra options)" options
+        end
         @testset "$(name)" begin
             server = QuartoNotebookRunner.Server()
             buffer = IOBuffer()
-            QuartoNotebookRunner.run!(server, each; output = buffer, showprogress = false)
+            QuartoNotebookRunner.run!(
+                server,
+                each;
+                options = options,
+                output = buffer,
+                showprogress = false,
+            )
             seekstart(buffer)
             json = JSON3.read(buffer, Any)
 
@@ -30,7 +40,10 @@ if !@isdefined(SCHEMA)
             @test json["nbformat"] == 4
             @test json["nbformat_minor"] == 5
             @test json["metadata"]["language_info"]["name"] == "julia"
-            @test json["metadata"]["language_info"]["version"] == "$VERSION"
+            @test isa(
+                VersionNumber(json["metadata"]["language_info"]["version"]),
+                VersionNumber,
+            )
             @test json["metadata"]["language_info"]["codemirror_mode"] == "julia"
             @test json["metadata"]["kernel_info"]["name"] == "julia"
             @test startswith(json["metadata"]["kernelspec"]["name"], "julia")
@@ -68,4 +81,5 @@ if !@isdefined(SCHEMA)
         end
         GC.gc()
     end
+    to_format(format) = Dict{String,Any}("format" => Dict("pandoc" => Dict("to" => format)))
 end

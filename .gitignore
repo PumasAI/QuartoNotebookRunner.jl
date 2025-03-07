@@ -7,4 +7,7 @@ Manifest.toml
 *.png
 *.jls
 .DS_Store
+.CondaPkg
+.cache
 !/test/assets/*
+!/src/QuartoNotebookWorker/src/vendor/Manifest.toml

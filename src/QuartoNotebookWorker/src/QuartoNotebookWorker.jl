@@ -21,12 +21,8 @@ import TOML
 
 is_precompiling() = ccall(:jl_generating_output, Cint, ()) == 1
 
-const packages = let
-    project = TOML.parsefile(joinpath(@__DIR__, "..", "Project.toml"))
-    uuid = Base.UUID(project["uuid"])
-    key = "packages"
-    is_precompiling() && Base.record_compiletime_preference(uuid, key)
-    Base.get_preferences(uuid)[key]
+const packages = map(["BSON", "Requires", "PackageExtensionCompat", "IOCapture"]) do each
+    joinpath(@__DIR__, "vendor", each, "src", "$each.jl")
 end
 const rewrites = Set(Symbol.(first.(splitext.(basename.(packages)))))
 
@@ -90,6 +86,8 @@ import Random
 
 # Includes.
 
+include("shared.jl")
+include("Malt.jl")
 include("package_hooks.jl")
 include("InlineDisplay.jl")
 include("NotebookState.jl")
@@ -100,5 +98,7 @@ include("render.jl")
 include("utilities.jl")
 include("ojs_define.jl")
 include("notebook_metadata.jl")
+include("manifest_validation.jl")
+include("python.jl")
 
 end
