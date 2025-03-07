@@ -6,6 +6,8 @@ struct SocketServer
     port::Int
     task::Task
     key::Base.UUID
+    timeout::Union{Nothing,Float64}
+    timeout_started_at::Ref{Union{Nothing,Dates.DateTime}}
 end
 
 Base.wait(s::SocketServer) = wait(s.task)
@@ -44,7 +46,7 @@ should match the following schema:
 
 ```json
 {
-    type: "run" | "close" | "stop" | "isopen" | "isready"
+    type: "run" | "close" | "stop" | "isopen" | "isready" | "status"
     content: string | { file: string, options: string | { ... } }
 }
 ```
@@ -76,6 +78,8 @@ A description of the message types:
 
  -  `isready` - Returns `true` if the server is ready to accept commands. Should
     never return `false`.
+
+-   `status` - Returns string with information about the server and workers.
 """
 function serve(;
     port = nothing,
@@ -96,6 +100,10 @@ function serve(;
 
     key = Base.UUID(rand(UInt128))
 
+    # we want to be able to pass the full SocketServer to the status
+    # function later, but we have to reference it before it exists
+    socket_server_ref = Ref{Union{SocketServer,Nothing}}(nothing)
+
     notebook_server = Server()
     closed_deliberately = Ref(false)
 
@@ -106,6 +114,7 @@ function serve(;
     end
 
     timer = Ref{Union{Timer,Nothing}}(nothing)
+    timeout_started_at = Ref{Union{Nothing,Dates.DateTime}}(nothing)
 
     function set_timer!()
         @debug "Timer set up"
@@ -124,6 +133,7 @@ function serve(;
                 close(socket_server)
             end
         end
+        timeout_started_at[] = Dates.now()
     end
 
     # this function is called under server.lock so we don't need further synchronization
@@ -143,6 +153,7 @@ function serve(;
                     @debug "Closing active timer"
                     close(timer[])
                     timer[] = nothing
+                    timeout_started_at[] = nothing
                 end
             end
             return
@@ -162,7 +173,7 @@ function serve(;
                 break
             end
             if !isnothing(socket)
-                Threads.@spawn while isopen(socket)
+                subtask = Threads.@spawn while isopen(socket)
                     @debug "Waiting for request"
                     data = readline(socket; keep = true)
                     if isempty(data)
@@ -198,10 +209,11 @@ function serve(;
                         elseif json.type == "isready"
                             _write_json(socket, true)
                         else
-                            _handle_response(socket, notebook_server, json, showprogress)
+                            _handle_response(socket, socket_server_ref[], json, showprogress)
                         end
                     end
                 end
+                errormonitor(subtask)
             end
         end
         @debug "Server closed."
@@ -209,7 +221,16 @@ function serve(;
 
     errormonitor(task)
 
-    return SocketServer(socket_server, notebook_server, port, task, key)
+    socket_server_ref[] = SocketServer(
+        socket_server,
+        notebook_server,
+        port,
+        task,
+        key,
+        timeout,
+        timeout_started_at,
+    )
+    return socket_server_ref[]
 end
 
 if Preferences.@load_preference("enable_revise", false)
@@ -255,15 +276,21 @@ end
 
 function _handle_response_internal(
     socket,
-    notebooks::Server,
+    socketserver::Union{Nothing,SocketServer},
     request::@NamedTuple{type::String, content::Union{String,Dict{String,Any}}},
     showprogress::Bool,
 )
+    socketserver === nothing && error("Got request before SocketServer object was created.")
+    notebooks = socketserver.notebookserver
     @debug "debugging" request notebooks = collect(keys(notebooks.workers))
     type = request.type
 
-    type in ("close", "run", "isopen") ||
+    type in ("close", "run", "isopen", "status") ||
         return _write_json(socket, _log_error("Unknown request type: $type"))
+
+    if type == "status"
+        return _write_json(socket, Base.@invokelatest(server_status(socketserver)))
+    end
 
     file = _get_file(request.content)
 
@@ -464,5 +491,133 @@ if !isdefined(Base, :errormonitor)
         end
         Base._wait2(t, t2)
         return t
+    end
+end
+
+function is_same_day(date1, date2)::Bool
+    return Dates.year(date1) == Dates.year(date2) &&
+           Dates.month(date1) == Dates.month(date2) &&
+           Dates.day(date1) == Dates.day(date2)
+end
+
+function simple_date_time_string(date)::String
+    now = Dates.now()
+    if is_same_day(date, now)
+        return string(Dates.hour(date), ":", Dates.minute(date), ":", Dates.second(date))
+    else
+        return string(
+            date,
+            " ",
+            Dates.hour(date),
+            ":",
+            Dates.minute(date),
+            ":",
+            Dates.second(date),
+        )
+    end
+end
+
+function format_seconds(seconds)::String
+    seconds = round(Int, seconds)
+    if seconds < 60
+        return string(seconds, " second", seconds == 1 ? "" : "s")
+    elseif seconds < 3600
+        full_minutes = div(seconds, 60)
+        rem_seconds = seconds % 60
+        seconds_str = rem_seconds == 0 ? "" : " " * format_seconds(rem_seconds)
+        return string(full_minutes, " minute", full_minutes == 1 ? "" : "s", seconds_str)
+    else
+        full_hours = div(seconds, 3600)
+        rem_seconds = seconds % 3600
+        minutes_str = rem_seconds == 0 ? "" : " " * format_seconds(rem_seconds)
+        return string(full_hours, " hour", full_hours == 1 ? "" : "s", minutes_str)
+    end
+end
+
+function server_status(socketserver::SocketServer)
+    server_timeout = socketserver.timeout
+    timeout_started_at = socketserver.timeout_started_at[]
+    server = socketserver.notebookserver
+    lock(server.lock) do
+        io = IOBuffer()
+        current_time = Dates.now()
+
+        println(io, "runner version: $(Base.pkgversion(@__MODULE__))")
+        println(io, "environment: $(replace(Base.active_project(), "Project.toml" => ""))")
+        println(io, "pid: $(Base.getpid())")
+        println(io, "port: $(socketserver.port)")
+        println(io, "julia version: $(VERSION)")
+
+        print(
+            io,
+            "timeout: $(server_timeout === nothing ? "disabled" : format_seconds(server_timeout))",
+        )
+
+        if isempty(server.workers) &&
+           server_timeout !== nothing &&
+           timeout_started_at !== nothing
+            seconds_until_server_timeout =
+                server_timeout - Dates.value(Dates.now() - timeout_started_at) / 1000
+            println(io, " ($(format_seconds(seconds_until_server_timeout)) left)")
+        else
+            println(io)
+            println(io, "workers active: $(length(server.workers))")
+
+            for (index, file) in enumerate(values(server.workers))
+                run_started = file.run_started
+                run_finished = file.run_finished
+
+                if isnothing(run_started)
+                    seconds_since_started = nothing
+                else
+                    seconds_since_started = Dates.value(current_time - run_started) / 1000
+                end
+
+                if isnothing(run_started) || isnothing(run_finished)
+                    run_duration_seconds = nothing
+                else
+                    run_duration_seconds = Dates.value(run_finished - run_started) / 1000
+                end
+
+                if isnothing(run_finished)
+                    seconds_since_finished = nothing
+                else
+                    seconds_since_finished = Dates.value(current_time - run_finished) / 1000
+                end
+
+                if file.timeout > 0 && !isnothing(seconds_since_finished)
+                    time_until_timeout = file.timeout - seconds_since_finished
+                else
+                    time_until_timeout = nothing
+                end
+
+                run_started_str =
+                    isnothing(run_started) ? "-" : simple_date_time_string(run_started)
+                run_started_ago =
+                    isnothing(seconds_since_started) ? "" :
+                    " ($(format_seconds(seconds_since_started)) ago)"
+
+                run_finished_str =
+                    isnothing(run_finished) ? "-" : simple_date_time_string(run_finished)
+                run_duration_str =
+                    isnothing(run_duration_seconds) ? "" :
+                    " (took $(format_seconds(run_duration_seconds)))"
+
+                timeout_str = "$(format_seconds(file.timeout))"
+                time_until_timeout_str =
+                    isnothing(time_until_timeout) ? "" :
+                    " ($(format_seconds(time_until_timeout)) left)"
+
+                println(io, "  worker $(index):")
+                println(io, "    path: $(file.path)")
+                println(io, "    run started: $(run_started_str)$(run_started_ago)")
+                println(io, "    run finished: $(run_finished_str)$(run_duration_str)")
+                println(io, "    timeout: $(timeout_str)$(time_until_timeout_str)")
+                println(io, "    pid: $(file.worker.proc_pid)")
+                println(io, "    exe: $(file.exe)")
+                println(io, "    exeflags: $(file.exeflags)")
+            end
+        end
+        return String(take!(io))
     end
 end
