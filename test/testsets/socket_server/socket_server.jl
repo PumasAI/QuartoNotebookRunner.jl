@@ -26,15 +26,10 @@ include("../../utilities/prelude.jl")
         t_after_run = Dates.now()
         @test d2 == d4
 
-        d5 = json(`$node $client $(server.port) $(server.key) workers`)
-        @test length(d5) == 1
-        worker = only(d5)
-        @test worker["timeout"] == 123
-        @test t_before_run <
-              Dates.DateTime(worker["run_started"]) <
-              Dates.DateTime(worker["run_finished"]) <
-              t_after_run
-        @test abspath(worker["path"]) == abspath(cell_types)
+        d5 = json(`$node $client $(server.port) $(server.key) status`)
+        @test d5 isa String
+        @test occursin("workers active: 1", d5)
+        @test occursin(abspath(cell_types), d5)
 
         d6 = json(`$node $client $(server.port) $(server.key) close $(cell_types)`)
         @test d6["status"] == true

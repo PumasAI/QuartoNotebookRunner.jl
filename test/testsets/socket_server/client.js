@@ -19,7 +19,7 @@ function handle() {
     const stop = () => toJSON({ type: 'stop', content: '' });
     const isopen = (file) => toJSON({ type: 'isopen', content: file });
     const isready = () => toJSON({ type: 'isready', content: '' });
-    const workers = () => toJSON({ type: 'workers', content: '' });
+    const status = () => toJSON({ type: 'status', content: '' });
 
     const notebook = (arg) => {
         if (arg) {
@@ -42,8 +42,8 @@ function handle() {
             return isopen(notebook(arg));
         case 'isready':
             return isready();
-        case 'workers':
-            return workers();
+        case 'status':
+            return status();
         default:
             throw new Error('Invalid command.');
     }
