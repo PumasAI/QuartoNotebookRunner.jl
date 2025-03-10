@@ -551,7 +551,7 @@ function server_status(socketserver::SocketServer)
             io,
             "  started at: $(simple_date_time_string(socketserver.started_at)) ($(format_seconds(running_since_seconds)) ago)",
         )
-        println(io, "  runner version: $(Base.pkgversion(@__MODULE__))")
+        println(io, "  runner version: $QNR_VERSION")
         println(
             io,
             "  environment: $(replace(Base.active_project(), "Project.toml" => ""))",
