@@ -21,17 +21,24 @@ include("../../utilities/prelude.jl")
         d3 = json(`$node $client $(server.port) $(server.key) isopen $(cell_types)`)
         @test d3 == true
 
+        t_before_run = Dates.now()
         d4 = json(`$node $client $(server.port) $(server.key) run $(cell_types)`)
+        t_after_run = Dates.now()
         @test d2 == d4
 
-        d5 = json(`$node $client $(server.port) $(server.key) close $(cell_types)`)
-        @test d5["status"] == true
+        d5 = json(`$node $client $(server.port) $(server.key) status`)
+        @test d5 isa String
+        @test occursin("workers active: 1", d5)
+        @test occursin(abspath(cell_types), d5)
 
-        d6 = json(`$node $client $(server.port) $(server.key) isopen $(cell_types)`)
-        @test d6 == false
+        d6 = json(`$node $client $(server.port) $(server.key) close $(cell_types)`)
+        @test d6["status"] == true
 
-        d7 = json(`$node $client $(server.port) $(server.key) run $(cell_types)`)
-        @test d2 == d7
+        d7 = json(`$node $client $(server.port) $(server.key) isopen $(cell_types)`)
+        @test d7 == false
+
+        d8 = json(`$node $client $(server.port) $(server.key) run $(cell_types)`)
+        @test d2 == d8
 
         run(`$node $client $(server.port) $(server.key) stop`)
 

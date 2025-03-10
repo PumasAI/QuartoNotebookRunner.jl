@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+### Added
+
+- New socket server command `status` that returns a string describing the current server status, including information for each active worker [#229](https://github.com/PumasAI/QuartoNotebookRunner.jl/pull/229).
+
 ## [v0.14.0] - 2025-02-26
 
 ### Added
