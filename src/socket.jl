@@ -194,6 +194,7 @@ function serve(;
                             # close connection with clients sending wrong hmacs or invalid json
                             # (could be other processes mistakingly targeting our port)
                             close(socket)
+                            break
                         end
                         @debug "Received request" json
 
