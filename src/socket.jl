@@ -6,6 +6,7 @@ struct SocketServer
     port::Int
     task::Task
     key::Base.UUID
+    started_at::Dates.DateTime
     timeout::Union{Nothing,Float64}
     timeout_started_at::Ref{Union{Nothing,Dates.DateTime}}
 end
@@ -227,6 +228,7 @@ function serve(;
         port,
         task,
         key,
+        Dates.now(),
         timeout,
         timeout_started_at,
     )
@@ -542,15 +544,19 @@ function server_status(socketserver::SocketServer)
         io = IOBuffer()
         current_time = Dates.now()
 
-        println(io, "runner version: $(Base.pkgversion(@__MODULE__))")
-        println(io, "environment: $(replace(Base.active_project(), "Project.toml" => ""))")
-        println(io, "pid: $(Base.getpid())")
-        println(io, "port: $(socketserver.port)")
-        println(io, "julia version: $(VERSION)")
+        running_since_seconds = Dates.value(current_time - socketserver.started_at) / 1000
+
+        println(io, "QuartoNotebookRunner server status:")
+        println(io, "  started at: $(simple_date_time_string(socketserver.started_at)) ($(format_seconds(running_since_seconds)) ago)")
+        println(io, "  runner version: $(Base.pkgversion(@__MODULE__))")
+        println(io, "  environment: $(replace(Base.active_project(), "Project.toml" => ""))")
+        println(io, "  pid: $(Base.getpid())")
+        println(io, "  port: $(socketserver.port)")
+        println(io, "  julia version: $(VERSION)")
 
         print(
             io,
-            "timeout: $(server_timeout === nothing ? "disabled" : format_seconds(server_timeout))",
+            "  timeout: $(server_timeout === nothing ? "disabled" : format_seconds(server_timeout))",
         )
 
         if isempty(server.workers) &&
@@ -561,7 +567,7 @@ function server_status(socketserver::SocketServer)
             println(io, " ($(format_seconds(seconds_until_server_timeout)) left)")
         else
             println(io)
-            println(io, "workers active: $(length(server.workers))")
+            println(io, "  workers active: $(length(server.workers))")
 
             for (index, file) in enumerate(values(server.workers))
                 run_started = file.run_started
@@ -608,14 +614,14 @@ function server_status(socketserver::SocketServer)
                     isnothing(time_until_timeout) ? "" :
                     " ($(format_seconds(time_until_timeout)) left)"
 
-                println(io, "  worker $(index):")
-                println(io, "    path: $(file.path)")
-                println(io, "    run started: $(run_started_str)$(run_started_ago)")
-                println(io, "    run finished: $(run_finished_str)$(run_duration_str)")
-                println(io, "    timeout: $(timeout_str)$(time_until_timeout_str)")
-                println(io, "    pid: $(file.worker.proc_pid)")
-                println(io, "    exe: $(file.exe)")
-                println(io, "    exeflags: $(file.exeflags)")
+                println(io, "    worker $(index):")
+                println(io, "      path: $(file.path)")
+                println(io, "      run started: $(run_started_str)$(run_started_ago)")
+                println(io, "      run finished: $(run_finished_str)$(run_duration_str)")
+                println(io, "      timeout: $(timeout_str)$(time_until_timeout_str)")
+                println(io, "      pid: $(file.worker.proc_pid)")
+                println(io, "      exe: $(file.exe)")
+                println(io, "      exeflags: $(file.exeflags)")
             end
         end
         return String(take!(io))
