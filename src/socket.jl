@@ -547,9 +547,15 @@ function server_status(socketserver::SocketServer)
         running_since_seconds = Dates.value(current_time - socketserver.started_at) / 1000
 
         println(io, "QuartoNotebookRunner server status:")
-        println(io, "  started at: $(simple_date_time_string(socketserver.started_at)) ($(format_seconds(running_since_seconds)) ago)")
+        println(
+            io,
+            "  started at: $(simple_date_time_string(socketserver.started_at)) ($(format_seconds(running_since_seconds)) ago)",
+        )
         println(io, "  runner version: $(Base.pkgversion(@__MODULE__))")
-        println(io, "  environment: $(replace(Base.active_project(), "Project.toml" => ""))")
+        println(
+            io,
+            "  environment: $(replace(Base.active_project(), "Project.toml" => ""))",
+        )
         println(io, "  pid: $(Base.getpid())")
         println(io, "  port: $(socketserver.port)")
         println(io, "  julia version: $(VERSION)")
