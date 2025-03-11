@@ -574,63 +574,65 @@ function server_status(socketserver::SocketServer)
             println(io, " ($(format_seconds(seconds_until_server_timeout)) left)")
         else
             println(io)
-            println(io, "  workers active: $(length(server.workers))")
-
-            for (index, file) in enumerate(values(server.workers))
-                run_started = file.run_started
-                run_finished = file.run_finished
-
-                if isnothing(run_started)
-                    seconds_since_started = nothing
-                else
-                    seconds_since_started = Dates.value(current_time - run_started) / 1000
-                end
-
-                if isnothing(run_started) || isnothing(run_finished)
-                    run_duration_seconds = nothing
-                else
-                    run_duration_seconds = Dates.value(run_finished - run_started) / 1000
-                end
-
-                if isnothing(run_finished)
-                    seconds_since_finished = nothing
-                else
-                    seconds_since_finished = Dates.value(current_time - run_finished) / 1000
-                end
-
-                if file.timeout > 0 && !isnothing(seconds_since_finished)
-                    time_until_timeout = file.timeout - seconds_since_finished
-                else
-                    time_until_timeout = nothing
-                end
-
-                run_started_str =
-                    isnothing(run_started) ? "-" : simple_date_time_string(run_started)
-                run_started_ago =
-                    isnothing(seconds_since_started) ? "" :
-                    " ($(format_seconds(seconds_since_started)) ago)"
-
-                run_finished_str =
-                    isnothing(run_finished) ? "-" : simple_date_time_string(run_finished)
-                run_duration_str =
-                    isnothing(run_duration_seconds) ? "" :
-                    " (took $(format_seconds(run_duration_seconds)))"
-
-                timeout_str = "$(format_seconds(file.timeout))"
-                time_until_timeout_str =
-                    isnothing(time_until_timeout) ? "" :
-                    " ($(format_seconds(time_until_timeout)) left)"
-
-                println(io, "    worker $(index):")
-                println(io, "      path: $(file.path)")
-                println(io, "      run started: $(run_started_str)$(run_started_ago)")
-                println(io, "      run finished: $(run_finished_str)$(run_duration_str)")
-                println(io, "      timeout: $(timeout_str)$(time_until_timeout_str)")
-                println(io, "      pid: $(file.worker.proc_pid)")
-                println(io, "      exe: $(file.exe)")
-                println(io, "      exeflags: $(file.exeflags)")
-            end
         end
+
+        println(io, "  workers active: $(length(server.workers))")
+
+        for (index, file) in enumerate(values(server.workers))
+            run_started = file.run_started
+            run_finished = file.run_finished
+
+            if isnothing(run_started)
+                seconds_since_started = nothing
+            else
+                seconds_since_started = Dates.value(current_time - run_started) / 1000
+            end
+
+            if isnothing(run_started) || isnothing(run_finished)
+                run_duration_seconds = nothing
+            else
+                run_duration_seconds = Dates.value(run_finished - run_started) / 1000
+            end
+
+            if isnothing(run_finished)
+                seconds_since_finished = nothing
+            else
+                seconds_since_finished = Dates.value(current_time - run_finished) / 1000
+            end
+
+            if file.timeout > 0 && !isnothing(seconds_since_finished)
+                time_until_timeout = file.timeout - seconds_since_finished
+            else
+                time_until_timeout = nothing
+            end
+
+            run_started_str =
+                isnothing(run_started) ? "-" : simple_date_time_string(run_started)
+            run_started_ago =
+                isnothing(seconds_since_started) ? "" :
+                " ($(format_seconds(seconds_since_started)) ago)"
+
+            run_finished_str =
+                isnothing(run_finished) ? "-" : simple_date_time_string(run_finished)
+            run_duration_str =
+                isnothing(run_duration_seconds) ? "" :
+                " (took $(format_seconds(run_duration_seconds)))"
+
+            timeout_str = "$(format_seconds(file.timeout))"
+            time_until_timeout_str =
+                isnothing(time_until_timeout) ? "" :
+                " ($(format_seconds(time_until_timeout)) left)"
+
+            println(io, "    worker $(index):")
+            println(io, "      path: $(file.path)")
+            println(io, "      run started: $(run_started_str)$(run_started_ago)")
+            println(io, "      run finished: $(run_finished_str)$(run_duration_str)")
+            println(io, "      timeout: $(timeout_str)$(time_until_timeout_str)")
+            println(io, "      pid: $(file.worker.proc_pid)")
+            println(io, "      exe: $(file.exe)")
+            println(io, "      exeflags: $(file.exeflags)")
+        end
+
         return String(take!(io))
     end
 end

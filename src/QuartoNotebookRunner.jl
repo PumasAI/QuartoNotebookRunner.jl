@@ -43,7 +43,8 @@ export Server, render, run!, close!
 
 # Includes.
 
-const QNR_VERSION = VersionNumber(TOML.parsefile(joinpath(@__DIR__, "..", "Project.toml"))["version"])
+const QNR_VERSION =
+    VersionNumber(TOML.parsefile(joinpath(@__DIR__, "..", "Project.toml"))["version"])
 include_dependency(joinpath(@__DIR__, "..", "Project.toml"))
 
 include("UserError.jl")
