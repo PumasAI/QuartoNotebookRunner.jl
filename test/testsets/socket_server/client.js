@@ -22,10 +22,10 @@ function handle() {
     const status = () => toJSON({ type: 'status', content: '' });
 
     const notebook = (arg) => {
-        if (arg) {
-            return path.join(process.cwd(), arg);
+        if (path.isAbsolute(arg)) {
+            return arg
         }
-        throw new Error('No notebook specified.');
+        throw new Error('No notebook with absolute path specified.');
     }
 
     const type = process.argv[4];
