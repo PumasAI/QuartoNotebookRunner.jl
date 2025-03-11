@@ -1430,24 +1430,37 @@ function run!(
     options::Union{String,Dict{String,Any}} = Dict{String,Any}(),
     chunk_callback = (i, n, c) -> nothing,
 )
-    borrow_file!(server, path; optionally_create = true) do file
-        if file.timeout_timer !== nothing
-            close(file.timeout_timer)
-            file.timeout_timer = nothing
-        end
-        file.run_started = Dates.now()
-        file.run_finished = nothing
-        result = evaluate!(file, output; showprogress, options, markdown, chunk_callback)
-        file.run_finished = Dates.now()
-        if file.timeout > 0
-            file.timeout_timer = Timer(file.timeout) do _
-                close!(server, file.path)
-                @debug "File at $(file.path) timed out after $(file.timeout) seconds of inactivity."
+    try
+        borrow_file!(server, path; optionally_create = true) do file
+            if file.timeout_timer !== nothing
+                close(file.timeout_timer)
+                file.timeout_timer = nothing
             end
-        else
-            close!(server, file.path)
+            file.run_started = Dates.now()
+            file.run_finished = nothing
+            result =
+                evaluate!(file, output; showprogress, options, markdown, chunk_callback)
+            file.run_finished = Dates.now()
+            if file.timeout > 0
+                file.timeout_timer = Timer(file.timeout) do _
+                    close!(server, file.path)
+                    @debug "File at $(file.path) timed out after $(file.timeout) seconds of inactivity."
+                end
+            else
+                close!(server, file.path)
+            end
+            return result
         end
-        return result
+    catch err
+        if err isa FileBusyError
+            throw(
+                UserError(
+                    "Tried to run file \"$path\" but the corresponding worker is busy.",
+                ),
+            )
+        else
+            rethrow(err)
+        end
     end
 end
 
@@ -1455,19 +1468,25 @@ struct NoFileEntryError <: Exception
     path::String
 end
 
+struct FileBusyError <: Exception
+    path::String
+end
+
 """
-    borrow_file!(f, server, path; optionally_create = false, options = Dict{String,Any}())
+    borrow_file!(f, server, path; wait = false, optionally_create = false, options = Dict{String,Any}())
 
 Executes `f(file)` while the `file`'s `ReentrantLock` is locked.
 All actions on a `Server`'s `File` should be wrapped in this
 so that no two tasks can mutate the `File` at the same time.
 When `optionally_create` is `true`, the `File` will be created on the server
 if it doesn't exist, in which case it is passed `options`.
+If `wait = false`, `borrow_file!` will throw a `FileBusyError` if the lock cannot be attained immediately.
 """
 function borrow_file!(
     f,
     server,
     path;
+    wait = false,
     optionally_create = false,
     options = Dict{String,Any}(),
 )
@@ -1503,7 +1522,18 @@ function borrow_file!(
         # no file exists or it doesn't match the one we have, we recurse into `borrow_file!`.
         # This could in principle go on forever but is very unlikely to with a small number of
         # concurrent users.
-        lock(file.lock) do
+
+        if wait
+            lock(file.lock)
+            lock_attained = true
+        else
+            lock_attained = trylock(file.lock)
+        end
+
+        try
+            if !lock_attained
+                throw(FileBusyError(apath))
+            end
             current_file = lock(server.lock) do
                 get(server.workers, apath, nothing)
             end
@@ -1512,6 +1542,8 @@ function borrow_file!(
             else
                 return f(file)
             end
+        finally
+            lock_attained && unlock(file.lock)
         end
     end
 end
@@ -1566,7 +1598,13 @@ function close!(server::Server, path::String)
         end
         return true
     catch err
-        if !(err isa NoFileEntryError)
+        if err isa FileBusyError
+            throw(
+                UserError(
+                    "Tried to run file \"$path\" but the corresponding worker is busy.",
+                ),
+            )
+        elseif !(err isa NoFileEntryError)
             rethrow(err)
         else
             false
