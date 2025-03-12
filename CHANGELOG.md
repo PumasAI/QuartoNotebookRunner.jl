@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- New socket server command `status` that returns a string describing the current server status, including information for each active worker [#229](https://github.com/PumasAI/QuartoNotebookRunner.jl/pull/229).
+- New socket server command `status` that returns a string describing the current server status, including information for each active worker, as well as `forceclose` which is the forced version of `close` that can shut down a worker even if it's currently running [#229](https://github.com/PumasAI/QuartoNotebookRunner.jl/pull/229).
 
 ### Changed
 
