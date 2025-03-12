@@ -1450,19 +1450,12 @@ function run!(
             end
 
             result_task = Threads.@spawn begin
-                result = evaluate!(
-                    file,
-                    output;
-                    showprogress,
-                    options,
-                    markdown,
-                    chunk_callback,
-                )
-                put!(file.run_decision_channel, :evaluate_finished)
-                result
+                try
+                    evaluate!(file, output; showprogress, options, markdown, chunk_callback)
+                finally
+                    put!(file.run_decision_channel, :evaluate_finished)
+                end
             end
-
-            errormonitor(result_task)
 
             # block until a decision is reached
             decision = take!(file.run_decision_channel)
@@ -1472,7 +1465,12 @@ function run!(
                 close!(server, file.path) # this is in the same task, so reentrant lock allows access
                 error("File was force-closed during run")
             elseif decision === :evaluate_finished
-                result = fetch(result_task)
+                result = try
+                    fetch(result_task)
+                catch err
+                    # throw the original exception, not the wrapping TaskFailedException
+                    rethrow(err.task.exception)
+                end
             else
                 error("Invalid decision $decision")
             end
