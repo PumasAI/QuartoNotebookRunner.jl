@@ -1636,7 +1636,7 @@ function close!(server::Server, path::String)
         if err isa FileBusyError
             throw(
                 UserError(
-                    "Tried to run file \"$path\" but the corresponding worker is busy.",
+                    "Tried to close file \"$path\" but the corresponding worker is busy.",
                 ),
             )
         elseif !(err isa NoFileEntryError)
