@@ -58,8 +58,12 @@ include("../../utilities/prelude.jl")
 
         # both of these tasks should then try to access the worker that is busy and fail because
         # the lock is already held
-        d9_task = Threads.@spawn json(`$node $client $(server.port) $(server.key) run $(sleep_10)`)
-        d10_task = Threads.@spawn json(`$node $client $(server.port) $(server.key) close $(sleep_10)`)
+        d9_task = Threads.@spawn json(
+            `$node $client $(server.port) $(server.key) run $(sleep_10)`,
+        )
+        d10_task = Threads.@spawn json(
+            `$node $client $(server.port) $(server.key) close $(sleep_10)`,
+        )
 
         d9 = fetch(d9_task)
         @test occursin("the corresponding worker is busy", d9["juliaError"])

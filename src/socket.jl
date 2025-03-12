@@ -333,7 +333,11 @@ function _handle_response_internal(
         catch error
             return _write_json(
                 socket,
-                _log_error("Failed to force close notebook: $file", error, catch_backtrace()),
+                _log_error(
+                    "Failed to force close notebook: $file",
+                    error,
+                    catch_backtrace(),
+                ),
             )
         end
     end

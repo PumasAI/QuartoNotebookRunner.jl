@@ -1448,7 +1448,14 @@ function run!(
             empty!(file.run_decision_channel)
 
             result_task = Threads.@spawn begin
-                result = evaluate!(file, output; showprogress, options, markdown, chunk_callback)
+                result = evaluate!(
+                    file,
+                    output;
+                    showprogress,
+                    options,
+                    markdown,
+                    chunk_callback,
+                )
                 put!(file.run_decision_channel, :evaluate_finished)
                 result
             end
@@ -1656,14 +1663,16 @@ function forceclose!(server::Server, path::String)
         # if we've attained the lock, we can close normally
         if lock_attained
             close!(server, path)
-        # but if not, we request a forced close via the run decision channel that
-        # is being waited for in `run!` function
+            # but if not, we request a forced close via the run decision channel that
+            # is being waited for in `run!` function
         else
             put!(file.run_decision_channel, :forceclose)
             t = time()
             while Malt.isrunning(file.worker)
                 timeout = 10
-                (time() - t) > timeout && error("Force close was requested but worker was still running after $timeout seconds.")
+                (time() - t) > timeout && error(
+                    "Force close was requested but worker was still running after $timeout seconds.",
+                )
                 sleep(0.1)
             end
         end
