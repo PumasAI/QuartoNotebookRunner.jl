@@ -1462,7 +1462,7 @@ function run!(
                 result
             end
 
-            Base.errormonitor(result_task)
+            errormonitor(result_task)
 
             # block until a decision is reached
             decision = take!(file.run_decision_channel)
