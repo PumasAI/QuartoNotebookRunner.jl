@@ -631,6 +631,7 @@ function server_status(socketserver::SocketServer)
             println(io, "      pid: $(file.worker.proc_pid)")
             println(io, "      exe: $(file.exe)")
             println(io, "      exeflags: $(file.exeflags)")
+            println(io, "      env: $(file.env)")
         end
 
         return String(take!(io))
