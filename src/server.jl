@@ -1445,7 +1445,9 @@ function run!(
             # so we run `evaluate!` in a task and wait for the `run_decision_channel`
             # further down. Depending on the value fetched from that channel, we either
             # know that evaluation has finished, or that force closing was requested.
-            empty!(file.run_decision_channel)
+            while !isempty(file.run_decision_channel)
+                take!(file.run_decision_channel) # empty! not defined on channels in earlier julia versions
+            end
 
             result_task = Threads.@spawn begin
                 result = evaluate!(
