@@ -47,7 +47,7 @@ should match the following schema:
 
 ```json
 {
-    type: "run" | "close" | "stop" | "isopen" | "isready" | "status"
+    type: "run" | "close" | "forceclose" | "stop" | "isopen" | "isready" | "status"
     content: string | { file: string, options: string | { ... } }
 }
 ```
@@ -67,7 +67,12 @@ A description of the message types:
  -  `close` - Close a notebook. The `content` should be the absolute path to
     the notebook file. If no file is specified, all notebooks will be closed.
     When the notebook is closed, the server will return a response with a
-    `status` field set to `true`.
+    `status` field set to `true`. Will return an error if any of the notebooks to be
+    closed is currently running.
+
+ -  `forceclose` - Forcibly close a notebook even if it is currently running.
+    The `content` should be the absolute path to the notebook file. When the notebook
+    is closed, the server will return a response with a `status` field set to `true`.
 
  -  `stop` - Stop the server. The server will return a response with a `message`
     field set to `Server stopped.`.
@@ -288,7 +293,7 @@ function _handle_response_internal(
     @debug "debugging" request notebooks = collect(keys(notebooks.workers))
     type = request.type
 
-    type in ("close", "run", "isopen", "status") ||
+    type in ("close", "forceclose", "run", "isopen", "status") ||
         return _write_json(socket, _log_error("Unknown request type: $type"))
 
     if type == "status"
@@ -317,6 +322,18 @@ function _handle_response_internal(
             return _write_json(
                 socket,
                 _log_error("Failed to close notebook: $file", error, catch_backtrace()),
+            )
+        end
+    end
+
+    if type == "forceclose"
+        try
+            forceclose!(notebooks, file)
+            return _write_json(socket, (; status = true))
+        catch error
+            return _write_json(
+                socket,
+                _log_error("Failed to force close notebook: $file", error, catch_backtrace()),
             )
         end
     end

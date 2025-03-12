@@ -13,6 +13,7 @@ mutable struct File
     timeout_timer::Union{Nothing,Timer}
     run_started::Union{Nothing,Dates.DateTime}
     run_finished::Union{Nothing,Dates.DateTime}
+    run_decision_channel::Channel{Symbol}
 
     function File(path::String, options::Union{String,Dict{String,Any}})
         if isfile(path)
@@ -43,6 +44,7 @@ mutable struct File
                     nothing,
                     nothing,
                     nothing,
+                    Channel{Symbol}(32), # we don't want an unbuffered channel because we might want to `put!` to it without blocking
                 )
                 init!(file, merged_options)
                 return file
@@ -1438,8 +1440,34 @@ function run!(
             end
             file.run_started = Dates.now()
             file.run_finished = nothing
-            result =
-                evaluate!(file, output; showprogress, options, markdown, chunk_callback)
+
+            # we want to be able to force close the worker while `evaluate!` is running,
+            # so we run `evaluate!` in a task and wait for the `run_decision_channel`
+            # further down. Depending on the value fetched from that channel, we either
+            # know that evaluation has finished, or that force closing was requested.
+            empty!(file.run_decision_channel)
+
+            result_task = Threads.@spawn begin
+                result = evaluate!(file, output; showprogress, options, markdown, chunk_callback)
+                put!(file.run_decision_channel, :evaluate_finished)
+                result
+            end
+
+            Base.errormonitor(result_task)
+
+            # block until a decision is reached
+            decision = take!(file.run_decision_channel)
+
+            # :forceclose might have been set from another task
+            if decision === :forceclose
+                close!(server, file.path) # this is in the same task, so reentrant lock allows access
+                error("File was force-closed during run")
+            elseif decision === :evaluate_finished
+                result = fetch(result_task)
+            else
+                error("Invalid decision $decision")
+            end
+
             file.run_finished = Dates.now()
             if file.timeout > 0
                 file.timeout_timer = Timer(file.timeout) do _
@@ -1610,6 +1638,39 @@ function close!(server::Server, path::String)
             false
         end
     end
+end
+
+function forceclose!(server::Server, path::String)
+    apath = abspath(path)
+    file = lock(server.lock) do
+        if haskey(server.workers, apath)
+            return server.workers[apath]
+        else
+            throw(NoFileEntryError(apath))
+        end
+    end
+    # if the worker is not actually running we need to fall back to normal closing,
+    # for that we try to get the file lock now
+    lock_attained = trylock(file.lock)
+    try
+        # if we've attained the lock, we can close normally
+        if lock_attained
+            close!(server, path)
+        # but if not, we request a forced close via the run decision channel that
+        # is being waited for in `run!` function
+        else
+            put!(file.run_decision_channel, :forceclose)
+            t = time()
+            while Malt.isrunning(file.worker)
+                timeout = 10
+                (time() - t) > timeout && error("Force close was requested but worker was still running after $timeout seconds.")
+                sleep(0.1)
+            end
+        end
+    finally
+        lock_attained && unlock(file.lock)
+    end
+    return
 end
 
 json_reader(str) = JSON3.read(str, Any)
