@@ -27,12 +27,17 @@ include("../utilities/prelude.jl")
                     showprogress = false,
                 )
                 logical_size = json.cells[end-1].outputs[1].metadata["image/png"]
-                pngbytes = Base64.base64decode(json.cells[end-1].outputs[1].data["image/png"])
+                pngbytes =
+                    Base64.base64decode(json.cells[end-1].outputs[1].data["image/png"])
                 px_size = QuartoNotebookRunner.png_image_metadata(
                     pngbytes;
                     phys_correction = false,
                 )
-                return (; width_px = px_size.width, height_px = px_size.height, logical_size...)
+                return (;
+                    width_px = px_size.width,
+                    height_px = px_size.height,
+                    logical_size...,
+                )
             end
 
             metadata = png_metadata()

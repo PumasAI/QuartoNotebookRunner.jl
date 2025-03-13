@@ -11,8 +11,6 @@ test_example(joinpath(@__DIR__, "../../examples/integrations/CairoMakie.qmd")) d
           Dict("width" => 4 * px_per_inch, "height" => 3 * px_per_inch)
 
     pngbytes = Base64.base64decode(cell["outputs"][1]["data"]["image/png"])
-    @test QuartoNotebookRunner.png_image_metadata(
-        pngbytes;
-        phys_correction = false,
-    ) == (; width = 4 * 150, height = 3 * 150)
+    @test QuartoNotebookRunner.png_image_metadata(pngbytes; phys_correction = false) ==
+          (; width = 4 * 150, height = 3 * 150)
 end

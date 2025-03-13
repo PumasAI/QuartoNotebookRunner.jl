@@ -20,10 +20,8 @@ include("../utilities/prelude.jl")
             cell = json.cells[6]
             metadata = cell.outputs[1].metadata["image/png"]
             pngbytes = Base64.base64decode(cell.outputs[1].data["image/png"])
-            px_size = QuartoNotebookRunner.png_image_metadata(
-                pngbytes;
-                phys_correction = false,
-            )
+            px_size =
+                QuartoNotebookRunner.png_image_metadata(pngbytes; phys_correction = false)
             @test metadata.width == 600
             @test metadata.height == 450
             @test px_size.width == 625
@@ -43,10 +41,8 @@ include("../utilities/prelude.jl")
             cell = json.cells[6]
             metadata = cell.outputs[1].metadata["image/png"]
             pngbytes = Base64.base64decode(cell.outputs[1].data["image/png"])
-            px_size = QuartoNotebookRunner.png_image_metadata(
-                pngbytes;
-                phys_correction = false,
-            )
+            px_size =
+                QuartoNotebookRunner.png_image_metadata(pngbytes; phys_correction = false)
             @test metadata.width == 600
             @test metadata.height == 450
             @test px_size.width == 625
