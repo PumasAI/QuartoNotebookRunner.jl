@@ -19,8 +19,15 @@ include("../utilities/prelude.jl")
             )
             cell = json.cells[6]
             metadata = cell.outputs[1].metadata["image/png"]
-            @test metadata.width == 625
-            @test metadata.height == 469
+            pngbytes = Base64.base64decode(cell.outputs[1].data["image/png"])
+            px_size = QuartoNotebookRunner.png_image_metadata(
+                pngbytes;
+                phys_correction = false,
+            )
+            @test metadata.width == 600
+            @test metadata.height == 450
+            @test px_size.width == 625
+            @test px_size.height == 469
 
             options_file = "temp_options.json"
             open(options_file, "w") do io
@@ -35,8 +42,15 @@ include("../utilities/prelude.jl")
             )
             cell = json.cells[6]
             metadata = cell.outputs[1].metadata["image/png"]
-            @test metadata.width == 625
-            @test metadata.height == 469
+            pngbytes = Base64.base64decode(cell.outputs[1].data["image/png"])
+            px_size = QuartoNotebookRunner.png_image_metadata(
+                pngbytes;
+                phys_correction = false,
+            )
+            @test metadata.width == 600
+            @test metadata.height == 450
+            @test px_size.width == 625
+            @test px_size.height == 469
 
             close!(server)
         end
