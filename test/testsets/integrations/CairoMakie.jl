@@ -10,8 +10,9 @@ test_example(joinpath(@__DIR__, "../../examples/integrations/CairoMakie.qmd")) d
     @test cell["outputs"][1]["metadata"]["image/png"] ==
           Dict("width" => 4 * px_per_inch, "height" => 3 * px_per_inch)
 
-    # the pixel resolution is controlled by px_per_unit and that reflects the dpi that is set
-    px_per_unit_str = cells[end-1]["outputs"][1]["data"]["text/plain"]
-    px_per_unit = parse(Float64, px_per_unit_str)
-    @test px_per_unit == 150 / px_per_inch
+    pngbytes = Base64.base64decode(cell["outputs"][1]["data"]["image/png"])
+    @test QuartoNotebookRunner.png_image_metadata(
+        pngbytes;
+        phys_correction = false,
+    ) == (; width = 4 * 150, height = 3 * 150)
 end
