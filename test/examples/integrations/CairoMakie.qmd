@@ -17,3 +17,7 @@ import CairoMakie
 ```{julia}
 CairoMakie.scatter([1, 2, 3], [1, 2, 3])
 ```
+
+```{julia}
+CairoMakie.Makie.current_default_theme()[:CairoMakie][:px_per_unit][]
+```
