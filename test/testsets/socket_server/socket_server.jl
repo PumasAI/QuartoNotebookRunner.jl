@@ -123,3 +123,57 @@ end
         wait(server)
     end
 end
+
+@testset "socket server interrupt" begin
+    cd(@__DIR__) do
+        node = NodeJS_18_jll.node()
+        client = joinpath(@__DIR__, "client.js")
+        server = QuartoNotebookRunner.serve(; showprogress = false)
+        sleep(1)
+        json(cmd) = JSON3.read(read(cmd, String), Any)
+
+        sleep_twice = abspath("../../examples/sleep_twice.qmd")
+        sleep_task = Threads.@spawn json(
+            `$node $client $(server.port) $(server.key) run $(sleep_twice)`,
+        )
+
+        # wait until server lock locks due to the `run` command above
+        while !islocked(server.notebookserver.lock)
+            sleep(0.001)
+        end
+        # wait just until the previous task releases the server lock, which is when it has
+        # attained the lock for the new file
+        lock(server.notebookserver.lock) do
+        end
+
+        # worker should be sleeping now
+        sleep(1)
+
+        # first interrupt should allow the notebook to proceed with the next cell
+        # as error: true is set
+        d1 = json(`$node $client $(server.port) $(server.key) interrupt $(sleep_twice)`)
+        @test d1 == Dict{String,Any}("status" => true)
+
+        # sleep(1)
+
+        # # second should cause evaluation to error out
+        d2 = json(`$node $client $(server.port) $(server.key) interrupt $(sleep_twice)`)
+        @test d2 == Dict{String,Any}("status" => true)
+
+        # d3 = fetch(sleep_task)
+        # @test occursin("File was force-closed", d2["juliaError"])
+
+        d4 = json(`$node $client $(server.port) $(server.key) interrupt $(sleep_twice)`)
+        @show d4
+
+        d5 = json(`$node $client $(server.port) $(server.key) close $(sleep_twice)`)
+        @test d5 == Dict{String,Any}("status" => true)
+
+        # d6 = json(`$node $client $(server.port) $(server.key) interrupt $(sleep_twice)`)
+        # @show d6
+
+        run(`$node $client $(server.port) $(server.key) stop`)
+
+        wait(server)
+    end
+end

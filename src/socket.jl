@@ -47,7 +47,7 @@ should match the following schema:
 
 ```json
 {
-    type: "run" | "close" | "forceclose" | "stop" | "isopen" | "isready" | "status"
+    type: "run" | "close" | "forceclose" | "interrupt" | "stop" | "isopen" | "isready" | "status"
     content: string | { file: string, options: string | { ... } }
 }
 ```
@@ -73,6 +73,11 @@ A description of the message types:
  -  `forceclose` - Forcibly close a notebook even if it is currently running.
     The `content` should be the absolute path to the notebook file. When the notebook
     is closed, the server will return a response with a `status` field set to `true`.
+
+ -  `interrupt` - Send an interrupt signal to a notebook's worker. The `content` should
+    be the absolute path to the notebook file. The request will return an error if the
+    worker is closed or idle. Otherwise a response with a `status` field set to `true`
+    will be returned.
 
  -  `stop` - Stop the server. The server will return a response with a `message`
     field set to `Server stopped.`.
@@ -293,7 +298,7 @@ function _handle_response_internal(
     @debug "debugging" request notebooks = collect(keys(notebooks.workers))
     type = request.type
 
-    type in ("close", "forceclose", "run", "isopen", "status") ||
+    type in ("close", "forceclose", "interrupt", "run", "isopen", "status") ||
         return _write_json(socket, _log_error("Unknown request type: $type"))
 
     if type == "status"
@@ -335,6 +340,22 @@ function _handle_response_internal(
                 socket,
                 _log_error(
                     "Failed to force close notebook: $file",
+                    error,
+                    catch_backtrace(),
+                ),
+            )
+        end
+    end
+
+    if type == "interrupt"
+        try
+            interrupt!(notebooks, file)
+            return _write_json(socket, (; status = true))
+        catch error
+            return _write_json(
+                socket,
+                _log_error(
+                    "Failed to interrupt notebook: $file",
                     error,
                     catch_backtrace(),
                 ),

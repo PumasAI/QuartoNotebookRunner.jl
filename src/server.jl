@@ -1684,6 +1684,34 @@ function forceclose!(server::Server, path::String)
     return
 end
 
+function interrupt!(server::Server, path::String)
+    apath = abspath(path)
+    file = lock(server.lock) do
+        if haskey(server.workers, apath)
+            return server.workers[apath]
+        else
+            throw(NoFileEntryError(apath))
+        end
+    end
+    if !Malt.isrunning(file.worker)
+        throw(UserError("Tried to interrupt worker at \"$(apath)\" which was already shut down"))
+    end
+
+    if !islocked(file.lock)
+        throw(UserError("Tried to interrupt worker at \"$(apath)\" which is currently idle."))
+    end
+
+    # We don't know what the exact consequence of this is
+    # as we don't know what the worker is doing at the time
+    # so the user will have to check themselves if something happened or not.
+    # In case the worker doesn't react to the interrupt (for example it's stuck
+    # in a tight while loop without yielding) the user can still force close
+    # but this of course loses all worker state like loaded packages.
+    Malt.interrupt(file.worker)
+        
+    return
+end
+
 json_reader(str) = JSON3.read(str, Any)
 yaml_reader(str) = YAML.load(str)
 

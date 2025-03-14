@@ -17,6 +17,7 @@ function handle() {
     const run = (file) => toJSON({ type: 'run', content: file });
     const close = (file) => toJSON({ type: 'close', content: file || '' });
     const forceclose = (file) => toJSON({ type: 'forceclose', content: file || '' });
+    const interrupt = (file) => toJSON({ type: 'interrupt', content: file || '' });
     const stop = () => toJSON({ type: 'stop', content: '' });
     const isopen = (file) => toJSON({ type: 'isopen', content: file });
     const isready = () => toJSON({ type: 'isready', content: '' });
@@ -39,6 +40,8 @@ function handle() {
             return close(notebook(arg));
         case 'forceclose':
             return forceclose(notebook(arg));
+        case 'interrupt':
+            return interrupt(notebook(arg));
         case 'stop':
             return stop();
         case 'isopen':

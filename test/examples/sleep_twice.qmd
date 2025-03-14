@@ -1,0 +1,8 @@
+```{julia}
+#| error: true
+sleep(60)
+```
+
+```{julia}
+sleep(60)
+```
