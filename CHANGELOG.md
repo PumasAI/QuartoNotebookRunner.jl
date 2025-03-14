@@ -5,15 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## Unreleased
+## [v0.15.0] - 2025-03-14
 
 ### Added
 
-- New socket server command `status` that returns a string describing the current server status, including information for each active worker, as well as `forceclose` which is the forced version of `close` that can shut down a worker even if it's currently running [#229](https://github.com/PumasAI/QuartoNotebookRunner.jl/pull/229).
+- New socket server command `status` that returns a string describing the current server status, including information for each active worker, as well as `forceclose` which is the forced version of `close` that can shut down a worker even if it's currently running [#229].
 
 ### Changed
 
-- Socket server commands `run`, `close` and `stop` will error if a file lock is currently held (a file worker is running) instead of waiting potentially a long time for that lock to open. Those locks were always intended only as mutation protection and not a queueing mechanism, they only behaved that way by accident and in case some worker hangs, it's impractical that further `quarto render` commands just add on top of the pile without a message [#229](https://github.com/PumasAI/QuartoNotebookRunner.jl/pull/229).
+- Socket server commands `run`, `close` and `stop` will error if a file lock is currently held (a file worker is running) instead of waiting potentially a long time for that lock to open. Those locks were always intended only as mutation protection and not a queueing mechanism, they only behaved that way by accident and in case some worker hangs, it's impractical that further `quarto render` commands just add on top of the pile without a message [#229].
 
 ## [v0.14.0] - 2025-02-26
 
@@ -340,6 +340,7 @@ caching is enabled. Delete this folder to clear the cache. [#259]
 [v0.13.1]: https://github.com/PumasAI/QuartoNotebookRunner.jl/releases/tag/v0.13.1
 [v0.13.2]: https://github.com/PumasAI/QuartoNotebookRunner.jl/releases/tag/v0.13.2
 [v0.14.0]: https://github.com/PumasAI/QuartoNotebookRunner.jl/releases/tag/v0.14.0
+[v0.15.0]: https://github.com/PumasAI/QuartoNotebookRunner.jl/releases/tag/v0.15.0
 [#9]: https://github.com/PumasAI/QuartoNotebookRunner.jl/issues/9
 [#11]: https://github.com/PumasAI/QuartoNotebookRunner.jl/issues/11
 [#14]: https://github.com/PumasAI/QuartoNotebookRunner.jl/issues/14
@@ -399,6 +400,7 @@ caching is enabled. Delete this folder to clear the cache. [#259]
 [#194]: https://github.com/PumasAI/QuartoNotebookRunner.jl/issues/194
 [#209]: https://github.com/PumasAI/QuartoNotebookRunner.jl/issues/209
 [#211]: https://github.com/PumasAI/QuartoNotebookRunner.jl/issues/211
+[#229]: https://github.com/PumasAI/QuartoNotebookRunner.jl/issues/229
 [#232]: https://github.com/PumasAI/QuartoNotebookRunner.jl/issues/232
 [#238]: https://github.com/PumasAI/QuartoNotebookRunner.jl/issues/238
 [#248]: https://github.com/PumasAI/QuartoNotebookRunner.jl/issues/248
