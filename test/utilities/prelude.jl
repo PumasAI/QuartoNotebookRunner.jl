@@ -2,6 +2,7 @@ using Test
 using Logging
 using QuartoNotebookRunner
 
+import Base64
 import JSON3
 import JSONSchema
 import NodeJS_18_jll
