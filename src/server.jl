@@ -11,6 +11,9 @@ mutable struct File
     lock::ReentrantLock
     timeout::Float64
     timeout_timer::Union{Nothing,Timer}
+    run_started::Union{Nothing,Dates.DateTime}
+    run_finished::Union{Nothing,Dates.DateTime}
+    run_decision_channel::Channel{Symbol}
 
     function File(path::String, options::Union{String,Dict{String,Any}})
         if isfile(path)
@@ -23,6 +26,7 @@ mutable struct File
                 merged_options = _extract_relevant_options(file_frontmatter, options)
                 exeflags, env = _exeflags_and_env(merged_options)
                 timeout = _extract_timeout(merged_options)
+
 
                 exe, _exeflags = _julia_exe(exeflags)
                 worker =
@@ -38,6 +42,9 @@ mutable struct File
                     ReentrantLock(),
                     timeout,
                     nothing,
+                    nothing,
+                    nothing,
+                    Channel{Symbol}(32), # we don't want an unbuffered channel because we might want to `put!` to it without blocking
                 )
                 init!(file, merged_options)
                 return file
@@ -1427,21 +1434,70 @@ function run!(
     options::Union{String,Dict{String,Any}} = Dict{String,Any}(),
     chunk_callback = (i, n, c) -> nothing,
 )
-    borrow_file!(server, path; optionally_create = true) do file
-        if file.timeout_timer !== nothing
-            close(file.timeout_timer)
-            file.timeout_timer = nothing
-        end
-        result = evaluate!(file, output; showprogress, options, markdown, chunk_callback)
-        if file.timeout > 0
-            file.timeout_timer = Timer(file.timeout) do _
-                close!(server, file.path)
-                @debug "File at $(file.path) timed out after $(file.timeout) seconds of inactivity."
+    try
+        borrow_file!(server, path; optionally_create = true) do file
+            if file.timeout_timer !== nothing
+                close(file.timeout_timer)
+                file.timeout_timer = nothing
             end
-        else
-            close!(server, file.path)
+            file.run_started = Dates.now()
+            file.run_finished = nothing
+
+            # we want to be able to force close the worker while `evaluate!` is running,
+            # so we run `evaluate!` in a task and wait for the `run_decision_channel`
+            # further down. Depending on the value fetched from that channel, we either
+            # know that evaluation has finished, or that force closing was requested.
+            while !isempty(file.run_decision_channel)
+                take!(file.run_decision_channel) # empty! not defined on channels in earlier julia versions
+            end
+
+            result_task = Threads.@spawn begin
+                try
+                    evaluate!(file, output; showprogress, options, markdown, chunk_callback)
+                finally
+                    put!(file.run_decision_channel, :evaluate_finished)
+                end
+            end
+
+            # block until a decision is reached
+            decision = take!(file.run_decision_channel)
+
+            # :forceclose might have been set from another task
+            if decision === :forceclose
+                close!(server, file.path) # this is in the same task, so reentrant lock allows access
+                error("File was force-closed during run")
+            elseif decision === :evaluate_finished
+                result = try
+                    fetch(result_task)
+                catch err
+                    # throw the original exception, not the wrapping TaskFailedException
+                    rethrow(err.task.exception)
+                end
+            else
+                error("Invalid decision $decision")
+            end
+
+            file.run_finished = Dates.now()
+            if file.timeout > 0
+                file.timeout_timer = Timer(file.timeout) do _
+                    close!(server, file.path)
+                    @debug "File at $(file.path) timed out after $(file.timeout) seconds of inactivity."
+                end
+            else
+                close!(server, file.path)
+            end
+            return result
         end
-        return result
+    catch err
+        if err isa FileBusyError
+            throw(
+                UserError(
+                    "Tried to run file \"$path\" but the corresponding worker is busy.",
+                ),
+            )
+        else
+            rethrow(err)
+        end
     end
 end
 
@@ -1449,19 +1505,25 @@ struct NoFileEntryError <: Exception
     path::String
 end
 
+struct FileBusyError <: Exception
+    path::String
+end
+
 """
-    borrow_file!(f, server, path; optionally_create = false, options = Dict{String,Any}())
+    borrow_file!(f, server, path; wait = false, optionally_create = false, options = Dict{String,Any}())
 
 Executes `f(file)` while the `file`'s `ReentrantLock` is locked.
 All actions on a `Server`'s `File` should be wrapped in this
 so that no two tasks can mutate the `File` at the same time.
 When `optionally_create` is `true`, the `File` will be created on the server
 if it doesn't exist, in which case it is passed `options`.
+If `wait = false`, `borrow_file!` will throw a `FileBusyError` if the lock cannot be attained immediately.
 """
 function borrow_file!(
     f,
     server,
     path;
+    wait = false,
     optionally_create = false,
     options = Dict{String,Any}(),
 )
@@ -1497,7 +1559,18 @@ function borrow_file!(
         # no file exists or it doesn't match the one we have, we recurse into `borrow_file!`.
         # This could in principle go on forever but is very unlikely to with a small number of
         # concurrent users.
-        lock(file.lock) do
+
+        if wait
+            lock(file.lock)
+            lock_attained = true
+        else
+            lock_attained = trylock(file.lock)
+        end
+
+        try
+            if !lock_attained
+                throw(FileBusyError(apath))
+            end
             current_file = lock(server.lock) do
                 get(server.workers, apath, nothing)
             end
@@ -1506,6 +1579,8 @@ function borrow_file!(
             else
                 return f(file)
             end
+        finally
+            lock_attained && unlock(file.lock)
         end
     end
 end
@@ -1560,12 +1635,53 @@ function close!(server::Server, path::String)
         end
         return true
     catch err
-        if !(err isa NoFileEntryError)
+        if err isa FileBusyError
+            throw(
+                UserError(
+                    "Tried to close file \"$path\" but the corresponding worker is busy.",
+                ),
+            )
+        elseif !(err isa NoFileEntryError)
             rethrow(err)
         else
             false
         end
     end
+end
+
+function forceclose!(server::Server, path::String)
+    apath = abspath(path)
+    file = lock(server.lock) do
+        if haskey(server.workers, apath)
+            return server.workers[apath]
+        else
+            throw(NoFileEntryError(apath))
+        end
+    end
+    # if the worker is not actually running we need to fall back to normal closing,
+    # for that we try to get the file lock now
+    lock_attained = trylock(file.lock)
+    try
+        # if we've attained the lock, we can close normally
+        if lock_attained
+            close!(server, path)
+            # but if not, we request a forced close via the run decision channel that
+            # is being waited for in `run!` function
+        else
+            put!(file.run_decision_channel, :forceclose)
+            t = time()
+            while Malt.isrunning(file.worker)
+                timeout = 10
+                (time() - t) > timeout && error(
+                    "Force close was requested but worker was still running after $timeout seconds.",
+                )
+                sleep(0.1)
+            end
+        end
+    finally
+        lock_attained && unlock(file.lock)
+    end
+    return
 end
 
 json_reader(str) = JSON3.read(str, Any)

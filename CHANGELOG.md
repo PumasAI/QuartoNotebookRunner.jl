@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+### Added
+
+- New socket server command `status` that returns a string describing the current server status, including information for each active worker, as well as `forceclose` which is the forced version of `close` that can shut down a worker even if it's currently running [#229](https://github.com/PumasAI/QuartoNotebookRunner.jl/pull/229).
+
+### Changed
+
+- Socket server commands `run`, `close` and `stop` will error if a file lock is currently held (a file worker is running) instead of waiting potentially a long time for that lock to open. Those locks were always intended only as mutation protection and not a queueing mechanism, they only behaved that way by accident and in case some worker hangs, it's impractical that further `quarto render` commands just add on top of the pile without a message [#229](https://github.com/PumasAI/QuartoNotebookRunner.jl/pull/229).
+
 ## [v0.14.0] - 2025-02-26
 
 ### Added
