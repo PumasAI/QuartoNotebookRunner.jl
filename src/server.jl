@@ -140,6 +140,29 @@ function _exeflags_and_env(options)
     end
     # if exeflags already contains '--color=no', the 'no' will prevail
     pushfirst!(exeflags, "--color=yes")
+
+    # Ensure that coverage settings are passed to the worker so that worker
+    # code is tracked correctly during tests.
+    # Based on https://github.com/JuliaLang/julia/blob/eed18bdf706b7aab15b12f3ba0588e8fafcd4930/base/util.jl#L216-L229.
+    opts = Base.JLOptions()
+    if opts.code_coverage != 0
+        # Forward the code-coverage flag only if applicable (if the filename
+        # is pid-dependent)
+        coverage_file =
+            (opts.output_code_coverage != C_NULL) ?
+            unsafe_string(opts.output_code_coverage) : ""
+        if isempty(coverage_file) || occursin("%p", coverage_file)
+            if opts.code_coverage == 1
+                push!(exeflags, "--code-coverage=user")
+            elseif opts.code_coverage == 2
+                push!(exeflags, "--code-coverage=all")
+            elseif opts.code_coverage == 3
+                push!(exeflags, "--code-coverage=@$(unsafe_string(opts.tracked_path))")
+            end
+            isempty(coverage_file) || push!(exeflags, "--code-coverage=$coverage_file")
+        end
+    end
+
     return exeflags, env
 end
 
