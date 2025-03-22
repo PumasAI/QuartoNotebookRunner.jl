@@ -12,7 +12,7 @@ include("../../utilities/prelude.jl")
         cp(base_file, copy)
         json = run!(s, copy)
 
-        @test json.cells[end].outputs[1].data["text/plain"] == "4.0"
+        @test json.cells[end-1].outputs[1].data["text/plain"] == "4.0"
 
         original = read(copy, String)
         modified = replace(original, "x <- 1" => "NULL")
@@ -22,7 +22,7 @@ include("../../utilities/prelude.jl")
         end
 
         json = run!(s, copy)
-        @test json.cells[end].outputs[1].traceback[1] ==
+        @test json.cells[end-1].outputs[1].traceback[1] ==
               "REvalError: Error: object 'x' not found"
     finally
         rm(copy)

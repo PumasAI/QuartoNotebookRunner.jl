@@ -9,7 +9,8 @@ cd(dirname(@__DIR__)) do
             for file in files
                 fullpath = joinpath(root, file)
                 fullpath_lowercase = lowercase(fullpath)
-                if endswith(fullpath_lowercase, ".jl")
+                if endswith(fullpath_lowercase, ".jl") &&
+                   !contains(fullpath_lowercase, "vendor")
                     is_formatted = JuliaFormatter.format(fullpath)
                     if is_formatted
                         push!(formatted_paths, fullpath)

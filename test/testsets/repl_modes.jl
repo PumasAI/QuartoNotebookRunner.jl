@@ -3,7 +3,7 @@ include("../utilities/prelude.jl")
 test_example(joinpath(@__DIR__, "../examples/repl_modes.qmd")) do json
 
     cells = json["cells"]
-    @test length(cells) == 8
+    @test length(cells) == 9
 
     if !Sys.iswindows()
         cell = cells[2]

@@ -1,0 +1,17 @@
+---
+title: RCall integration
+fig-width: 4
+fig-height: 3
+fig-dpi: 150
+fig-format: svg
+julia:
+    exeflags: ["--project=RCall"]
+---
+
+```{julia}
+using RCall
+```
+
+```{julia}
+R"plot(1:10)"
+```

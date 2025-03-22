@@ -29,5 +29,20 @@ test_example(joinpath(@__DIR__, "../examples/mimetypes.qmd")) do json
     cell = cells[14]
     @test !isempty(cell["outputs"][1]["data"]["text/plain"])
     @test !isempty(cell["outputs"][1]["data"]["text/latex"])
-    @test !isempty(cell["outputs"][1]["data"]["text/markdown"])
+
+    md = cell["outputs"][1]["data"]["text/markdown"]
+    @test !isempty(md)
+    @test !startswith(md, "\$\$")
+    @test !endswith(md, "\$\$")
+end
+
+test_example(joinpath(@__DIR__, "../examples/mimetypes.qmd"), to_format("typst")) do json
+    cells = json["cells"]
+
+    cell = cells[14]
+    @test !isempty(cell["outputs"][1]["data"]["text/plain"])
+    @test !isempty(cell["outputs"][1]["data"]["text/latex"])
+    md = cell["outputs"][1]["data"]["text/markdown"]
+    @test startswith(md, "\$\$")
+    @test endswith(md, "\$\$")
 end

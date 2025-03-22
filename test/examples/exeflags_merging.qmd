@@ -1,0 +1,14 @@
+---
+title: Exeflags merging
+engine: julia
+julia:
+    exeflags: []
+---
+
+```{julia}
+print(Base.active_project())
+```
+
+```{julia}
+print(Threads.nthreads())
+```

@@ -2,7 +2,7 @@ include("../utilities/prelude.jl")
 
 test_example(joinpath(@__DIR__, "../examples/serialization.qmd")) do json
     cells = json["cells"]
-    @test length(cells) == 8
+    @test length(cells) == 9
 
     cell = cells[8]
     @test cell["cell_type"] == "code"

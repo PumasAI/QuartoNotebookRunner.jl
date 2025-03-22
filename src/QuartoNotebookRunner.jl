@@ -18,16 +18,17 @@ module QuartoNotebookRunner
 
 # Imports.
 
+import BSON
 import Base64
 import CommonMark
 import Compat
-import IOCapture
+import Dates
 import InteractiveUtils
 import IterTools
 import JSON3
 import Logging
-import Malt
 import PrecompileTools
+import Preferences
 import ProgressLogging
 import REPL
 import Random
@@ -42,6 +43,12 @@ export Server, render, run!, close!
 
 # Includes.
 
+const QNR_VERSION =
+    VersionNumber(TOML.parsefile(joinpath(@__DIR__, "..", "Project.toml"))["version"])
+include_dependency(joinpath(@__DIR__, "..", "Project.toml"))
+
+include("UserError.jl")
+include("Malt.jl")
 include("WorkerSetup.jl")
 include("server.jl")
 include("socket.jl")

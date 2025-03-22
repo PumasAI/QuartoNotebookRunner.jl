@@ -1,0 +1,17 @@
+---
+title: Random seed
+---
+
+```{julia}
+using Random
+Random.seed!(123)
+rand()
+```
+
+```{julia}
+rand()
+```
+
+```{julia}
+rand()
+```

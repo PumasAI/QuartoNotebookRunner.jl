@@ -44,7 +44,7 @@ jobs:
       matrix:
         version:
           - "1.6"
-          - "1.10"
+          - "1.11"
         os:
           - ubuntu-latest
           - macos-13
@@ -58,39 +58,55 @@ jobs:
             os: macos-13
           - version: "1.6"
             os: windows-latest
+          # Performance regressions on Julia 1.11 on Windows. Currently not
+          # viable to run the test suite there.
+          - version: "1.11"
+            os: windows-latest
         include:
           - version: "1.7"
             os: macos-13
           - version: "1.7"
             os: windows-latest
+          - version: "1.10"
+            os: windows-latest
     steps:
-      - uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           persist-credentials: false
 
-      - uses: julia-actions/setup-julia@512e2ab44f5848ea62bddd21d1ee906e989b0360 # v2.4.0
+      - uses: julia-actions/install-juliaup@1da6847c869cd68e3a32b8f52fe8f005b8cd5ece # v2.2.1
         with:
-          version: ${{ matrix.version }}
-      - uses: julia-actions/cache@8608484607cba0bdb5437a7bad85d6502499d029 # v2.0.4
+          channel: "${{ matrix.version }}"
 
-      - uses: r-lib/actions/setup-r@e6be4b3706e0f39bc7a4cf4496a5f2c4cb840040 # v2.10.1
+      # These versions of `julia` are used for the cross-version notebook tests.
+      - run: juliaup add 1.9.4
+      - run: juliaup add 1.10.7
+      - run: juliaup add 1.11.2
+
+      - uses: julia-actions/cache@2b1bf4d8a138668ac719ea7ca149b53ed8d8401e # v2.0.7
+
+      - uses: r-lib/actions/setup-r@14a7e741c1cb130261263aa1593718ba42cf443b # v2.11.2
         with:
           use-public-rspm: true
           r-version: "4.3"
       - run: echo "LD_LIBRARY_PATH=$(R RHOME)/lib:$LD_LIBRARY_PATH" >> $GITHUB_ENV
         if: matrix.os == 'ubuntu-latest'
+      - run: julia -e 'cp("/usr/lib/x86_64-linux-gnu/libstdc++.so.6", joinpath(dirname(Sys.BINDIR), "lib", "julia", "libstdc++.so.6"); force = true)' 
+        if: matrix.os == 'ubuntu-latest' && matrix.version == '1.6'
 
       # TODO: use quarto_jll for integration tests once modern enough versions are available
-      - uses: quarto-dev/quarto-actions/setup@87b35bb88b36317fa36b5189e9553b4164a5c5a3 # v2.1.6
+      - uses: quarto-dev/quarto-actions/setup@9e48da27e184aa238fcb49f5db75469626d43adb # v2.1.9
         with:
           version: pre-release
 
-      - uses: julia-actions/julia-buildpkg@90dd6f23eb49626e4e6612cb9d64d456f86e6a1c # v1.6.0
-      - uses: julia-actions/julia-runtest@d0c4f093badade621cd041bba567d1e832480ac2 # v1.10.0
+      - uses: julia-actions/julia-buildpkg@e3eb439fad4f9aba7da2667e7510e4a46ebc46e1 # v1.7.0
+      - uses: julia-actions/julia-runtest@678da69444cd5f13d7e674a90cb4f534639a14f9 # v1.11.2
         with:
           depwarn: "yes"
       - uses: julia-actions/julia-processcoverage@03114f09f119417c3242a9fb6e0b722676aedf38 # v1.2.2
-      - uses: codecov/codecov-action@e28ff129e5465c2c0dcc6f003fc735cb6ae0c673 # v4.5.0
+        if: matrix.os == 'ubuntu-latest' && matrix.version == '1.11'
+      - uses: codecov/codecov-action@0565863a31f2c772f9f0395002a31e3f06189574 # v5.4.0
+        if: matrix.os == 'ubuntu-latest' && matrix.version == '1.11'
         with:
           verbose: true
           files: lcov.info
@@ -102,10 +118,10 @@ jobs:
     timeout-minutes: 20
 
     steps:
-      - uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           persist-credentials: false
-      - uses: julia-actions/setup-julia@512e2ab44f5848ea62bddd21d1ee906e989b0360 # v2.4.0
+      - uses: julia-actions/setup-julia@5c9647d97b78a5debe5164e9eec09d653d29bd71 # v2.6.1
         with:
           version: "1"
       - run: |

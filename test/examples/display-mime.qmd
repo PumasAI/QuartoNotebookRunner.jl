@@ -1,0 +1,11 @@
+---
+title: Display specific MIME types
+---
+
+```{julia}
+display(MIME("text/html"), HTML("<p></p>"))
+```
+
+```{julia}
+display("text/html", HTML("<p></p>"))
+```

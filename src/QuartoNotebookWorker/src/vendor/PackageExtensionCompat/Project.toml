@@ -1,0 +1,26 @@
+name = "PackageExtensionCompat"
+uuid = "65ce6f38-6b18-4e1d-a461-8949797d7930"
+authors = ["Christopher Doris <github.com/cjdoris>"]
+version = "1.0.2"
+
+[deps]
+Requires = "ae029012-a4dd-5104-9daa-d747884805df"
+TOML = "fa267f1f-6049-4f14-aa54-33bafae1ed76"
+
+[compat]
+Requires = "1"
+TOML = "1"
+julia = "1"
+
+[extras]
+Pkg = "44cfe95a-1eb2-52ea-b672-e2afdf69b78f"
+Random = "9a3f8284-a2c9-5f02-9a11-845980a1fd5c"
+Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
+UUIDs = "cf7118a7-6976-5b1a-9a39-7adc72f591a4"
+
+[targets]
+test = ["Test", "Pkg", "Random", "UUIDs"]
+
+[weakdeps]
+Requires = "ae029012-a4dd-5104-9daa-d747884805df"
+TOML = "fa267f1f-6049-4f14-aa54-33bafae1ed76"

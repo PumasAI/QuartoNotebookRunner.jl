@@ -1,0 +1,17 @@
+name = "IOCapture"
+uuid = "b5f81e59-6552-4d32-b1f0-c071b021bf89"
+authors = ["Morten Piibeleht", "Michael Hatherly", "IOCapture contributors"]
+version = "0.2.5"
+
+[deps]
+Logging = "56ddb016-857b-54e1-b83d-db4d58db5568"
+Random = "9a3f8284-a2c9-5f02-9a11-845980a1fd5c"
+
+[compat]
+julia = "1"
+
+[extras]
+Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
+
+[targets]
+test = ["Test"]

@@ -16,15 +16,17 @@ function handle() {
     }
     const run = (file) => toJSON({ type: 'run', content: file });
     const close = (file) => toJSON({ type: 'close', content: file || '' });
+    const forceclose = (file) => toJSON({ type: 'forceclose', content: file || '' });
     const stop = () => toJSON({ type: 'stop', content: '' });
     const isopen = (file) => toJSON({ type: 'isopen', content: file });
     const isready = () => toJSON({ type: 'isready', content: '' });
+    const status = () => toJSON({ type: 'status', content: '' });
 
     const notebook = (arg) => {
-        if (arg) {
-            return path.join(process.cwd(), arg);
+        if (path.isAbsolute(arg)) {
+            return arg
         }
-        throw new Error('No notebook specified.');
+        throw new Error('No notebook with absolute path specified.');
     }
 
     const type = process.argv[4];
@@ -35,12 +37,16 @@ function handle() {
             return run(notebook(arg));
         case 'close':
             return close(notebook(arg));
+        case 'forceclose':
+            return forceclose(notebook(arg));
         case 'stop':
             return stop();
         case 'isopen':
             return isopen(notebook(arg));
         case 'isready':
             return isready();
+        case 'status':
+            return status();
         default:
             throw new Error('Invalid command.');
     }

@@ -1,2 +1,8 @@
 [deps]
+Changelog = "5217a498-cd5d-4ec6-b8c2-9b85a09b6e3e"
 JuliaFormatter = "98e50ef6-434e-11e9-1051-2b60c6c9e899"
+
+[compat]
+Changelog = "1"
+JuliaFormatter = "1"
+julia = "1"
