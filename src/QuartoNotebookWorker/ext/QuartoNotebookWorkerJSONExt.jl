@@ -1,12 +1,15 @@
 module QuartoNotebookWorkerJSONExt
 
 import QuartoNotebookWorker
-import JSON
+import JSON: print
 
 function QuartoNotebookWorker._ojs_define(::QuartoNotebookWorker.OJSDefine, kwargs)
     contents = QuartoNotebookWorker.ojs_convert(kwargs)
-    json = JSON.json(Dict("contents" => contents))
-    return HTML("<script type='ojs-define'>$(json)</script>")
+    return HTML() do io
+        print(io, "<script type='ojs-define'>")
+        JSON.print(io, Dict("contents" => contents))
+        print(io, "</script>")
+    end
 end
 
 end
