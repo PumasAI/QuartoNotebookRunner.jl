@@ -8,7 +8,6 @@ export expand
 export cell_options
 export notebook_options
 
-using Tables: isrowtable, rows
 
 walk(x, _, outer) = outer(x)
 walk(x::Expr, inner, outer) = outer(Expr(x.head, map(inner, x.args)...))

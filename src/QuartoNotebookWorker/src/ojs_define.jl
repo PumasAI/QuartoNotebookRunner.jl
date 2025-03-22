@@ -9,11 +9,11 @@ end
 
 ojs_convert(kwargs) = [Dict("name" => k, "value" => _ojs_convert(v)) for (k, v) in kwargs]
 
-function _ojs_convert(x)
-    if Tables.isrowtable(x)
-        # enumerate all rows if the object supports rowtable inferface
-        return Tables.rows(x)
-    else
-        return x # no conversion by default
-    end
-end
+_istable(x) = __istable(nothing, x)
+__istable(::Any, x) = false
+
+_rows(x) = __rows(nothing, x)
+__rows(::Any, x) = error("Object does not support `Tables.rows` interface.")
+
+# Enumerate all rows if the object supports rowtable inferface.
+_ojs_convert(x) = _istable(x) ? _rows(x) : x
