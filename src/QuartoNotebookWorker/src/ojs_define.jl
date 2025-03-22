@@ -8,4 +8,12 @@ function _ojs_define(::Any, kwargs)
 end
 
 ojs_convert(kwargs) = [Dict("name" => k, "value" => _ojs_convert(v)) for (k, v) in kwargs]
-_ojs_convert(x) = x
+
+function _ojs_convert(x)
+    if Tables.isrowtable(x)
+        # enumerate all rows if the object supports rowtable inferface
+        return Tables.rows(x)
+    else
+        return x # no conversion by default
+    end
+end
