@@ -4,7 +4,7 @@ function refresh!(path, original_options, options = original_options)
     # We check the `execute-dir` key in the options,
     if haskey(options, "project") && haskey(options["project"], "execute-dir")
         ed = options["project"]["execute-dir"]
-        if ed == "directory"
+        if ed == "file"
             cd(dirname(path))
         elseif ed == "project"
             # TODO: this doesn't seem right. How does one get the root path of the project here?
@@ -14,13 +14,11 @@ function refresh!(path, original_options, options = original_options)
                 cd(dirname(NotebookState.PROJECT[]))
             elseif isdir(NotebookState.PROJECT[])
                 cd(NotebookState.PROJECT[])
-            elseif isdir(ed)
-                cd(ed)
             else
                 @warn "Project path not found: $(NotebookState.PROJECT[])"
             end
         else
-            cd(abspath(ed))
+            error("Quarto only accepts `file` or `project` as arguments to `execute-dir`, got `$ed`.")
         end
     else
         # Current directory should always start out as the directory of the
