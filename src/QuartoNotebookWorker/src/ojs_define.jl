@@ -26,27 +26,29 @@ that supports direct conversion to JSON.
 """
 ojs_convert(kwargs) = [Dict("name" => k, "value" => _ojs_convert(v)) for (k, v) in kwargs]
 
-# Internal function to check if the object supports a specific trait.
-# QuartoNotebookWorker extensions that implement specific traits
-# should override this function.
-# The fallback implementation reports no trait support.
-_has_trait(trait::Val, obj::Any) = false
+# Internal function to check if the object supports Tables.jl table interface
+# QuartoNotebookWorkerTablesExt overrides this function with the actual implementation.
+# The fallback implementation reports no table interace support.
+_istable(::Any, obj::Any) = false
+# outer function called from _ojs_convert()
+_istable(obj::Any) = _istable(nothing, obj)
 
-# Trait-specific object conversion that is called when the object
-# supports a specific trait (_has_trait(trait, obj) == true).
-# QuartoNotebookWorker extensions that implement specific traits
-# should override this function.
-# The fallback implementation returns the object unchanged.
-_ojs_convert(trait::Val, obj::Any) = obj
+# Get rows iterator for objects that support Tables.jl table interface
+# (see _istable()) to facilitate OJS conversion.
+# QuartoNotebookWorkerTablesExt overrides this function with the actual implementation.
+# The fallback implementation throws an error.
+_ojs_rows(::Any, obj::Any) = error("Object does not support `Tables.rows` interface.")
+# outer function called from _ojs_convert()
+_ojs_rows(obj::Any) = _ojs_rows(nothing, obj)
 
 # The default object conversion function that is called when
 # there is no more specific _ojs_convert(obj::T)
 function _ojs_convert(obj::Any)
     # check if the object implements any of the traits supported by extensions
-    if _has_trait(Val(:table), obj)
+    if _istable(obj)
         # if QuartoNotebookWorkerTablesExt is active and
         # obj supports Tables.istable(obj) interface, do table-specific conversion
-        return _ojs_convert(Val(:table), obj)
+        return _ojs_rows(obj)
     else
         # no specific trait support, no conversion by default
         return obj
