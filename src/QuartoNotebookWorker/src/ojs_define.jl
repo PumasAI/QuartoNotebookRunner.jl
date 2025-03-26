@@ -1,20 +1,35 @@
-struct OJSDefine end
-
 """
     ojs_define(; kwargs...)
 
-User-facing function that, given a list of `name = object` pairs,
-makes them available to *ObservableJS* by rendering their
-HTML/JavaScript representation.
+Given a list of `name = object` pairs, makes them available to *ObservableJS*
+by rendering their HTML/JavaScript representation.
 """
-ojs_define(; kwargs...) = _ojs_define(OJSDefine(), kwargs)
-
-# Internal function that implements rendering of the `name = object` pairs.
-# The actual implementation is in the QuartoNotebookWorkerJSONExt extension.
-function _ojs_define(::Any, kwargs)
-    @warn "JSON package not available. Please install the JSON.jl package to use ojs_define."
-    return nothing
+function ojs_define(; kwargs...)
+    json_write = _json_writer()
+    if isnothing(json_write)
+        @warn "No JSON package imported. Please import either JSON.jl or JSON3.jl to use `ojs_define`."
+        return nothing
+    else
+        object = ojs_convert(kwargs)
+        return HTML() do io
+            write(io, "<script type='ojs-define'>")
+            json_write(io, Dict("contents" => object))
+            write(io, "</script>")
+        end
+    end
 end
+
+# JSON package interfaces. Functions are extended with methods in their
+# respective extensions (QuartoNotebookWorkerJSONExt and
+# QuartoNotebookWorkerJSON3Ext). Returns a suitable writer function.
+
+_json_writer() = _json3_write(nothing)
+
+# Prioritize JSON3 over JSON. First check whether there is a suitable
+# `_json3_write`, and if not defined then check `_json_write`. Default
+# returns `nothing` which signals that there is no suitable writer.
+_json3_write(::Any) = _json_write(nothing)
+_json_write(::Any) = nothing
 
 """
     ojs_convert(kwargs)
