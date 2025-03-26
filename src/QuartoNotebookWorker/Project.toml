@@ -44,6 +44,3 @@ QuartoNotebookWorkerRemoteREPL = "RemoteREPL"
 QuartoNotebookWorkerReviseExt = "Revise"
 QuartoNotebookWorkerSymPyCoreExt = "SymPyCore"
 QuartoNotebookWorkerTablesExt = "Tables"
-
-[compat]
-Tables = "1"
