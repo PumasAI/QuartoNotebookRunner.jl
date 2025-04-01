@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## Unreleased
+
+### Added
+
+- `ojs_define` support for any tabular data source, as defined by the `Tables.jl` `istable` interface [#285].
+- `ojs_define` support for rendering via `JSON3.jl`, in additional to the currently supported `JSON.jl` [#286].
+
 ## [v0.15.0] - 2025-03-14
 
 ### Added
@@ -411,3 +418,5 @@ caching is enabled. Delete this folder to clear the cache. [#259]
 [#259]: https://github.com/PumasAI/QuartoNotebookRunner.jl/issues/259
 [#262]: https://github.com/PumasAI/QuartoNotebookRunner.jl/issues/262
 [#265]: https://github.com/PumasAI/QuartoNotebookRunner.jl/issues/265
+[#285]: https://github.com/PumasAI/QuartoNotebookRunner.jl/issues/285
+[#286]: https://github.com/PumasAI/QuartoNotebookRunner.jl/issues/286
