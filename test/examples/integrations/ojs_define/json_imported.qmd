@@ -1,0 +1,27 @@
+---
+title: JSON imported
+---
+
+```{julia}
+import JSON
+```
+
+```{julia}
+ojs_define(; key = "value")
+```
+
+```{julia}
+import Tables
+```
+
+```{julia}
+ojs_define(; table = (; a = [1, 2, 3]))
+```
+
+```{julia}
+import DataFrames
+```
+
+```{julia}
+ojs_define(; df = DataFrames.DataFrame(; a = [1, 2, 3]))
+```

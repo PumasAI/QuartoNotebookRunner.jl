@@ -1,0 +1,7 @@
+---
+title: No imports
+---
+
+```{julia}
+ojs_define(; key = "value")
+```
