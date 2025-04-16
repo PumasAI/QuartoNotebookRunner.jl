@@ -20,9 +20,9 @@ function configure()
 
         pkgid = Base.PkgId(Makie)
         if QuartoNotebookWorker._pkg_version(pkgid) < v"0.20"
-            Makie.update_theme!(; resolution = (fig_width, fig_height))
+            Makie.set_theme!(; resolution = (fig_width, fig_height))
         else
-            Makie.update_theme!(; size = (fig_width, fig_height))
+            Makie.set_theme!(; size = (fig_width, fig_height))
         end
     end
 end
@@ -30,7 +30,7 @@ end
 function __init__()
     if ccall(:jl_generating_output, Cint, ()) == 0
         configure()
-        QuartoNotebookWorker.add_package_loading_hook!(configure)
+        QuartoNotebookWorker.add_package_refresh_hook!(configure)
     end
 end
 
