@@ -155,7 +155,7 @@ function _process_code(
 
     shell_regex = r"^\s*;"
     if startswith(code, shell_regex)
-        code = chomp(replace(code, shell_regex => ""; count = 1))
+        code = String(chomp(replace(code, shell_regex => ""; count = 1)))
         ex = :($(Base).@cmd($code))
 
         # Force the line numbering of macroexpansion errors to match the
