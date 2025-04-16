@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+### Fixed
+
+- Fix parsing of source code with trailing whitespace on Julia 1.12+ [#298]
+
 ## [v0.16.0] - 2025-04-11
 
 ### Added
@@ -423,3 +427,4 @@ caching is enabled. Delete this folder to clear the cache. [#259]
 [#265]: https://github.com/PumasAI/QuartoNotebookRunner.jl/issues/265
 [#285]: https://github.com/PumasAI/QuartoNotebookRunner.jl/issues/285
 [#286]: https://github.com/PumasAI/QuartoNotebookRunner.jl/issues/286
+[#298]: https://github.com/PumasAI/QuartoNotebookRunner.jl/issues/298

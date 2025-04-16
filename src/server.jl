@@ -750,7 +750,7 @@ function raw_script_chunks(path::String)
                 source_code_hash = hash(source, source_code_hash)
             elseif type == :markdown
                 try
-                    text = Meta.parse(source)
+                    text = Meta.parse(rstrip(source))
                     if isa(text, AbstractString)
                         if nth == 1
                             frontmatter = CommonMark.frontmatter(Parser()(text))
