@@ -2,14 +2,18 @@ include("../../utilities/prelude.jl")
 
 
 @testset "CairoMakie fig-formats" begin
-    s = read(joinpath(@__DIR__, "../../examples/integrations/CairoMakieFigFormat.qmd"), String)
+    s = read(
+        joinpath(@__DIR__, "../../examples/integrations/CairoMakieFigFormat.qmd"),
+        String,
+    )
 
     env = abspath(joinpath(@__DIR__, "../../examples/integrations/CairoMakie/Project.toml"))
 
-    showable_mimes(::Union{Val{:png}, Val{:jpeg}, Val{:retina}}) = ["image/png", "text/html"]
-    showable_mimes(::Union{Val{:pdf}, Val{:svg}}) = ["image/svg+xml", "application/pdf"]
-    not_showable_mimes(::Union{Val{:png}, Val{:jpeg}, Val{:retina}}) = showable_mimes(Val(:pdf))
-    not_showable_mimes(::Union{Val{:pdf}, Val{:svg}}) = ["text/html"] # png stays as a fallback that should not be chosen if svg or pdf are accepted
+    showable_mimes(::Union{Val{:png},Val{:jpeg},Val{:retina}}) = ["image/png", "text/html"]
+    showable_mimes(::Union{Val{:pdf},Val{:svg}}) = ["image/svg+xml", "application/pdf"]
+    not_showable_mimes(::Union{Val{:png},Val{:jpeg},Val{:retina}}) =
+        showable_mimes(Val(:pdf))
+    not_showable_mimes(::Union{Val{:pdf},Val{:svg}}) = ["text/html"] # png stays as a fallback that should not be chosen if svg or pdf are accepted
 
     mktempdir() do dir
         server = QuartoNotebookRunner.Server()
@@ -25,7 +29,7 @@ include("../../utilities/prelude.jl")
                         "CAIROMAKIE_ENV" => env,
                         "SHOWABLE_MIMES" => repr(showable_mimes(Val(format))),
                         "NOT_SHOWABLE_MIMES" => repr(not_showable_mimes(Val(format))),
-                    )
+                    ),
                 )
             end
 
