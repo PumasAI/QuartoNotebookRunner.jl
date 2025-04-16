@@ -47,9 +47,5 @@ function _figure_metadata()
     fig_format = rget(options, ("format", "execute", "fig-format"), nothing)
     fig_dpi = rget(options, ("format", "execute", "fig-dpi"), nothing)
 
-    if fig_format == "retina"
-        fig_format = "svg"
-    end
-
     return (; fig_width_inch, fig_height_inch, fig_format, fig_dpi)
 end
