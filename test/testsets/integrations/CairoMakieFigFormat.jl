@@ -25,8 +25,8 @@ include("../../utilities/prelude.jl")
                 for pattern in [
                     "retina" => format,
                     "CAIROMAKIE_ENV" => env,
-                    "SHOWABLE_MIMES" => repr(showable_mimes(Val(format))),
                     "NOT_SHOWABLE_MIMES" => repr(not_showable_mimes(Val(format))),
+                    "SHOWABLE_MIMES" => repr(showable_mimes(Val(format))),
                 ]
                     s = replace(s, pattern)
                 end
