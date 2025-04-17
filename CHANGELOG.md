@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+## [v0.17.0] - 2025-04-17
+
 ### Changed
 
 - `fig-format: pdf` now doesn't use the `png` format in CairoMakie anymore, instead `svg` and `pdf` render both vector formats to be robust against frontends (Typst/LaTeX) and `jpeg`, `retina` and `png` render png bitmaps [#299].
@@ -359,6 +361,7 @@ caching is enabled. Delete this folder to clear the cache. [#259]
 [v0.14.0]: https://github.com/PumasAI/QuartoNotebookRunner.jl/releases/tag/v0.14.0
 [v0.15.0]: https://github.com/PumasAI/QuartoNotebookRunner.jl/releases/tag/v0.15.0
 [v0.16.0]: https://github.com/PumasAI/QuartoNotebookRunner.jl/releases/tag/v0.16.0
+[v0.17.0]: https://github.com/PumasAI/QuartoNotebookRunner.jl/releases/tag/v0.17.0
 [#9]: https://github.com/PumasAI/QuartoNotebookRunner.jl/issues/9
 [#11]: https://github.com/PumasAI/QuartoNotebookRunner.jl/issues/11
 [#14]: https://github.com/PumasAI/QuartoNotebookRunner.jl/issues/14
