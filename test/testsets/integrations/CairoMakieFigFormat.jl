@@ -21,22 +21,22 @@ include("../../utilities/prelude.jl")
 
         @testset "$format" for format in [:png, :jpeg, :retina, :svg, :pdf]
             open(file, "w") do io
-                print(
-                    io,
-                    replace(
-                        s,
-                        "retina" => format,
-                        "CAIROMAKIE_ENV" => env,
-                        "SHOWABLE_MIMES" => repr(showable_mimes(Val(format))),
-                        "NOT_SHOWABLE_MIMES" => repr(not_showable_mimes(Val(format))),
-                    ),
-                )
+                # 1.6 doesn't support multiple patterns
+                for pattern in [
+                    "retina" => format,
+                    "CAIROMAKIE_ENV" => env,
+                    "SHOWABLE_MIMES" => repr(showable_mimes(Val(format))),
+                    "NOT_SHOWABLE_MIMES" => repr(not_showable_mimes(Val(format))),
+                ]
+                    s = replace(s, pattern)
+                end
+                print(io, s)
             end
 
             result = QuartoNotebookRunner.run!(server, file)
             cells = result.cells
             println("$format\n")
-            for i in 2:2:8
+            for i = 2:2:8
                 display(cells[i])
                 println("\n")
             end
