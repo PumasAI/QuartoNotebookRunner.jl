@@ -10,6 +10,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - `fig-format: pdf` now doesn't use the `png` format in CairoMakie anymore, instead `svg` and `pdf` render both vector formats to be robust against frontends (Typst/LaTeX) and `jpeg`, `retina` and `png` render png bitmaps [#299].
+
+### Fixed
+
 - Fix parsing of source code with trailing whitespace on Julia 1.12+ [#298]
 
 ## [v0.16.0] - 2025-04-11
