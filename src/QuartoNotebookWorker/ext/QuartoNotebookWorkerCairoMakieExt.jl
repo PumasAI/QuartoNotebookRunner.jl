@@ -13,12 +13,10 @@ function configure()
     else
         kwargs = Dict{Symbol,Any}()
     end
-    if fm.fig_format == "pdf"
-        kwargs[:type] = "png"
+    kwargs[:type] = if fm.fig_format in ("pdf", "svg")
+        "svg" # enables both pdf and svg, simpler for backends like typst and latex which prefer one
     else
-        if isa(fm.fig_format, AbstractString)
-            kwargs[:type] = fm.fig_format
-        end
+        "png" # all other fig formats are bitmaps, "retina" is handled via dpi settings
     end
     CairoMakie.activate!(; kwargs...)
 
@@ -28,7 +26,7 @@ end
 function __init__()
     if ccall(:jl_generating_output, Cint, ()) == 0
         configure()
-        QuartoNotebookWorker.add_package_loading_hook!(configure)
+        QuartoNotebookWorker.add_package_refresh_hook!(configure)
     end
 end
 
