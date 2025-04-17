@@ -36,10 +36,10 @@ include("../../utilities/prelude.jl")
             result = QuartoNotebookRunner.run!(server, file)
             cells = result.cells
             println("$format\n")
-            display(cells[6].outputs[1])
-            println("\n")
-            display(cells[8].outputs[1])
-            println("\n")
+            for i in 2:2:8
+                display(cells[i])
+                println("\n")
+            end
             @test cells[6].outputs[1].data["text/plain"] == "true"
             @test cells[8].outputs[1].data["text/plain"] == "true"
         end
