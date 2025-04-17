@@ -4,7 +4,7 @@ fig-format: retina
 ---
 
 ```{julia}
-Pkg.activate("CAIROMAKIE_ENV")
+Pkg.activate(CAIROMAKIE_ENV)
 Pkg.instantiate()
 ```
 

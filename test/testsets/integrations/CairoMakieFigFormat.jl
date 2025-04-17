@@ -24,7 +24,7 @@ include("../../utilities/prelude.jl")
                 # 1.6 doesn't support multiple patterns
                 for pattern in [
                     "retina" => format,
-                    "CAIROMAKIE_ENV" => env,
+                    "CAIROMAKIE_ENV" => repr(env),
                     "NOT_SHOWABLE_MIMES" => repr(not_showable_mimes(Val(format))),
                     "SHOWABLE_MIMES" => repr(showable_mimes(Val(format))),
                 ]
@@ -34,14 +34,8 @@ include("../../utilities/prelude.jl")
             end
 
             result = QuartoNotebookRunner.run!(server, file)
-            cells = result.cells
-            println("$format\n")
-            for i = 2:2:8
-                display(cells[i])
-                println("\n")
-            end
-            @test cells[6].outputs[1].data["text/plain"] == "true"
-            @test cells[8].outputs[1].data["text/plain"] == "true"
+            @test result.cells[6].outputs[1].data["text/plain"] == "true"
+            @test result.cells[8].outputs[1].data["text/plain"] == "true"
         end
 
         QuartoNotebookRunner.close!(server)
