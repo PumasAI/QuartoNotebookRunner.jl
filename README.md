@@ -3,6 +3,10 @@
 [![CI](https://github.com/PumasAI/QuartoNotebookRunner.jl/actions/workflows/CI.yml/badge.svg)](https://github.com/PumasAI/QuartoNotebookRunner.jl/actions/workflows/CI.yml)
 [![codecov](https://codecov.io/gh/PumasAI/QuartoNotebookRunner.jl/graph/badge.svg?token=84nO9FG9oc)](https://codecov.io/gh/PumasAI/QuartoNotebookRunner.jl)
 
+[![Downloads](https://img.shields.io/badge/dynamic/json?url=http%3A%2F%2Fjuliapkgstats.com%2Fapi%2Fv1%2Fmonthly_downloads%2FQuartoNotebookRunner&query=total_requests&suffix=%2Fmonth&label=Downloads)](https://juliapkgstats.com/pkg/QuartoNotebookRunner)
+[![Downloads](https://img.shields.io/badge/dynamic/json?url=http%3A%2F%2Fjuliapkgstats.com%2Fapi%2Fv1%2Ftotal_downloads%2FQuartoNotebookRunner&query=total_requests&&label=Total%20Downloads)](https://juliapkgstats.com/pkg/QuartoNotebookRunner)
+
+
 > [!NOTE]
 >
 > This Julia package provides a code evaluation engine that Quarto
