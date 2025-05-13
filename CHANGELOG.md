@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+### Fixed
+
+- More robust detection of `juliaup` on user systems [#303]
+
 ## [v0.17.0] - 2025-04-17
 
 ### Changed
@@ -436,3 +440,4 @@ caching is enabled. Delete this folder to clear the cache. [#259]
 [#286]: https://github.com/PumasAI/QuartoNotebookRunner.jl/issues/286
 [#298]: https://github.com/PumasAI/QuartoNotebookRunner.jl/issues/298
 [#299]: https://github.com/PumasAI/QuartoNotebookRunner.jl/issues/299
+[#303]: https://github.com/PumasAI/QuartoNotebookRunner.jl/issues/303

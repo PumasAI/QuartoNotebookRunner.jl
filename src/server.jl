@@ -61,13 +61,15 @@ mutable struct File
     end
 end
 
+_has_juliaup() = success(`juliaup --version`) && success(`julia --version`)
+
 function _julia_exe(exeflags)
     # Find the `julia` executable to use for this worker process. If the
     # `juliaup` command is available, we can use plain `julia` if a channel has
     # been provided in the exeflags. The channel exeflag is dropped from the
     # exeflags vector so that it isn't provided twice, the second of which
     # would be treated as a file name.
-    if all(!isnothing, Sys.which.(("juliaup", "julia")))
+    if _has_juliaup()
         indices = findall(startswith("+"), exeflags)
         if isempty(indices)
             quarto_julia = get(ENV, "QUARTO_JULIA", nothing)
