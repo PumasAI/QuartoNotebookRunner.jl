@@ -1,0 +1,8 @@
+---
+title: "Source Path"
+engine: julia
+---
+
+```{julia}
+Base.source_path()
+```

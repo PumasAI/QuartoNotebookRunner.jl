@@ -3,6 +3,7 @@ function refresh!(path, original_options, options = original_options)
     # notebook file, which is not necessarily right initially if the parent
     # process was started from a different directory to the notebook.
     cd(dirname(path))
+    task_local_storage()[:SOURCE_PATH] = path
 
     # Reset back to the original project environment if it happens to
     # have changed during cell evaluation.
