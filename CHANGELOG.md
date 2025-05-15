@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+## [v0.17.2] - 2025-05-15
+
 ### Fixed
 
 - Ensure `Base.source_path()` reflects the currently running notebook path [#304]
@@ -373,6 +375,7 @@ caching is enabled. Delete this folder to clear the cache. [#259]
 [v0.16.0]: https://github.com/PumasAI/QuartoNotebookRunner.jl/releases/tag/v0.16.0
 [v0.17.0]: https://github.com/PumasAI/QuartoNotebookRunner.jl/releases/tag/v0.17.0
 [v0.17.1]: https://github.com/PumasAI/QuartoNotebookRunner.jl/releases/tag/v0.17.1
+[v0.17.2]: https://github.com/PumasAI/QuartoNotebookRunner.jl/releases/tag/v0.17.2
 [#9]: https://github.com/PumasAI/QuartoNotebookRunner.jl/issues/9
 [#11]: https://github.com/PumasAI/QuartoNotebookRunner.jl/issues/11
 [#14]: https://github.com/PumasAI/QuartoNotebookRunner.jl/issues/14
