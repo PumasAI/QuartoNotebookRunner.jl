@@ -61,7 +61,13 @@ mutable struct File
     end
 end
 
-_has_juliaup() = success(`juliaup --version`) && success(`julia --version`)
+function _has_juliaup()
+    try
+        success(`juliaup --version`) && success(`julia --version`)
+    catch error
+        return false
+    end
+end
 
 function _julia_exe(exeflags)
     # Find the `julia` executable to use for this worker process. If the
