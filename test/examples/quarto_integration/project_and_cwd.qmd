@@ -1,0 +1,13 @@
+```{julia}
+import QuartoNotebookWorker
+
+projectDir = QuartoNotebookWorker.notebook_options()["projectDir"]
+@show projectDir
+nothing
+```
+
+```{julia}
+cwd = QuartoNotebookWorker.notebook_options()["cwd"]
+@show cwd
+nothing
+```
