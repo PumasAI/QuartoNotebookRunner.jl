@@ -423,6 +423,8 @@ function _extract_relevant_options(file_frontmatter::Dict, options::Dict)
     cache_default = get(get(D, file_frontmatter, "execute"), "cache", false)
 
     pandoc_to_default = nothing
+    cwd_default = nothing
+    project_dir_default = nothing
 
     julia_default = get(file_frontmatter, "julia", nothing)
 
@@ -441,6 +443,8 @@ function _extract_relevant_options(file_frontmatter::Dict, options::Dict)
             daemon = daemon_default,
             params = params_default,
             cache = cache_default,
+            cwd = cwd_default,
+            project_dir = project_dir_default,
         )
     else
         format = get(D, options, "format")
@@ -469,6 +473,9 @@ function _extract_relevant_options(file_frontmatter::Dict, options::Dict)
         cli_params = get(options, "params", Dict())
         params_merged = _recursive_merge(params_default, params, cli_params)
 
+        cwd = get(options, "cwd", cwd_default)
+        project_dir = get(options, "projectDir", project_dir_default)
+
         return _options_template(;
             fig_width,
             fig_height,
@@ -481,6 +488,8 @@ function _extract_relevant_options(file_frontmatter::Dict, options::Dict)
             daemon,
             params = params_merged,
             cache,
+            cwd,
+            project_dir,
         )
     end
 end
@@ -497,6 +506,8 @@ function _options_template(;
     daemon,
     params,
     cache,
+    cwd,
+    project_dir,
 )
     D = Dict{String,Any}
     return D(
@@ -515,6 +526,8 @@ function _options_template(;
             "metadata" => D("julia" => julia),
         ),
         "params" => D(params),
+        "cwd" => cwd,
+        "projectDir" => project_dir,
     )
 end
 
