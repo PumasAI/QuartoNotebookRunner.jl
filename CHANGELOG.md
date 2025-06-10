@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+### Added
+
+- Added `cwd` and `projectDir` to the set of quarto options keys that are accessible through `QuartoNotebookWorker` [#308].
+
 ## [v0.17.3] - 2025-05-19
 
 ### Fixed
@@ -460,3 +464,4 @@ caching is enabled. Delete this folder to clear the cache. [#259]
 [#303]: https://github.com/PumasAI/QuartoNotebookRunner.jl/issues/303
 [#304]: https://github.com/PumasAI/QuartoNotebookRunner.jl/issues/304
 [#305]: https://github.com/PumasAI/QuartoNotebookRunner.jl/issues/305
+[#308]: https://github.com/PumasAI/QuartoNotebookRunner.jl/issues/308
