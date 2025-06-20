@@ -1048,6 +1048,17 @@ function evaluate_raw_cells!(
                         # so to render an R formatted cell, we need to do a workaround. We push a cell before
                         # the actual code cell which contains a plain markdown block that wraps the code in ```r
                         # for the formatting.
+                        opt_echo = get(extract_cell_options(chunk.source; chunk.file, chunk.line), "echo", "true")
+                        source_echoed = ""
+                        if opt_echo == "true" || opt_echo == true || opt_echo == ""
+                            source_echoed = """```python\n$(strip_cell_options(chunk.source))```"""
+                        elseif opt_echo == "fenced"
+                            source_echoed = """```{{python}}\n$(strip_cell_options_echo(chunk.source))```"""
+                        elseif !(opt_echo == "false" || opt_echo == false)
+                            msg = """Error parsing cell attribute "echo" at $(chunk.file):$(chunk.line):\n\n""" *
+                                  """```{python}\n$(chunk.source)\n```"""
+                            error(msg)
+                        end
                         push!(
                             cells,
                             (;
@@ -1057,14 +1068,7 @@ function evaluate_raw_cells!(
                                 ),
                                 cell_type = :markdown,
                                 metadata = (;),
-                                source = process_cell_source(
-                                    """
-           ```python
-           $(strip_cell_options(chunk.source))
-           ```
-           """,
-                                    Dict(),
-                                ),
+                                source = process_cell_source(source_echoed, Dict()),
                             ),
                         )
                         # We also need to hide the real code cell in this case, which contains possible formatting
@@ -1077,6 +1081,17 @@ function evaluate_raw_cells!(
                         # so to render an R formatted cell, we need to do a workaround. We push a cell before
                         # the actual code cell which contains a plain markdown block that wraps the code in ```r
                         # for the formatting.
+                        opt_echo = get(extract_cell_options(chunk.source; chunk.file, chunk.line), "echo", "true")
+                        source_echoed = ""
+                        if opt_echo == "true" || opt_echo == true || opt_echo == ""
+                            source_echoed = """```r\n$(strip_cell_options(chunk.source))```"""
+                        elseif opt_echo == "fenced"
+                            source_echoed = """```{{r}}\n$(strip_cell_options_echo(chunk.source))```"""
+                        elseif !(opt_echo == "false" || opt_echo == false)
+                            msg = """Error parsing cell attribute "echo" at $(chunk.file):$(chunk.line):\n\n""" *
+                                  """```{r}\n$(chunk.source)\n```"""
+                            error(msg)
+                        end
                         push!(
                             cells,
                             (;
@@ -1086,14 +1101,7 @@ function evaluate_raw_cells!(
                                 ),
                                 cell_type = :markdown,
                                 metadata = (;),
-                                source = process_cell_source(
-                                    """
-           ```r
-           $(strip_cell_options(chunk.source))
-           ```
-           """,
-                                    Dict(),
-                                ),
+                                source = process_cell_source(source_echoed, Dict()),
                             ),
                         )
                         # We also need to hide the real code cell in this case, which contains possible formatting
@@ -1211,7 +1219,11 @@ end
 # are written into the processed cell source when the cell is the result of an
 # expansion of an `expand` cell.
 function process_cell_source(source::AbstractString, cell_options::Dict = Dict())
-    lines = collect(eachline(IOBuffer(source); keep = true))
+    if haskey(cell_options, "echo")
+        lines = collect(eachline(IOBuffer(strip_cell_options_echo(source)), keep = true))
+    else
+        lines = collect(eachline(IOBuffer(source); keep = true))
+    end
     if !isempty(lines)
         lines[end] = rstrip(lines[end])
     end
@@ -1230,6 +1242,14 @@ function strip_cell_options(source::AbstractString)
     lines = collect(eachline(IOBuffer(source); keep = true))
     keep_from = something(findfirst(lines) do line
         !startswith(line, "#|")
+    end, 1)
+    join(lines[keep_from:end])
+end
+
+function strip_cell_options_echo(source::AbstractString)
+    lines = collect(eachline(IOBuffer(source); keep = true))
+    keep_from = something(findfirst(lines) do line
+        !startswith(line, r"#\|[\t ]+echo[\t ]*:")
     end, 1)
     join(lines[keep_from:end])
 end
