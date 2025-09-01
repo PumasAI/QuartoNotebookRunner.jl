@@ -1,0 +1,26 @@
+---
+title: "Execute Dir Project"
+engine: julia
+execute:
+  project:
+    execute-dir: project
+---
+
+```{julia}
+# Should be in the project root directory
+pwd()
+```
+
+```{julia}
+# Should be able to read project marker file in project root
+if isfile("project_marker.txt")
+    read("project_marker.txt", String)
+else
+    "Project marker file not found in current directory"
+end
+```
+
+```{julia}
+# Check if we can see Project.toml in project root
+isfile("Project.toml")
+```

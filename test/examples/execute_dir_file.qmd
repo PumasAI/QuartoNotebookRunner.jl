@@ -1,0 +1,26 @@
+---
+title: "Execute Dir File"
+engine: julia
+execute:
+  project:
+    execute-dir: file
+---
+
+```{julia}
+# Should be in the same directory as this file
+pwd()
+```
+
+```{julia}
+# Should be able to read marker file in same directory
+if isfile("marker_file.txt")
+    read("marker_file.txt", String)
+else
+    "Marker file not found in current directory"
+end
+```
+
+```{julia}
+# Verify we're in the examples directory
+basename(pwd())
+```
