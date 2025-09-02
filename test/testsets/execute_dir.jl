@@ -183,18 +183,16 @@ include("../utilities/prelude.jl")
             cd(dir) do
                 server = QuartoNotebookRunner.Server()
                 
-                # Currently, invalid execute-dir values don't throw an error at the server level
-                # The error happens in the worker process
-                # TODO: Consider propagating the error to the caller
-                json = QuartoNotebookRunner.run!(
+                # With validation in server.jl, invalid execute-dir values should now throw an error
+                err = @test_throws ErrorException QuartoNotebookRunner.run!(
                     server,
                     notebook_path;
                     showprogress = false
                 )
                 
-                # For now, just verify that the notebook runs
-                # (the error handling could be improved in the future)
-                @test json !== nothing
+                # Verify the error message contains the expected text
+                @test contains(string(err.value), "Invalid execute-dir value")
+                @test contains(string(err.value), "invalid_value")
                 
                 close!(server)
             end
