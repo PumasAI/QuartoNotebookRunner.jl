@@ -427,6 +427,18 @@ function _extract_relevant_options(file_frontmatter::Dict, options::Dict)
     julia_default = get(file_frontmatter, "julia", nothing)
 
     params_default = get(file_frontmatter, "params", Dict{String,Any}())
+    
+    # Get project from execute section in frontmatter
+    execute_frontmatter = get(file_frontmatter, "execute", Dict{String,Any}())
+    project_default = get(execute_frontmatter, "project", Dict{String,Any}())
+    
+    # Validate execute-dir from frontmatter if present
+    if haskey(project_default, "execute-dir")
+        execute_dir = project_default["execute-dir"]
+        if !(execute_dir in ["file", "project"])
+            Base.error("Invalid execute-dir value: '$execute_dir'. Quarto only accepts 'file' or 'project'.")
+        end
+    end
 
     if isempty(options)
         return _options_template(;
@@ -441,6 +453,7 @@ function _extract_relevant_options(file_frontmatter::Dict, options::Dict)
             daemon = daemon_default,
             params = params_default,
             cache = cache_default,
+            project = project_default,
         )
     else
         format = get(D, options, "format")
@@ -469,6 +482,16 @@ function _extract_relevant_options(file_frontmatter::Dict, options::Dict)
         cli_params = get(options, "params", Dict())
         params_merged = _recursive_merge(params_default, params, cli_params)
 
+        project = get(metadata, "project", Dict())
+        
+        # Validate execute-dir if present
+        if haskey(project, "execute-dir")
+            execute_dir = project["execute-dir"]
+            if !(execute_dir in ["file", "project"])
+                Base.error("Invalid execute-dir value: '$execute_dir'. Quarto only accepts 'file' or 'project'.")
+            end
+        end
+
         return _options_template(;
             fig_width,
             fig_height,
@@ -481,6 +504,7 @@ function _extract_relevant_options(file_frontmatter::Dict, options::Dict)
             daemon,
             params = params_merged,
             cache,
+            project,
         )
     end
 end
@@ -497,6 +521,7 @@ function _options_template(;
     daemon,
     params,
     cache,
+    project,
 )
     D = Dict{String,Any}
     return D(
@@ -515,6 +540,7 @@ function _options_template(;
             "metadata" => D("julia" => julia),
         ),
         "params" => D(params),
+        "project" => D(project),
     )
 end
 

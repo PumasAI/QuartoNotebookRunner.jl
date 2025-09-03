@@ -1,0 +1,31 @@
+---
+title: "Execute Dir Nested"
+engine: julia
+execute:
+  project:
+    execute-dir: file
+---
+
+```{julia}
+# Should be in the subdirectory folder
+pwd()
+```
+
+```{julia}
+# Should see subdirectory as basename
+basename(pwd())
+```
+
+```{julia}
+# Should be able to read marker file in subdirectory
+if isfile("subdir_marker.txt")
+    read("subdir_marker.txt", String)
+else
+    "Subdirectory marker file not found"
+end
+```
+
+```{julia}
+# Should NOT be able to see parent directory marker without ../
+!isfile("marker_file.txt") && isfile("../marker_file.txt")
+```
