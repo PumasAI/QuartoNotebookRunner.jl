@@ -24,13 +24,18 @@ mutable struct File
                 options = _parsed_options(options)
                 _, _, file_frontmatter = raw_text_chunks(path)
                 merged_options = _extract_relevant_options(file_frontmatter, options)
-                exeflags, env = _exeflags_and_env(merged_options)
+                exeflags, env, quarto_env = _exeflags_and_env(merged_options)
                 timeout = _extract_timeout(merged_options)
 
-
                 exe, _exeflags = _julia_exe(exeflags)
-                worker =
-                    cd(() -> Malt.Worker(; exe, exeflags = _exeflags, env), dirname(path))
+                worker = cd(
+                    () -> Malt.Worker(;
+                        exe,
+                        exeflags = _exeflags,
+                        env = vcat(env, quarto_env),
+                    ),
+                    dirname(path),
+                )
                 file = new(
                     worker,
                     path,
@@ -104,7 +109,7 @@ function _julia_exe(exeflags)
 end
 
 function _extract_timeout(merged_options)
-    daemon = merged_options["format"]["execute"]["daemon"]
+    daemon = something(merged_options["format"]["execute"]["daemon"], true)
     if daemon === true
         300.0 # match quarto's default timeout of 300 seconds
     elseif daemon === false
@@ -149,6 +154,13 @@ function _exeflags_and_env(options)
     # if exeflags already contains '--color=no', the 'no' will prevail
     pushfirst!(exeflags, "--color=yes")
 
+    # Several QUARTO_* environment variables are passed to the worker process
+    # via the `env` field rather than via real environment variables. Capture
+    # these and pass them to the worker process separate from `env` since that
+    # is used by the worker status printout and we don't want these extra ones
+    # that the user has not set themselves to show up there.
+    quarto_env = Base.byteenv(options["env"])
+
     # Ensure that coverage settings are passed to the worker so that worker
     # code is tracked correctly during tests.
     # Based on https://github.com/JuliaLang/julia/blob/eed18bdf706b7aab15b12f3ba0588e8fafcd4930/base/util.jl#L216-L229.
@@ -171,7 +183,7 @@ function _exeflags_and_env(options)
         end
     end
 
-    return exeflags, env
+    return exeflags, env, quarto_env
 end
 
 struct Server
@@ -205,12 +217,14 @@ function init!(file::File, options::Dict)
 end
 
 function refresh!(file::File, options::Dict)
-    exeflags, env = _exeflags_and_env(options)
+    exeflags, env, quarto_env = _exeflags_and_env(options)
     if exeflags != file.exeflags || env != file.env || !Malt.isrunning(file.worker) # the worker might have been killed on another task
         Malt.stop(file.worker)
         exe, _exeflags = _julia_exe(exeflags)
-        file.worker =
-            cd(() -> Malt.Worker(; exe, exeflags = _exeflags, env), dirname(file.path))
+        file.worker = cd(
+            () -> Malt.Worker(; exe, exeflags = _exeflags, env = vcat(env, quarto_env)),
+            dirname(file.path),
+        )
         file.exe = exe
         file.exeflags = exeflags
         file.env = env
@@ -218,7 +232,23 @@ function refresh!(file::File, options::Dict)
         file.output_chunks = []
         init!(file, options)
     end
+    refresh_quarto_env_vars!(file, quarto_env)
     remote_eval_fetch_channeled(file.worker, :(refresh!($(options)); revise_hook()))
+end
+
+# Environment variables provided by Quarto may change between `quarto render`
+# calls. To update them correctly in the worker process, we need to refresh
+# them before each run.
+function refresh_quarto_env_vars!(file::File, quarto_env)
+    if !isempty(quarto_env)
+        remote_eval_fetch_channeled(file.worker, quote
+            for each in $quarto_env
+                k, v = Base.splitenv(each)
+                ENV[k] = v
+            end
+        end)
+    end
+    return nothing
 end
 
 function _cache_file(f::File, source_code_hash)
@@ -441,9 +471,11 @@ function _extract_relevant_options(file_frontmatter::Dict, options::Dict)
             daemon = daemon_default,
             params = params_default,
             cache = cache_default,
+            env = Dict{String,Any}(),
         )
     else
         format = get(D, options, "format")
+        env = get(D, options, "env")
         execute = get(D, format, "execute")
         fig_width = get(execute, "fig-width", fig_width_default)
         fig_height = get(execute, "fig-height", fig_height_default)
@@ -481,6 +513,7 @@ function _extract_relevant_options(file_frontmatter::Dict, options::Dict)
             daemon,
             params = params_merged,
             cache,
+            env,
         )
     end
 end
@@ -497,6 +530,7 @@ function _options_template(;
     daemon,
     params,
     cache,
+    env,
 )
     D = Dict{String,Any}
     return D(
@@ -515,6 +549,7 @@ function _options_template(;
             "metadata" => D("julia" => julia),
         ),
         "params" => D(params),
+        "env" => env,
     )
 end
 
@@ -1466,7 +1501,7 @@ function run!(
     chunk_callback = (i, n, c) -> nothing,
 )
     try
-        borrow_file!(server, path; optionally_create = true) do file
+        borrow_file!(server, path; options, optionally_create = true) do file
             if file.timeout_timer !== nothing
                 close(file.timeout_timer)
                 file.timeout_timer = nothing
@@ -1606,7 +1641,7 @@ function borrow_file!(
                 get(server.workers, apath, nothing)
             end
             if file !== current_file
-                return borrow_file!(f, server, apath; optionally_create)
+                return borrow_file!(f, server, apath; options, optionally_create)
             else
                 return f(file)
             end
