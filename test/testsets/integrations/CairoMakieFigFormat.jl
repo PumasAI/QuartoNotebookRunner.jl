@@ -1,43 +1,48 @@
-include("../../utilities/prelude.jl")
+if VERSION >= v"1.10"
+    include("../../utilities/prelude.jl")
 
 
-@testset "CairoMakie fig-formats" begin
-    s = read(
-        joinpath(@__DIR__, "../../examples/integrations/CairoMakieFigFormat.qmd"),
-        String,
-    )
+    @testset "CairoMakie fig-formats" begin
+        s = read(
+            joinpath(@__DIR__, "../../examples/integrations/CairoMakieFigFormat.qmd"),
+            String,
+        )
 
-    env = abspath(joinpath(@__DIR__, "../../examples/integrations/CairoMakie/Project.toml"))
+        env = abspath(
+            joinpath(@__DIR__, "../../examples/integrations/CairoMakie/Project.toml"),
+        )
 
-    showable_mimes(::Union{Val{:png},Val{:jpeg},Val{:retina}}) = ["image/png", "text/html"]
-    showable_mimes(::Union{Val{:pdf},Val{:svg}}) = ["image/svg+xml", "application/pdf"]
-    not_showable_mimes(::Union{Val{:png},Val{:jpeg},Val{:retina}}) =
-        showable_mimes(Val(:pdf))
-    not_showable_mimes(::Union{Val{:pdf},Val{:svg}}) = ["text/html"] # png stays as a fallback that should not be chosen if svg or pdf are accepted
+        showable_mimes(::Union{Val{:png},Val{:jpeg},Val{:retina}}) =
+            ["image/png", "text/html"]
+        showable_mimes(::Union{Val{:pdf},Val{:svg}}) = ["image/svg+xml", "application/pdf"]
+        not_showable_mimes(::Union{Val{:png},Val{:jpeg},Val{:retina}}) =
+            showable_mimes(Val(:pdf))
+        not_showable_mimes(::Union{Val{:pdf},Val{:svg}}) = ["text/html"] # png stays as a fallback that should not be chosen if svg or pdf are accepted
 
-    mktempdir() do dir
-        server = QuartoNotebookRunner.Server()
-        file = joinpath(dir, "temp.qmd")
+        mktempdir() do dir
+            server = QuartoNotebookRunner.Server()
+            file = joinpath(dir, "temp.qmd")
 
-        @testset "$format" for format in [:png, :jpeg, :retina, :svg, :pdf]
-            open(file, "w") do io
-                # 1.6 doesn't support multiple patterns
-                for pattern in [
-                    "retina" => format,
-                    "CAIROMAKIE_ENV" => repr(env),
-                    "NOT_SHOWABLE_MIMES" => repr(not_showable_mimes(Val(format))),
-                    "SHOWABLE_MIMES" => repr(showable_mimes(Val(format))),
-                ]
-                    s = replace(s, pattern)
+            @testset "$format" for format in [:png, :jpeg, :retina, :svg, :pdf]
+                open(file, "w") do io
+                    # 1.6 doesn't support multiple patterns
+                    for pattern in [
+                        "retina" => format,
+                        "CAIROMAKIE_ENV" => repr(env),
+                        "NOT_SHOWABLE_MIMES" => repr(not_showable_mimes(Val(format))),
+                        "SHOWABLE_MIMES" => repr(showable_mimes(Val(format))),
+                    ]
+                        s = replace(s, pattern)
+                    end
+                    print(io, s)
                 end
-                print(io, s)
+
+                result = QuartoNotebookRunner.run!(server, file)
+                @test result.cells[6].outputs[1].data["text/plain"] == "true"
+                @test result.cells[8].outputs[1].data["text/plain"] == "true"
             end
 
-            result = QuartoNotebookRunner.run!(server, file)
-            @test result.cells[6].outputs[1].data["text/plain"] == "true"
-            @test result.cells[8].outputs[1].data["text/plain"] == "true"
+            QuartoNotebookRunner.close!(server)
         end
-
-        QuartoNotebookRunner.close!(server)
     end
 end
