@@ -232,7 +232,23 @@ function refresh!(file::File, options::Dict)
         file.output_chunks = []
         init!(file, options)
     end
+    refresh_quarto_env_vars!(file, quarto_env)
     remote_eval_fetch_channeled(file.worker, :(refresh!($(options)); revise_hook()))
+end
+
+# Environment variables provided by Quarto may change between `quarto render`
+# calls. To update them correctly in the worker process, we need to refresh
+# them before each run.
+function refresh_quarto_env_vars!(file::File, quarto_env)
+    if !isempty(quarto_env)
+        remote_eval_fetch_channeled(file.worker, quote
+            for each in $quarto_env
+                k, v = Base.splitenv(each)
+                ENV[k] = v
+            end
+        end)
+    end
+    return nothing
 end
 
 function _cache_file(f::File, source_code_hash)
