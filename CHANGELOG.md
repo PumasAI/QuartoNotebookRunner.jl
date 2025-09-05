@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Support new requirement from `quarto` to population environment variables
   explicitly in the notebook process [#306].
+- Contributing guidelines with AI assistance policy and AGENTS.md for AI coding assistants [#335].
 
 ## [v0.17.3] - 2025-05-19
 
@@ -466,3 +467,4 @@ caching is enabled. Delete this folder to clear the cache. [#259]
 [#304]: https://github.com/PumasAI/QuartoNotebookRunner.jl/issues/304
 [#305]: https://github.com/PumasAI/QuartoNotebookRunner.jl/issues/305
 [#306]: https://github.com/PumasAI/QuartoNotebookRunner.jl/issues/306
+[#335]: https://github.com/PumasAI/QuartoNotebookRunner.jl/issues/335
