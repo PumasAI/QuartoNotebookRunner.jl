@@ -9,8 +9,6 @@ include("../../utilities/prelude.jl")
         `quarto render $file --to md`,
         "QUARTO_JULIA_PROJECT" => normpath(joinpath(@__DIR__, "..", "..", "..")),
     )
-    # check that the project is not the same for both even though 
-    run(cmd(file_a))
 
     function server_start_time_and_pid()
         status = readchomp(`quarto call engine julia status`)
@@ -19,6 +17,7 @@ include("../../utilities/prelude.jl")
         return started_at, pid
     end
 
+    run(cmd(file_a))
     time_pid_a = server_start_time_and_pid()
     run(cmd(file_b))
     time_pid_b = server_start_time_and_pid()
