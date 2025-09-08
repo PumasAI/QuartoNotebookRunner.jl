@@ -459,6 +459,7 @@ function _extract_relevant_options(file_frontmatter::Dict, options::Dict)
     eval_default = get(get(D, file_frontmatter, "execute"), "eval", true)
     daemon_default = get(get(D, file_frontmatter, "execute"), "daemon", true)
     cache_default = get(get(D, file_frontmatter, "execute"), "cache", false)
+    project_dir_default = get(file_frontmatter, "projectDir", nothing)
 
     pandoc_to_default = nothing
 
@@ -480,6 +481,7 @@ function _extract_relevant_options(file_frontmatter::Dict, options::Dict)
             params = params_default,
             cache = cache_default,
             env = Dict{String,Any}(),
+            project_dir = project_dir_default,
         )
     else
         format = get(D, options, "format")
@@ -493,6 +495,7 @@ function _extract_relevant_options(file_frontmatter::Dict, options::Dict)
         eval = get(execute, "eval", eval_default)
         daemon = get(execute, "daemon", daemon_default)
         cache = get(execute, "cache", cache_default)
+        project_dir = get(options, "projectDir", nothing)
 
         pandoc = get(D, format, "pandoc")
         pandoc_to = get(pandoc, "to", pandoc_to_default)
@@ -522,6 +525,7 @@ function _extract_relevant_options(file_frontmatter::Dict, options::Dict)
             params = params_merged,
             cache,
             env,
+            project_dir,
         )
     end
 end
@@ -539,6 +543,7 @@ function _options_template(;
     params,
     cache,
     env,
+    project_dir,
 )
     D = Dict{String,Any}
     return D(
@@ -558,6 +563,7 @@ function _options_template(;
         ),
         "params" => D(params),
         "env" => env,
+        "projectDir" => project_dir,
     )
 end
 
