@@ -696,20 +696,6 @@ function raw_markdown_chunks_from_string(path::String, markdown::String)
 
     frontmatter = _recursive_merge(default_frontmatter(), file_fromtmatter)
 
-    for (i, chunk) in enumerate(raw_chunks)
-        printstyled(i, bold = true)
-        println()
-        println()
-        for fn in fieldnames(typeof(chunk))
-            printstyled(fn, color = :blue)
-            println()
-            show(getproperty(chunk, fn))
-            println()
-        end
-        println()
-        println()
-    end
-
     return source_code_hash, raw_chunks, frontmatter
 end
 
@@ -930,6 +916,20 @@ function evaluate_raw_cells!(
     showprogress = true,
     chunk_callback = (i, n, c) -> nothing,
 )
+    for (i, chunk) in enumerate(chunks)
+        printstyled(i, bold = true)
+        println()
+        println()
+        for fn in fieldnames(typeof(chunk))
+            printstyled(fn, color = :blue)
+            println()
+            show(getproperty(chunk, fn))
+            println()
+        end
+        println()
+        println()
+    end
+
     evaluate_params!(f, options["params"])
 
     cells = []
