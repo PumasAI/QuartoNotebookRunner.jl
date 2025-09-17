@@ -161,6 +161,14 @@ function _exeflags_and_env(options)
     # that the user has not set themselves to show up there.
     quarto_env = Base.byteenv(options["env"])
 
+    # Add QUARTO_PROJECT_ROOT if projectDir is provided in options.
+    # This ensures the environment variable is refreshed when rendering
+    # multiple projects sequentially.
+    project_dir = get(options, "projectDir", nothing)
+    if !isnothing(project_dir)
+        push!(quarto_env, "QUARTO_PROJECT_ROOT=$project_dir")
+    end
+
     # Ensure that coverage settings are passed to the worker so that worker
     # code is tracked correctly during tests.
     # Based on https://github.com/JuliaLang/julia/blob/eed18bdf706b7aab15b12f3ba0588e8fafcd4930/base/util.jl#L216-L229.
@@ -451,6 +459,7 @@ function _extract_relevant_options(file_frontmatter::Dict, options::Dict)
     eval_default = get(get(D, file_frontmatter, "execute"), "eval", true)
     daemon_default = get(get(D, file_frontmatter, "execute"), "daemon", true)
     cache_default = get(get(D, file_frontmatter, "execute"), "cache", false)
+    project_dir_default = get(file_frontmatter, "projectDir", nothing)
 
     pandoc_to_default = nothing
 
@@ -472,6 +481,7 @@ function _extract_relevant_options(file_frontmatter::Dict, options::Dict)
             params = params_default,
             cache = cache_default,
             env = Dict{String,Any}(),
+            project_dir = project_dir_default,
         )
     else
         format = get(D, options, "format")
@@ -485,6 +495,7 @@ function _extract_relevant_options(file_frontmatter::Dict, options::Dict)
         eval = get(execute, "eval", eval_default)
         daemon = get(execute, "daemon", daemon_default)
         cache = get(execute, "cache", cache_default)
+        project_dir = get(options, "projectDir", nothing)
 
         pandoc = get(D, format, "pandoc")
         pandoc_to = get(pandoc, "to", pandoc_to_default)
@@ -514,6 +525,7 @@ function _extract_relevant_options(file_frontmatter::Dict, options::Dict)
             params = params_merged,
             cache,
             env,
+            project_dir,
         )
     end
 end
@@ -531,6 +543,7 @@ function _options_template(;
     params,
     cache,
     env,
+    project_dir,
 )
     D = Dict{String,Any}
     return D(
@@ -550,6 +563,7 @@ function _options_template(;
         ),
         "params" => D(params),
         "env" => env,
+        "projectDir" => project_dir,
     )
 end
 

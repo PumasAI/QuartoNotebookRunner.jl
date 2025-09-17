@@ -13,6 +13,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   explicitly in the notebook process [#306].
 - Contributing guidelines with AI assistance policy and AGENTS.md for AI coding assistants [#335].
 
+### Fixed
+
+- Refresh `QUARTO_PROJECT_ROOT` environment variable when rendering multiple projects sequentially [#336].
+
 ## [v0.17.3] - 2025-05-19
 
 ### Fixed
@@ -468,3 +472,4 @@ caching is enabled. Delete this folder to clear the cache. [#259]
 [#305]: https://github.com/PumasAI/QuartoNotebookRunner.jl/issues/305
 [#306]: https://github.com/PumasAI/QuartoNotebookRunner.jl/issues/306
 [#335]: https://github.com/PumasAI/QuartoNotebookRunner.jl/issues/335
+[#336]: https://github.com/PumasAI/QuartoNotebookRunner.jl/issues/336

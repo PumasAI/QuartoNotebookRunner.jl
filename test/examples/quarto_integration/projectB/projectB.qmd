@@ -1,0 +1,7 @@
+---
+engine: julia
+---
+
+```{julia}
+@show ENV["QUARTO_PROJECT_ROOT"]
+```
