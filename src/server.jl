@@ -22,7 +22,8 @@ mutable struct File
                 path = isabspath(path) ? path : abspath(path)
 
                 options = _parsed_options(options)
-                _, _, file_frontmatter = raw_text_chunks(path)
+                project_dir = get(options, "projectDir", nothing)
+                _, _, file_frontmatter = raw_text_chunks(path; project_dir)
                 merged_options = _extract_relevant_options(file_frontmatter, options)
                 exeflags, env, quarto_env = _exeflags_and_env(merged_options)
                 timeout = _extract_timeout(merged_options)
@@ -343,9 +344,11 @@ function evaluate!(
     _check_output_dst(output)
 
     options = _parsed_options(options)
+    project_dir = get(options, "projectDir", nothing)
     path = abspath(f.path)
     if isfile(path)
-        source_code_hash, raw_chunks, file_frontmatter = raw_text_chunks(f, markdown)
+        source_code_hash, raw_chunks, file_frontmatter =
+            raw_text_chunks(f, markdown; project_dir)
         merged_options = _extract_relevant_options(file_frontmatter, options)
 
         # A change of parameter values must invalidate the source code hash.
@@ -583,13 +586,19 @@ write_json(::Nothing, data) = data
 Return a vector of raw markdown and code chunks from `file` ready for evaluation
 by `evaluate_raw_cells!`.
 """
-raw_text_chunks(file::File, ::Nothing) = raw_text_chunks(file.path)
-raw_text_chunks(file::File, markdown::String) =
-    raw_markdown_chunks_from_string(file.path, markdown)
+raw_text_chunks(file::File, ::Nothing; project_dir = nothing) =
+    raw_text_chunks(file.path; project_dir)
+raw_text_chunks(file::File, markdown::String; project_dir = nothing) =
+    raw_markdown_chunks_from_string(
+        file.path;
+        quarto_markdown = markdown,
+        root_file = file.path,
+        project_dir,
+    )
 
-function raw_text_chunks(path::String)
-    endswith(path, ".qmd") && return raw_markdown_chunks(path)
-    endswith(path, ".jl") && return raw_script_chunks(path)
+function raw_text_chunks(path::String; project_dir = nothing)
+    endswith(path, ".qmd") && return raw_markdown_chunks(path; project_dir)
+    endswith(path, ".jl") && return raw_script_chunks(path; project_dir)
     throw(ArgumentError("file is not a julia script or quarto markdown file: $(path)"))
 end
 
@@ -599,37 +608,98 @@ end
 Return a vector of raw markdown and code chunks from `file` ready
 for evaluation by `evaluate_raw_cells!`.
 """
-raw_markdown_chunks(file::File) =
-    endswith(path, ".qmd") ? raw_markdown_chunks(file.path) :
+raw_markdown_chunks(file::File; project_dir) =
+    endswith(path, ".qmd") ? raw_markdown_chunks(file.path; project_dir) :
     throw(ArgumentError("file is not a quarto markdown file: $(path)"))
-raw_markdown_chunks(path::String) =
-    raw_markdown_chunks_from_string(path, read(path, String))
+raw_markdown_chunks(path::String; project_dir) =
+    raw_markdown_chunks_from_string(path; root_file = path, project_dir)
 
 struct Unset end
 
-function raw_markdown_chunks_from_string(path::String, markdown::String)
+function raw_markdown_chunks_from_string(
+    path::String;
+    quarto_markdown::Union{Nothing,String} = nothing,
+    root_file::String,
+    project_dir::Union{Nothing,String},
+    is_include = false,
+)
+    markdown = read(path, String)
+
     raw_chunks = []
     source_code_hash = hash(VERSION)
     pars = Parser()
     ast = pars(markdown; source = path)
-    file_fromtmatter = CommonMark.frontmatter(ast)
-    source_code_hash = hash(file_fromtmatter, source_code_hash)
+    file_frontmatter = CommonMark.frontmatter(ast)
+    is_include &&
+        !isempty(file_frontmatter) &&
+        error("Found non-empty frontmatter in included file $path")
+    source_code_hash = hash(file_frontmatter, source_code_hash)
     source_lines = collect(eachline(IOBuffer(markdown)))
     terminal_line = 1
     code_cells = false
+
+    include_splices = Pair{Int,Vector{String}}[]
+
     for (node, enter) in ast
         if enter &&
            (is_julia_toplevel(node) || is_python_toplevel(node) || is_r_toplevel(node))
             code_cells = true
             line = node.sourcepos[1][1]
-            md = join(source_lines[terminal_line:(line-1)], "\n")
-            push!(
-                raw_chunks,
-                (type = :markdown, source = md, file = path, line = terminal_line),
-            )
-            if contains(md, r"`{(?:julia|python|r)} ")
-                source_code_hash = hash(md, source_code_hash)
+            md_lines = @view source_lines[terminal_line:(line-1)]
+
+            start = firstindex(md_lines)
+            for i in eachindex(md_lines)
+                # In this markdown block, we check for lines that match the {{< include some/path>}} syntax.
+                include_shortcode_path =
+                    extract_include_shortcode_path(md_lines[i]; root_file, project_dir)
+                stop = if include_shortcode_path !== nothing
+                    i - 1
+                elseif i == lastindex(md_lines)
+                    i
+                else
+                    nothing
+                end
+
+                if stop !== nothing && stop >= start
+                    # we push all markdown between such include lines as separate blocks
+                    md = join(@view(md_lines[start:stop]), "\n")
+                    push!(
+                        raw_chunks,
+                        (type = :markdown, source = md, file = path, line = terminal_line),
+                    )
+                    if contains(md, r"`{(?:julia|python|r)} ")
+                        source_code_hash = hash(md, source_code_hash)
+                    end
+                end
+                if include_shortcode_path !== nothing
+                    start = i + 1
+                    # If we find an include statement, we call `raw_markdown_chunks_from_string` on
+                    # it which recurses through all further includes. We later splice the lines
+                    # of the included file into the `source_lines` array with which we can
+                    # check at the end if we reached the same markdown string as the one quarto
+                    # sent us after applying its own include logic. We only proceed if they match
+                    # as otherwise we presumably have a bug in our implementation.
+                    _lines = collect(eachline(include_shortcode_path))
+
+                    # we ignore the inner _frontmatter, we could also think about erroring here because
+                    # it really shouldn't make sense to include frontmatter I think
+                    _source_code_hash, _raw_chunks, _frontmatter =
+                        raw_markdown_chunks_from_string(
+                            String(include_shortcode_path);
+                            root_file,
+                            project_dir,
+                            is_include = true,
+                        )
+
+                    # we don't splice in the new lines directly because that would break the loop
+                    # logic, we just keep track of them and later splice them in in reverse
+                    # order so all indices stay correct
+                    push!(include_splices, terminal_line + i - 1 => _lines)
+                    append!(raw_chunks, _raw_chunks)
+                    source_code_hash = hash(_source_code_hash, source_code_hash)
+                end
             end
+
             terminal_line = node.sourcepos[2][1] + 1
 
             # currently, the only execution-relevant cell option is `eval` which controls if a code block is executed or not.
@@ -694,16 +764,58 @@ function raw_markdown_chunks_from_string(path::String, markdown::String)
         )
     end
 
-    frontmatter = _recursive_merge(default_frontmatter(), file_fromtmatter)
+    frontmatter = _recursive_merge(default_frontmatter(), file_frontmatter)
+
+    for (i, lines) in reverse(include_splices)
+        splice!(source_lines, i, lines)
+    end
+
+    if is_include && quarto_markdown !== nothing
+        markdown_with_expanded_includes = join(source_lines, "\n")
+        if markdown_with_expanded_includes != quarto_markdown
+            println("########## QUARTO MARKDOWN")
+            println(quarto_markdown)
+            println("########## QUARTONOTEBOOKRUNNER MARKDOWN")
+            println(markdown_with_expanded_includes)
+            error(
+                "QuartoNotebookRunner created a different markdown string than the one it got from quarto. This is likely because of incorrectly implemented include expansion.",
+            )
+        end
+    end
 
     return source_code_hash, raw_chunks, frontmatter
+end
+
+function extract_include_shortcode_path(line; root_file, project_dir::Union{String,Nothing})
+    # quoted_match = match(r"""^\s*{{<\s+include\s+(['"])(.+?)\1\s+>}}\s*$""", line)
+    m = match(r"""^\s*{{<\s+include\s+(.+?)\s+>}}\s*$""", line)
+    m === nothing && return nothing
+    pathstring = m[1]
+    fenced_by(str, fence) =
+        length(str) >= 2 && startswith(str, fence) && endswith(str, fence)
+    path = if fenced_by(pathstring, "\"") || fenced_by(pathstring, "'")
+        chop(pathstring; head = 1, tail = 1)
+    else
+        occursin(r"\s", pathstring) && error("Invalid unquoted include path: $pathstring")
+        pathstring
+    end
+    return if startswith(path, r"[/\\]")
+        project_dir === nothing && error(
+            "Cannot resolve an include shortcode with absolute path \"$path\"without having a project directory. This situation should only be possible when using QuartoNotebookRunner.jl directly because the project directory is determined by quarto.",
+        )
+        rel = replace(path, r"^[/\\]+" => "")
+        joinpath(project_dir, rel)
+    else
+        dir = dirname(root_file)
+        joinpath(dir, path)
+    end
 end
 
 _recursive_merge(x::AbstractDict...) = merge(_recursive_merge, x...)
 _recursive_merge(x...) = x[end]
 
 """
-    raw_script_chunks(file::File)
+    raw_script_chunks(file::File; project_dir)
 
 Return a vector of raw script chunks from `file` ready for evaluation by
 `evaluate_raw_cells!`.
@@ -715,9 +827,9 @@ content can either be multiline string literals, or comments. Code chunks can
 contain cell attributes `#| {key: value}` which are parsed as YAML and passed
 to the `render` function.
 """
-raw_script_chunks(file::File) = raw_script_chunks(file.path)
+raw_script_chunks(file::File; project_dir) = raw_script_chunks(file.path; project_dir)
 
-function raw_script_chunks(path::String)
+function raw_script_chunks(path::String; project_dir)
     if !endswith(path, ".jl")
         throw(ArgumentError("file is not a julia script file: $(path)"))
     end
