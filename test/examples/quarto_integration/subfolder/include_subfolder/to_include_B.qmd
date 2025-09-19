@@ -1,0 +1,9 @@
+<!-- an absolute path (relative to project root) -->
+{{< include '/to_include_C.qmd' >}}
+
+```{julia}
+B = 2
+"$(@__FILE__):$(@__LINE__)"
+```
+
+INCLUDE B

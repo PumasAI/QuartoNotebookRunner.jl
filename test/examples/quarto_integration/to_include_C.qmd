@@ -1,0 +1,7 @@
+
+```{julia}
+C = 3
+"$(@__FILE__):$(@__LINE__)"
+```
+
+INCLUDE C

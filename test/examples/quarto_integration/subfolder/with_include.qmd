@@ -1,0 +1,12 @@
+---
+engine: julia
+---
+
+{{< include to_include_A.qmd >}}
+
+{{< include "include_subfolder/to_include_B.qmd" >}}
+
+```{julia}
+D = A + B + C
+println("D = $D")
+```
