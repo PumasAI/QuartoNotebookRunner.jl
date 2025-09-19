@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+### Fixed
+
+- `{{< include >}}` shortcodes are expanded in QuartoNotebookRunner which means stack traces now point to included qmd files directly and not to some offset in the concatenated root file [#338](https://github.com/PumasAI/QuartoNotebookRunner.jl/pull/338).
+
 ### Added
 
 - Support new requirement from `quarto` to population environment variables
