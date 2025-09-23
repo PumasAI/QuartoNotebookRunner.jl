@@ -197,6 +197,7 @@ end
             collect(eachline(to_include)),
         )
 
+        # check that the FILE/LINE printouts reflect the original files and line numbers
         @test result["notebook"]["cells"][2]["outputs"][1]["text"] ==
               "$(to_include):$line_in_to_include"
         @test result["notebook"]["cells"][4]["outputs"][1]["text"] ==
