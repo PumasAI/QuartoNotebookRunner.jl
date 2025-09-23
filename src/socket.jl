@@ -481,11 +481,7 @@ function _get_source_ranges(content::Dict)
             @assert length(_source_lines) == 2
             _source_lines[1]:_source_lines[2]
         end
-        SourceRange(
-            file,
-            lines,
-            source_lines,
-        )
+        SourceRange(file, lines, source_lines)
     end
 end
 _get_source_ranges(::String) = nothing

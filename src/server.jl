@@ -74,7 +74,9 @@ end
 
 function SourceRange(file, lines, source_lines::UnitRange)
     if length(lines) != length(source_lines)
-        error("Mismatching lengths of lines $lines ($(length(lines))) and source_lines $source_lines ($(length(source_lines)))")
+        error(
+            "Mismatching lengths of lines $lines ($(length(lines))) and source_lines $source_lines ($(length(source_lines)))",
+        )
     end
     SourceRange(file, lines, source_lines.start)
 end
@@ -359,7 +361,8 @@ function evaluate!(
     options = _parsed_options(options)
     path = abspath(f.path)
     if isfile(path)
-        source_code_hash, raw_chunks, file_frontmatter = raw_text_chunks(f, markdown; source_ranges)
+        source_code_hash, raw_chunks, file_frontmatter =
+            raw_text_chunks(f, markdown; source_ranges)
         merged_options = _extract_relevant_options(file_frontmatter, options)
 
         # A change of parameter values must invalidate the source code hash.
@@ -621,7 +624,11 @@ raw_markdown_chunks(path::String) =
 
 struct Unset end
 
-function raw_markdown_chunks_from_string(path::String, markdown::String; source_ranges = nothing)
+function raw_markdown_chunks_from_string(
+    path::String,
+    markdown::String;
+    source_ranges = nothing,
+)
     raw_chunks = []
     source_code_hash = hash(VERSION)
     pars = Parser()
@@ -638,11 +645,14 @@ function raw_markdown_chunks_from_string(path::String, markdown::String; source_
             for source_range in source_ranges
                 if terminal_line in source_range.lines
                     file::String = something(source_range.file, "unknown")
-                    source_line::Int = terminal_line - source_range.lines.start + source_range.source_line
+                    source_line::Int =
+                        terminal_line - source_range.lines.start + source_range.source_line
                     return (; file, line = source_line)
                 end
             end
-            error("Terminal line $terminal_line was not included in source ranges, last range was $(last(source_ranges))")
+            error(
+                "Terminal line $terminal_line was not included in source ranges, last range was $(last(source_ranges))",
+            )
         end
     end
 
@@ -1549,7 +1559,15 @@ function run!(
 
             result_task = Threads.@spawn begin
                 try
-                    evaluate!(file, output; showprogress, options, markdown, chunk_callback, source_ranges)
+                    evaluate!(
+                        file,
+                        output;
+                        showprogress,
+                        options,
+                        markdown,
+                        chunk_callback,
+                        source_ranges,
+                    )
                 finally
                     put!(file.run_decision_channel, :evaluate_finished)
                 end
