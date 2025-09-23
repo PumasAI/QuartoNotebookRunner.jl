@@ -66,6 +66,19 @@ mutable struct File
     end
 end
 
+struct SourceRange
+    file::Union{String,Nothing}
+    lines::UnitRange{Int}
+    source_line::Union{Nothing,Int} # first line in source
+end
+
+function SourceRange(file, lines, source_lines::UnitRange)
+    if length(lines) != length(source_lines)
+        error("Mismatching lengths of lines $lines ($(length(lines))) and source_lines $source_lines ($(length(source_lines)))")
+    end
+    SourceRange(file, lines, source_lines.start)
+end
+
 function _has_juliaup()
     try
         success(`juliaup --version`) && success(`julia --version`)
@@ -339,13 +352,14 @@ function evaluate!(
     options::Union{String,Dict{String,Any}} = Dict{String,Any}(),
     chunk_callback = (i, n, c) -> nothing,
     markdown::Union{String,Nothing} = nothing,
+    source_ranges::Union{Nothing,Vector} = nothing,
 )
     _check_output_dst(output)
 
     options = _parsed_options(options)
     path = abspath(f.path)
     if isfile(path)
-        source_code_hash, raw_chunks, file_frontmatter = raw_text_chunks(f, markdown)
+        source_code_hash, raw_chunks, file_frontmatter = raw_text_chunks(f, markdown; source_ranges)
         merged_options = _extract_relevant_options(file_frontmatter, options)
 
         # A change of parameter values must invalidate the source code hash.
@@ -583,9 +597,9 @@ write_json(::Nothing, data) = data
 Return a vector of raw markdown and code chunks from `file` ready for evaluation
 by `evaluate_raw_cells!`.
 """
-raw_text_chunks(file::File, ::Nothing) = raw_text_chunks(file.path)
-raw_text_chunks(file::File, markdown::String) =
-    raw_markdown_chunks_from_string(file.path, markdown)
+raw_text_chunks(file::File, ::Nothing; source_ranges = nothing) = raw_text_chunks(file.path)
+raw_text_chunks(file::File, markdown::String; source_ranges = nothing) =
+    raw_markdown_chunks_from_string(file.path, markdown; source_ranges)
 
 function raw_text_chunks(path::String)
     endswith(path, ".qmd") && return raw_markdown_chunks(path)
@@ -607,7 +621,7 @@ raw_markdown_chunks(path::String) =
 
 struct Unset end
 
-function raw_markdown_chunks_from_string(path::String, markdown::String)
+function raw_markdown_chunks_from_string(path::String, markdown::String; source_ranges = nothing)
     raw_chunks = []
     source_code_hash = hash(VERSION)
     pars = Parser()
@@ -616,6 +630,22 @@ function raw_markdown_chunks_from_string(path::String, markdown::String)
     source_code_hash = hash(file_fromtmatter, source_code_hash)
     source_lines = collect(eachline(IOBuffer(markdown)))
     terminal_line = 1
+
+    function source_file_and_line(terminal_line::Int)
+        if source_ranges === nothing
+            return (; file = path, line = terminal_line)
+        else
+            for source_range in source_ranges
+                if terminal_line in source_range.lines
+                    file::String = something(source_range.file, "unknown")
+                    source_line::Int = terminal_line - source_range.lines.start + source_range.source_line
+                    return (; file, line = source_line)
+                end
+            end
+            error("Terminal line $terminal_line was not included in source ranges, last range was $(last(source_ranges))")
+        end
+    end
+
     code_cells = false
     for (node, enter) in ast
         if enter &&
@@ -625,7 +655,7 @@ function raw_markdown_chunks_from_string(path::String, markdown::String)
             md = join(source_lines[terminal_line:(line-1)], "\n")
             push!(
                 raw_chunks,
-                (type = :markdown, source = md, file = path, line = terminal_line),
+                (; type = :markdown, source = md, source_file_and_line(terminal_line)...),
             )
             if contains(md, r"`{(?:julia|python|r)} ")
                 source_code_hash = hash(md, source_code_hash)
@@ -636,7 +666,7 @@ function raw_markdown_chunks_from_string(path::String, markdown::String)
             # this option could in the future also include a vector of line numbers, which knitr supports.
             # all other options seem to be quarto-rendering related, like where to put figure captions etc.
             source = node.literal
-            cell_options = extract_cell_options(source; file = path, line = line)
+            cell_options = extract_cell_options(source; source_file_and_line(line)...)
             evaluate = get(cell_options, "eval", Unset())
             if !(evaluate isa Union{Bool,Unset})
                 error(
@@ -649,12 +679,11 @@ function raw_markdown_chunks_from_string(path::String, markdown::String)
                 is_r_toplevel(node) ? :r : error("Unhandled code block language")
             push!(
                 raw_chunks,
-                (
+                (;
                     type = :code,
                     language = language,
                     source,
-                    file = path,
-                    line,
+                    source_file_and_line(line)...,
                     evaluate,
                     cell_options,
                 ),
@@ -666,7 +695,7 @@ function raw_markdown_chunks_from_string(path::String, markdown::String)
         md = join(source_lines[terminal_line:end], "\n")
         push!(
             raw_chunks,
-            (type = :markdown, source = md, file = path, line = terminal_line),
+            (; type = :markdown, source = md, source_file_and_line(terminal_line)...),
         )
         if contains(md, r"`{(?:julia|python|r)} ")
             source_code_hash = hash(md, source_code_hash)
@@ -690,7 +719,7 @@ function raw_markdown_chunks_from_string(path::String, markdown::String)
     if raw_chunks[end].type == :code
         push!(
             raw_chunks,
-            (type = :markdown, source = "", file = path, line = terminal_line),
+            (; type = :markdown, source = "", source_file_and_line(terminal_line)...),
         )
     end
 
@@ -1499,6 +1528,7 @@ function run!(
     showprogress::Bool = true,
     options::Union{String,Dict{String,Any}} = Dict{String,Any}(),
     chunk_callback = (i, n, c) -> nothing,
+    source_ranges::Union{Nothing,Vector} = nothing,
 )
     try
         borrow_file!(server, path; options, optionally_create = true) do file
@@ -1519,7 +1549,7 @@ function run!(
 
             result_task = Threads.@spawn begin
                 try
-                    evaluate!(file, output; showprogress, options, markdown, chunk_callback)
+                    evaluate!(file, output; showprogress, options, markdown, chunk_callback, source_ranges)
                 finally
                     put!(file.run_decision_channel, :evaluate_finished)
                 end

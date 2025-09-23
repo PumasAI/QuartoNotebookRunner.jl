@@ -345,9 +345,6 @@ function _handle_response_internal(
     # Running:
 
     if type == "run"
-        options = _get_options(request.content)
-        markdown = _get_markdown(options)
-
         function chunk_callback(i, n, chunk)
             _write_json(
                 socket,
@@ -362,6 +359,10 @@ function _handle_response_internal(
         end
 
         result = try
+            options = _get_options(request.content)
+            markdown = _get_markdown(options)
+            source_ranges = _get_source_ranges(request.content)
+
             (;
                 notebook = run!(
                     notebooks,
@@ -370,6 +371,7 @@ function _handle_response_internal(
                     markdown,
                     showprogress,
                     chunk_callback,
+                    source_ranges,
                 )
             )
         catch error
@@ -463,6 +465,30 @@ _get_file(content::String) = content
 
 _get_options(content::Dict) = get(Dict{String,Any}, content, "options")
 _get_options(::String) = Dict{String,Any}()
+
+function _get_source_ranges(content::Dict)
+    ranges = get(content, "sourceRanges", nothing)
+    ranges === nothing && return nothing
+    return map(ranges) do range
+        file = get(range, "file", nothing)
+        _lines::Vector{Int} = range["lines"]
+        @assert length(_lines) == 2
+        lines = _lines[1]:_lines[2]
+        _source_lines::Union{Nothing,Vector{Int}} = get(range, "sourceLines", nothing)
+        source_lines = if _source_lines === nothing
+            1:length(lines) # source lines are only missing in degenerate cases like additional newlines anyway so this doesn't really matter
+        else
+            @assert length(_source_lines) == 2
+            _source_lines[1]:_source_lines[2]
+        end
+        SourceRange(
+            file,
+            lines,
+            source_lines,
+        )
+    end
+end
+_get_source_ranges(::String) = nothing
 
 function _get_nested(d::Dict, keys...)
     _d = d
