@@ -153,7 +153,7 @@ end
         to_include_md = read(to_include, String)
 
         with_include_A, with_include_B =
-            split(with_include_md, "{{< include to_include.qmd >}}\n")
+            split(with_include_md, "{{< include to_include.qmd >}}\r?\n")
 
         lines_A = length(split(with_include_A, "\n"))
         lines_B = length(split(with_include_B, "\n"))
