@@ -624,6 +624,21 @@ raw_markdown_chunks(path::String) =
 
 struct Unset end
 
+function compute_line_file_lookup(nlines, path, source_ranges)
+    lookup = fill((; file = "unknown", line = 0), nlines)
+    for source_range in source_ranges
+        file::String = something(source_range.file, "unknown")
+        for line in source_range.lines
+            source_line = line - source_range.lines.start + source_range.source_line
+            lookup[line] = (; file, line = source_line)
+        end
+    end
+    return lookup
+end
+function compute_line_file_lookup(nlines, path, source_ranges::Nothing)
+    return [(; file = path, line) for line in 1:nlines]
+end
+
 function raw_markdown_chunks_from_string(
     path::String,
     markdown::String;
@@ -638,23 +653,7 @@ function raw_markdown_chunks_from_string(
     source_lines = collect(eachline(IOBuffer(markdown)))
     terminal_line = 1
 
-    function source_file_and_line(terminal_line::Int)
-        if source_ranges === nothing
-            return (; file = path, line = terminal_line)
-        else
-            for source_range in source_ranges
-                if terminal_line in source_range.lines
-                    file::String = something(source_range.file, "unknown")
-                    source_line::Int =
-                        terminal_line - source_range.lines.start + source_range.source_line
-                    return (; file, line = source_line)
-                end
-            end
-            error(
-                "Terminal line $terminal_line was not included in source ranges, last range was $(last(source_ranges))",
-            )
-        end
-    end
+    line_file_lookup = compute_line_file_lookup(length(source_lines), path, source_ranges)
 
     code_cells = false
     for (node, enter) in ast
@@ -665,7 +664,7 @@ function raw_markdown_chunks_from_string(
             md = join(source_lines[terminal_line:(line-1)], "\n")
             push!(
                 raw_chunks,
-                (; type = :markdown, source = md, source_file_and_line(terminal_line)...),
+                (; type = :markdown, source = md, line_file_lookup[terminal_line]...),
             )
             if contains(md, r"`{(?:julia|python|r)} ")
                 source_code_hash = hash(md, source_code_hash)
@@ -676,7 +675,7 @@ function raw_markdown_chunks_from_string(
             # this option could in the future also include a vector of line numbers, which knitr supports.
             # all other options seem to be quarto-rendering related, like where to put figure captions etc.
             source = node.literal
-            cell_options = extract_cell_options(source; source_file_and_line(line)...)
+            cell_options = extract_cell_options(source; line_file_lookup[line]...)
             evaluate = get(cell_options, "eval", Unset())
             if !(evaluate isa Union{Bool,Unset})
                 error(
@@ -693,7 +692,7 @@ function raw_markdown_chunks_from_string(
                     type = :code,
                     language = language,
                     source,
-                    source_file_and_line(line)...,
+                    line_file_lookup[line]...,
                     evaluate,
                     cell_options,
                 ),
@@ -705,7 +704,7 @@ function raw_markdown_chunks_from_string(
         md = join(source_lines[terminal_line:end], "\n")
         push!(
             raw_chunks,
-            (; type = :markdown, source = md, source_file_and_line(terminal_line)...),
+            (; type = :markdown, source = md, line_file_lookup[terminal_line]...),
         )
         if contains(md, r"`{(?:julia|python|r)} ")
             source_code_hash = hash(md, source_code_hash)
