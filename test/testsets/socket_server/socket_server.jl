@@ -184,9 +184,29 @@ end
         json(cmd) = JSON3.read(read(cmd, String), Any)
 
         options = (; target = (; markdown = (; value = full)))
-        content = (; file = with_include, sourceRanges = source_ranges, options)
-        result =
-            json(`$node $client $(server.port) $(server.key) run $(JSON3.write(content))`)
+
+        full_lines = split(full, "\n")
+
+        content_without_ranges = (; file = with_include, options)
+        result = json(
+            `$node $client $(server.port) $(server.key) run $(JSON3.write(content_without_ranges))`,
+        )
+
+        first_line_with_print =
+            findfirst(contains(raw"""print("$(@__FILE__):$(@__LINE__)")"""), full_lines)
+        last_line_with_print =
+            findlast(contains(raw"""print("$(@__FILE__):$(@__LINE__)")"""), full_lines)
+
+        # check that the FILE/LINE printouts reflect only the concatenated (root) file
+        @test result["notebook"]["cells"][2]["outputs"][1]["text"] ==
+              "$(with_include):$first_line_with_print"
+        @test result["notebook"]["cells"][4]["outputs"][1]["text"] ==
+              "$(with_include):$last_line_with_print"
+
+        content_with_ranges = (; file = with_include, sourceRanges = source_ranges, options)
+        result = json(
+            `$node $client $(server.port) $(server.key) run $(JSON3.write(content_with_ranges))`,
+        )
 
         line_in_with_include = findfirst(
             contains(raw"""print("$(@__FILE__):$(@__LINE__)")"""),
@@ -205,8 +225,9 @@ end
 
         # modify one of the source line boundaries so it mismatches
         source_ranges[1].sourceLines[2] -= 1
-        result =
-            json(`$node $client $(server.port) $(server.key) run $(JSON3.write(content))`)
+        result = json(
+            `$node $client $(server.port) $(server.key) run $(JSON3.write(content_with_ranges))`,
+        )
         @test contains(
             result["juliaError"],
             "Mismatching lengths of lines 1:5 (5) and source_lines 1:4",
