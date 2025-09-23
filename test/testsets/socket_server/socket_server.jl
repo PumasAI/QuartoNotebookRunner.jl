@@ -202,5 +202,14 @@ end
               "$(to_include):$line_in_to_include"
         @test result["notebook"]["cells"][4]["outputs"][1]["text"] ==
               "$(with_include):$line_in_with_include"
+
+        # modify one of the source line boundaries so it mismatches
+        source_ranges[1].sourceLines[2] -= 1
+        result =
+            json(`$node $client $(server.port) $(server.key) run $(JSON3.write(content))`)
+        @test contains(
+            result["juliaError"],
+            "Mismatching lengths of lines 1:5 (5) and source_lines 1:4",
+        )
     end
 end

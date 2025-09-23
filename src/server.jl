@@ -636,7 +636,7 @@ function compute_line_file_lookup(nlines, path, source_ranges)
     return lookup
 end
 function compute_line_file_lookup(nlines, path, source_ranges::Nothing)
-    return [(; file = path, line) for line in 1:nlines]
+    return [(; file = path, line) for line = 1:nlines]
 end
 
 function raw_markdown_chunks_from_string(
