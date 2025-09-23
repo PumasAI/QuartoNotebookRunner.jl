@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added the ability to read a `sourceRanges` attribute from quarto to correctly point to included files in stacktraces [#339].
 - Support new requirement from `quarto` to population environment variables
   explicitly in the notebook process [#306].
 - Contributing guidelines with AI assistance policy and AGENTS.md for AI coding assistants [#335].
@@ -468,3 +469,4 @@ caching is enabled. Delete this folder to clear the cache. [#259]
 [#305]: https://github.com/PumasAI/QuartoNotebookRunner.jl/issues/305
 [#306]: https://github.com/PumasAI/QuartoNotebookRunner.jl/issues/306
 [#335]: https://github.com/PumasAI/QuartoNotebookRunner.jl/issues/335
+[#339]: https://github.com/PumasAI/QuartoNotebookRunner.jl/issues/339
