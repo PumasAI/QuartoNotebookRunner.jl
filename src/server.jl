@@ -719,7 +719,7 @@ function raw_markdown_chunks_from_string(path::String, markdown::String; source_
     if raw_chunks[end].type == :code
         push!(
             raw_chunks,
-            (; type = :markdown, source = "", source_file_and_line(terminal_line)...),
+            (; type = :markdown, source = "", file = path, line = terminal_line),
         )
     end
 
