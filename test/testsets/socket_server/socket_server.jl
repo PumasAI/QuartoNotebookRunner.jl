@@ -159,9 +159,13 @@ end
         lines_B = length(split(with_include_B, "\n"))
         lines_to_include = length(split(to_include_md, "\n"))
 
-        full = join([with_include_A, to_include_md, with_include_B], "\n")
+        # this mocks the current behavior of quarto where it sometimes inserts newlines
+        # without tracking info after includes
+        empty_line = ""
 
-        ends = cumsum([lines_A, lines_to_include, lines_B])
+        full = join([with_include_A, to_include_md, empty_line, with_include_B], "\n")
+
+        ends = cumsum([lines_A, lines_to_include, 1, lines_B])
 
         source_ranges = [
             (; file = with_include, lines = [1, ends[1]], sourceLines = [1, lines_A]),
@@ -171,8 +175,12 @@ end
                 sourceLines = [1, lines_to_include],
             ),
             (;
-                file = with_include,
+                # the empty lines that quarto sometimes add lack file and sourceLines
                 lines = [ends[2] + 1, ends[3]],
+            ),
+            (;
+                file = with_include,
+                lines = [ends[3] + 1, ends[4]],
                 sourceLines = [lines_A + 1, lines_A + lines_B],
             ),
         ]
