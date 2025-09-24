@@ -625,7 +625,8 @@ raw_markdown_chunks(path::String) =
 struct Unset end
 
 function compute_line_file_lookup(nlines, path, source_ranges)
-    lookup = fill((; file = "unknown", line = 0), nlines)
+    nlines_ranges = maximum(r -> r.lines.stop, source_ranges) # number of lines reported might be different from the markdown string due to quarto bugs
+    lookup = fill((; file = "unknown", line = 0), nlines_ranges)
     for source_range in source_ranges
         file::String = something(source_range.file, "unknown")
         for line in source_range.lines
