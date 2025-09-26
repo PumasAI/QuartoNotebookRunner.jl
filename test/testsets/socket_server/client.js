@@ -22,27 +22,30 @@ function handle() {
     const isready = () => toJSON({ type: 'isready', content: '' });
     const status = () => toJSON({ type: 'status', content: '' });
 
-    const notebook = (arg) => {
-        if (path.isAbsolute(arg)) {
-            return arg
+    const content = (arg) => {
+        if (typeof arg === 'string') {
+            if (path.isAbsolute(arg)) {
+                return arg
+            }
+            throw new Error('No notebook with absolute path specified.');
         }
-        throw new Error('No notebook with absolute path specified.');
+        return arg;
     }
 
     const type = process.argv[4];
-    const arg = process.argv[5];
+    const arg = process.argv.length >= 6 ? JSON.parse(process.argv[5]) : undefined;
 
     switch (type) {
         case 'run':
-            return run(notebook(arg));
+            return run(content(arg));
         case 'close':
-            return close(notebook(arg));
+            return close(content(arg));
         case 'forceclose':
-            return forceclose(notebook(arg));
+            return forceclose(content(arg));
         case 'stop':
             return stop();
         case 'isopen':
-            return isopen(notebook(arg));
+            return isopen(content(arg));
         case 'isready':
             return isready();
         case 'status':
