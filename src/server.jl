@@ -78,7 +78,7 @@ function SourceRange(file, lines, source_lines::UnitRange)
             "Mismatching lengths of lines $lines ($(length(lines))) and source_lines $source_lines ($(length(source_lines)))",
         )
     end
-    SourceRange(file, lines, source_lines.start)
+    SourceRange(file, lines, first(source_lines))
 end
 
 function _has_juliaup()
@@ -630,7 +630,7 @@ function compute_line_file_lookup(nlines, path, source_ranges)
     for source_range in source_ranges
         file::String = something(source_range.file, "unknown")
         for line in source_range.lines
-            source_line = line - source_range.lines.start + source_range.source_line
+            source_line = line - first(source_range.lines) + source_range.source_line
             lookup[line] = (; file, line = source_line)
         end
     end
