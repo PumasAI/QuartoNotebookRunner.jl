@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+## [v0.17.4] - 2025-09-26
+
 ### Added
 
 - Added the ability to read a `sourceRanges` attribute from quarto to correctly point to included files in stacktraces [#339].
@@ -390,6 +392,7 @@ caching is enabled. Delete this folder to clear the cache. [#259]
 [v0.17.1]: https://github.com/PumasAI/QuartoNotebookRunner.jl/releases/tag/v0.17.1
 [v0.17.2]: https://github.com/PumasAI/QuartoNotebookRunner.jl/releases/tag/v0.17.2
 [v0.17.3]: https://github.com/PumasAI/QuartoNotebookRunner.jl/releases/tag/v0.17.3
+[v0.17.4]: https://github.com/PumasAI/QuartoNotebookRunner.jl/releases/tag/v0.17.4
 [#9]: https://github.com/PumasAI/QuartoNotebookRunner.jl/issues/9
 [#11]: https://github.com/PumasAI/QuartoNotebookRunner.jl/issues/11
 [#14]: https://github.com/PumasAI/QuartoNotebookRunner.jl/issues/14
