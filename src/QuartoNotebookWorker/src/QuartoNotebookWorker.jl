@@ -101,4 +101,7 @@ include("notebook_metadata.jl")
 include("manifest_validation.jl")
 include("python.jl")
 
+include("PrecompileTools/PrecompileTools.jl")
+include("precompile.jl")
+
 end
