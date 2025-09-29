@@ -103,8 +103,11 @@ mutable struct Worker <: AbstractWorker
 
             env = vcat("MALT_WORKER_TEMP_DIR=$temp_dir", env)
 
+            Main.@timeit "      run(exe)" run(`$exe -e '1 + 1'`)
+
             # Spawn process
             cmd = _get_worker_cmd(; exe, env, exeflags)
+            Main.@timeit "      worker cmd startup till port read" begin
             proc = open(Cmd(cmd; detach = true, windows_hide = true), "w+")
 
             # Keep internal list
@@ -113,6 +116,7 @@ mutable struct Worker <: AbstractWorker
 
             # Block until reading the port number of the process (from its stdout)
             port_str = readline(proc)
+            end
             port = tryparse(UInt16, port_str)
 
             # Generate an error message for Julia version mismatches. This does
@@ -120,7 +124,7 @@ mutable struct Worker <: AbstractWorker
             # the worker is connected to the socket and if there is a mismatch
             # we call `stop` to gracefully close the worker. We cannot
             # gracefully close it until that point.
-            manifest_file, manifest_error =
+            Main.@timeit "validate manifest" manifest_file, manifest_error =
                 _validate_worker_process_manifest(metadata_toml_file, errors_log_file)
 
             if port === nothing
@@ -196,7 +200,7 @@ mutable struct Worker <: AbstractWorker
             throw(UserError(manifest_error))
         end
 
-        _manifest_in_sync_check(w)
+        Main.@timeit "manifest sync check" _manifest_in_sync_check(w)
 
         return w
     end

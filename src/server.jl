@@ -28,7 +28,7 @@ mutable struct File
                 timeout = _extract_timeout(merged_options)
 
                 exe, _exeflags = _julia_exe(exeflags)
-                worker = cd(
+                Main.@timeit "Worker(...)" worker = cd(
                     () -> Malt.Worker(;
                         exe,
                         exeflags = _exeflags,
@@ -51,7 +51,7 @@ mutable struct File
                     nothing,
                     Channel{Symbol}(32), # we don't want an unbuffered channel because we might want to `put!` to it without blocking
                 )
-                init!(file, merged_options)
+                Main.@timeit "init!" init!(file, merged_options)
                 return file
             else
                 throw(
@@ -1559,7 +1559,7 @@ function run!(
 
             result_task = Threads.@spawn begin
                 try
-                    evaluate!(
+                    Main.@timeit "evaluate!" evaluate!(
                         file,
                         output;
                         showprogress,
@@ -1650,7 +1650,7 @@ function borrow_file!(
             if optionally_create
                 # it's not ideal to create the `File` under server.lock but it takes a second or
                 # so on my machine to init it, so for practical purposes it should be ok
-                file = server.workers[apath] = File(apath, options)
+                file = server.workers[apath] = Main.@timeit "File(...)" File(apath, options)
                 lock(file.lock) # don't let anything get to the fresh file before us
                 on_change(server)
                 return true, file
@@ -1713,9 +1713,11 @@ function render(
     output::Union{AbstractString,IO,Nothing} = nothing,
     showprogress::Bool = true,
 )
-    server = Server()
-    run!(server, file; output, showprogress)
-    close!(server, file)
+    Main.reset_timer!()
+    Main.@timeit "Server()" server = Server()
+    Main.@timeit "run!" run!(server, file; output, showprogress)
+    Main.@timeit "close!" close!(server, file)
+    Main.print_timer(allocations = false)
 end
 
 function close!(server::Server)
