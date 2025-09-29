@@ -32,6 +32,7 @@ import Preferences
 import ProgressLogging
 import REPL
 import Random
+import Scratch
 import Sockets
 import SHA
 import TOML

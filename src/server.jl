@@ -28,11 +28,34 @@ mutable struct File
                 timeout = _extract_timeout(merged_options)
 
                 exe, _exeflags = _julia_exe(exeflags)
+
+                qnw_env_dir = Scratch.@get_scratch!("quartonotebookworker-env")
+
+                script = """                
+                    qnw_env_dir::String = $(repr(qnw_env_dir))
+                    qnw_package_dir::String = $(repr(Malt.worker_package))
+
+                    env_path = joinpath(qnw_env_dir, string(VERSION))
+                    env_proj = joinpath(env_path, "Project.toml")
+                    env_mani = joinpath(env_path, "Manifest.toml")
+
+                    if !(isfile(env_proj) && isfile(env_mani))
+                        import Pkg
+
+                        Pkg.activate(env_path)
+                        Pkg.develop(path = qnw_package_dir)
+                    end
+
+                    println(env_path)
+                """
+
+                env_path = readchomp(`$exe --startup-file=no -e $script`)
+
                 Main.@timeit "Worker(...)" worker = cd(
                     () -> Malt.Worker(;
                         exe,
                         exeflags = _exeflags,
-                        env = vcat(env, quarto_env),
+                        env = vcat(env, quarto_env, "QUARTONOTEBOOKWORKER_ENV=$env_path"),
                     ),
                     dirname(path),
                 )
