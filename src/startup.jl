@@ -13,11 +13,15 @@ function capture(func)
     try
         return func()
     catch err
+        bt = catch_backtrace()
         errors_log_file = joinpath(ENV["MALT_WORKER_TEMP_DIR"], "errors.log")
-        open(errors_log_file, "w") do io
+        io = open(errors_log_file, "w")
+        try
             showerror(io, err)
-            Base.show_backtrace(io, catch_backtrace())
+            Base.inferencebarrier(Base.show_backtrace)(io, bt)
             flush(io)
+        finally
+            close(io)
         end
         exit()
     end
@@ -45,9 +49,10 @@ pushfirst!(LOAD_PATH, "@stdlib")
 # and if a user was to perform `Pkg` operations they may affect that
 # environment. Instead we provide a temporary sandbox environment that gets
 # discarded when the notebook process exits.
+
 let temp = mktempdir()
     sandbox = joinpath(temp, "QuartoSandbox")
-    mkpath(sandbox)
+    mkdir(sandbox)
     # The empty project file is key to making this the active environment if
     # noting else is available if the rest of the `LOAD_PATH`.
     touch(joinpath(sandbox, "Project.toml"))
@@ -56,31 +61,8 @@ let temp = mktempdir()
     # Step 2b:
     #
     # We also need to ensure that the `QuartoNotebookWorker` package is
-    # available on the `LOAD_PATH`. This is done by creating another
-    # environment alongside the sandbox environment. We `Pkg.develop` the
-    # "local" `QuartoNotebookWorker` package into this environment. `Pkg`
-    # operations are logged to the `pkg.log` file that the server process can
-    # read to provide feedback to the user if needed.
-    #
-    # `Pkg` is loaded outside of this closure otherwise the methods required do
-    # not exist in a new enough world age to be callable.
-    Pkg = Base.require(Base.PkgId(Base.UUID("44cfe95a-1eb2-52ea-b672-e2afdf69b78f"), "Pkg"))
-    capture() do
-        worker = joinpath(temp, "QuartoNotebookWorker")
-        mkpath(worker)
-        push!(LOAD_PATH, worker)
-        open(joinpath(ENV["MALT_WORKER_TEMP_DIR"], "pkg.log"), "w") do io
-            ap = Base.active_project()
-            try
-                Pkg.activate(worker; io)
-                Pkg.develop(; path = ENV["QUARTONOTEBOOKWORKER_PACKAGE"], io)
-            finally
-                # Ensure that we switch the active project back afterwards.
-                Pkg.activate(ap; io)
-            end
-            flush(io)
-        end
-    end
+    # available on the `LOAD_PATH`.
+    push!(LOAD_PATH, ENV["QUARTONOTEBOOKWORKER_ENV"])
 end
 
 # Step 3:
@@ -94,9 +76,10 @@ end
 # instead manually write the strings so that this can happen prior to any
 # stdlib loading, which could trigger errors that we would then want this
 # metadata to be able to properly inform the user about.
-capture() do
+function save_metadata()
     metadata_toml_file = joinpath(ENV["MALT_WORKER_TEMP_DIR"], "metadata.toml")
-    open(metadata_toml_file, "w") do io
+    io = open(metadata_toml_file, "w")
+    try
         project_toml_file = Base.active_project()
         if !isnothing(project_toml_file) && isfile(project_toml_file)
             println(io, "project = $(repr(project_toml_file))")
@@ -107,8 +90,11 @@ capture() do
         end
         println(io, "julia_version = $(repr(string(VERSION)))")
         flush(io)
+    finally
+        close(io)
     end
 end
+capture(save_metadata)
 
 # Step: 4
 #
@@ -119,18 +105,19 @@ end
 # should do a manual `import Revise` in their notebook if they need `Revise`
 # support.
 const QUARTO_ENABLE_REVISE = get(ENV, "QUARTO_ENABLE_REVISE", "false") == "true"
-capture() do
+function require_revise()
     if QUARTO_ENABLE_REVISE
         pkgid = Base.PkgId(Base.UUID("295af30f-e4ad-537b-8983-00126c2a3abe"), "Revise")
         Base.require(pkgid)
     end
 end
+capture(require_revise)
 
 # Step 5:
 #
 # Now load in the worker package. This may trigger package precompilation on
 # first load, hence it is run under a `capture` should it fail to run.
-const QuartoNotebookWorker = capture() do
+function require_qnw()
     Base.require(
         Base.PkgId(
             Base.UUID("38328d9c-a911-4051-bc06-3f7f556ffeda"),
@@ -138,6 +125,7 @@ const QuartoNotebookWorker = capture() do
         ),
     )
 end
+const QuartoNotebookWorker = capture(require_qnw)
 
 # Step 6:
 #
