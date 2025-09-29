@@ -1,15 +1,16 @@
 const newly_inferred = Core.CodeInstance[]   # only used to support verbose[]
 
 function workload_enabled(mod::Module)
-    try
-        if load_preference(@__MODULE__, "precompile_workloads", true)
-            return load_preference(mod, "precompile_workload", true)
-        else
-            return false
-        end
-    catch
-        true
-    end
+    # try
+    #     if load_preference(@__MODULE__, "precompile_workloads", true)
+    #         return load_preference(mod, "precompile_workload", true)
+    #     else
+    #         return false
+    #     end
+    # catch
+    #     true
+    # end
+    true # not using Preferences
 end
 
 @noinline is_generating_output() = ccall(:jl_generating_output, Cint, ()) == 1
