@@ -29,7 +29,7 @@ mutable struct File
 
                 exe, _exeflags = _julia_exe(exeflags)
 
-                qnw_env_dir = Scratch.@get_scratch!("quartonotebookworker-env")
+                qnw_env_dir = Scratch.@get_scratch!("qnw-env-$(hash(Malt.worker_package))")
 
                 script = """                
                     qnw_env_dir::String = $(repr(qnw_env_dir))
