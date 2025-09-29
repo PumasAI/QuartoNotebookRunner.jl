@@ -32,8 +32,8 @@ mutable struct File
                 qnw_env_dir = Scratch.@get_scratch!("qnw-env-$(hash(Malt.worker_package))")
 
                 script = """                
-                    qnw_env_dir::String = $(repr(qnw_env_dir))
-                    qnw_package_dir::String = $(repr(Malt.worker_package))
+                    qnw_env_dir = $(repr(qnw_env_dir))
+                    qnw_package_dir = $(repr(Malt.worker_package))
 
                     env_path = joinpath(qnw_env_dir, string(VERSION))
                     env_proj = joinpath(env_path, "Project.toml")
