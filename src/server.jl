@@ -32,6 +32,8 @@ mutable struct File
                 qnw_env_dir = Scratch.@get_scratch!("qnw-env-$(hash(Malt.worker_package))")
 
                 script = """                
+                    pushfirst!(LOAD_PATH, "@stdlib")
+                    
                     qnw_env_dir = $(repr(qnw_env_dir))
                     qnw_package_dir = $(repr(Malt.worker_package))
 
