@@ -22,7 +22,8 @@ module __PrecompilationModule end
 
 QuartoNotebookWorker.NotebookState.NotebookModuleForPrecompile[] = __PrecompilationModule
 
-PrecompileTools.@compile_workload begin
+# PrecompileTools.@compile_workload begin
+let # the copying of PrecompileTools source did not just work on 1.11
     result = QuartoNotebookWorker.render(
         "1 + 1",
         "some_file",
@@ -35,5 +36,6 @@ PrecompileTools.@compile_workload begin
     seekstart(io)
     QuartoNotebookWorker.Packages.BSON.load(io)[:data]
 end
+# end
 
 QuartoNotebookWorker.NotebookState.NotebookModuleForPrecompile[] = nothing

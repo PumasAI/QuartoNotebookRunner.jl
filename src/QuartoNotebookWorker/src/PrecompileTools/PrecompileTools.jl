@@ -11,6 +11,5 @@ function precompile_mi(mi::Core.MethodInstance)
 end
 
 include("workloads.jl")
-include("invalidations.jl")
 
 end
