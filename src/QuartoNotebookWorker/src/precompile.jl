@@ -25,7 +25,7 @@ module __PrecompilationModule end
 QuartoNotebookWorker.NotebookState.NotebookModuleForPrecompile[] = __PrecompilationModule
 
 PrecompileTools.@compile_workload begin
-    for code in ["1 + 1", "println(\"abc\")", "error()"]
+    for code in ["1 + 1", "println(\"abc\")", "error()", "@info \"info text\" value=1"]
         result = QuartoNotebookWorker.render(
             code,
             "some_file",
