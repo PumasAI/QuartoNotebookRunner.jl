@@ -57,13 +57,40 @@ let temp = mktempdir()
     # noting else is available if the rest of the `LOAD_PATH`.
     touch(joinpath(sandbox, "Project.toml"))
     push!(LOAD_PATH, sandbox)
-
-    # Step 2b:
-    #
-    # We also need to ensure that the `QuartoNotebookWorker` package is
-    # available on the `LOAD_PATH`.
-    push!(LOAD_PATH, ENV["QUARTONOTEBOOKWORKER_ENV"])
 end
+
+# Step 2b:
+#
+# We also need to ensure that the `QuartoNotebookWorker` package is
+# available on the `LOAD_PATH`.
+
+qnw_env_dir = ENV["QUARTONOTEBOOKWORKER_ENV_DIR"]
+qnw_package_dir = ENV["QUARTONOTEBOOKWORKER_PACKAGE_DIR"]
+
+env_path = joinpath(qnw_env_dir, string(VERSION))
+env_proj = joinpath(env_path, "Project.toml")
+env_mani = joinpath(env_path, "Manifest.toml")
+
+if !(isfile(env_proj) && isfile(env_mani))
+    # `Pkg` is loaded outside of this closure otherwise the methods required do
+    # not exist in a new enough world age to be callable.
+    Pkg = Base.require(Base.PkgId(Base.UUID("44cfe95a-1eb2-52ea-b672-e2afdf69b78f"), "Pkg"))
+    capture() do
+        open(joinpath(ENV["MALT_WORKER_TEMP_DIR"], "pkg.log"), "w") do io
+            ap = Base.active_project()
+            try
+                Pkg.activate(env_path; io)
+                Pkg.develop(; path = qnw_package_dir, io)
+            finally
+                # Ensure that we switch the active project back afterwards.
+                Pkg.activate(ap; io)
+            end
+            flush(io)
+        end
+    end
+end
+
+push!(LOAD_PATH, env_path)
 
 # Step 3:
 #

@@ -31,33 +31,11 @@ mutable struct File
 
                 qnw_env_dir = Scratch.@get_scratch!("qnw-env-$(hash(Malt.worker_package))")
 
-                script = """                
-                    pushfirst!(LOAD_PATH, "@stdlib")
-                    
-                    qnw_env_dir = $(repr(qnw_env_dir))
-                    qnw_package_dir = $(repr(Malt.worker_package))
-
-                    env_path = joinpath(qnw_env_dir, string(VERSION))
-                    env_proj = joinpath(env_path, "Project.toml")
-                    env_mani = joinpath(env_path, "Manifest.toml")
-
-                    if !(isfile(env_proj) && isfile(env_mani))
-                        import Pkg
-
-                        Pkg.activate(env_path)
-                        Pkg.develop(path = qnw_package_dir)
-                    end
-
-                    println(env_path)
-                """
-
-                env_path = readchomp(`$exe --startup-file=no -e $script`)
-
                 worker = cd(
                     () -> Malt.Worker(;
                         exe,
                         exeflags = _exeflags,
-                        env = vcat(env, quarto_env, "QUARTONOTEBOOKWORKER_ENV=$env_path"),
+                        env = vcat(env, quarto_env, "QUARTONOTEBOOKWORKER_ENV_DIR=$qnw_env_dir", "QUARTONOTEBOOKWORKER_PACKAGE_DIR=$(Malt.worker_package)"),
                     ),
                     dirname(path),
                 )
