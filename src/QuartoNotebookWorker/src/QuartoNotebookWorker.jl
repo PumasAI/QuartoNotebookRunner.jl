@@ -101,7 +101,11 @@ include("notebook_metadata.jl")
 include("manifest_validation.jl")
 include("python.jl")
 
-include("PrecompileTools/PrecompileTools.jl")
+if VERSION >= v"1.12-rc1"
+    include("PrecompileTools-post1.12/PrecompileTools.jl")
+else
+    include("PrecompileTools-pre1.12/PrecompileTools.jl")
+end
 include("precompile.jl")
 
 end

@@ -24,20 +24,20 @@ module __PrecompilationModule end
 
 QuartoNotebookWorker.NotebookState.NotebookModuleForPrecompile[] = __PrecompilationModule
 
-# PrecompileTools.@compile_workload begin
-let # the copying of PrecompileTools source did not just work on 1.11
-    result = QuartoNotebookWorker.render(
-        "1 + 1",
-        "some_file",
-        1,
-        Dict{String,Any}();
-        inline = false,
-    )
-    io = IOBuffer()
-    bson = QuartoNotebookWorker.Packages.BSON.bson(io, Dict{Symbol,Any}(:data => result))
-    seekstart(io)
-    QuartoNotebookWorker.Packages.BSON.load(io)[:data]
+PrecompileTools.@compile_workload begin
+    for code in ["1 + 1", "println(\"abc\")", "error()"]
+        result = QuartoNotebookWorker.render(
+            code,
+            "some_file",
+            1,
+            Dict{String,Any}("error" => "true");
+            inline = false,
+        )
+        io = IOBuffer()
+        bson = QuartoNotebookWorker.Packages.BSON.bson(io, Dict{Symbol,Any}(:data => result))
+        seekstart(io)
+        QuartoNotebookWorker.Packages.BSON.load(io)[:data]
+    end
 end
-# end
 
 QuartoNotebookWorker.NotebookState.NotebookModuleForPrecompile[] = nothing
