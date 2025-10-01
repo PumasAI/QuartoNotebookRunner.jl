@@ -388,9 +388,7 @@ const empty_file = RelocatableFolders.@path joinpath(@__DIR__, "empty.jl")
 const worker_package = RelocatableFolders.@path joinpath(@__DIR__, "QuartoNotebookWorker")
 
 function _get_worker_cmd(; exe, env, exeflags, file = String(startup_file))
-    defaults = Dict(
-        "OPENBLAS_NUM_THREADS" => "1",
-    )
+    defaults = Dict("OPENBLAS_NUM_THREADS" => "1")
     env = vcat(Base.byteenv(defaults), Base.byteenv(env))
     return addenv(`$exe --startup-file=no $exeflags $file`, env)
 end

@@ -50,6 +50,8 @@ end
 const NotebookModuleForPrecompile = Base.RefValue{Union{Nothing,Module}}(nothing)
 
 # `getfield` ends up throwing a segfault here, `getproperty` works fine though.
-notebook_module() = NotebookModuleForPrecompile[] === nothing ? Base.getproperty(Main, :Notebook)::Module : NotebookModuleForPrecompile[]
+notebook_module() =
+    NotebookModuleForPrecompile[] === nothing ? Base.getproperty(Main, :Notebook)::Module :
+    NotebookModuleForPrecompile[]
 
 end

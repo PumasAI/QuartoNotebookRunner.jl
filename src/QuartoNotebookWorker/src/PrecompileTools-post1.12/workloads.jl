@@ -67,7 +67,10 @@ end
         - indirect runtime-dispatched calls to such methods.
 """
 macro compile_workload(ex::Expr)
-    local iscompiling = :($PrecompileTools.is_generating_output() && $PrecompileTools.workload_enabled(@__MODULE__))
+    local iscompiling = :(
+        $PrecompileTools.is_generating_output() &&
+        $PrecompileTools.workload_enabled(@__MODULE__)
+    )
     ex = quote
         begin
             $PrecompileTools.@latestworld_if_toplevel  # block inference from proceeding beyond this point (xref https://github.com/JuliaLang/julia/issues/57957)
@@ -112,7 +115,10 @@ runtime dispatches (though they will be precompiled anyway if the runtime-callee
 to your package).
 """
 macro setup_workload(ex::Expr)
-    local iscompiling = :((ccall(:jl_generating_output, Cint, ()) == 1 && $PrecompileTools.workload_enabled(@__MODULE__)))
+    local iscompiling = :((
+        ccall(:jl_generating_output, Cint, ()) == 1 &&
+        $PrecompileTools.workload_enabled(@__MODULE__)
+    ))
     # Ideally we'd like a `let` around this to prevent namespace pollution, but that seem to
     # trigger inference & codegen in undesirable ways (see #16).
     return quote
