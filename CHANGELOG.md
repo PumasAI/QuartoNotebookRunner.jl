@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+- Improved precompilation of QuartoNotebookWorker and avoided Pkg startup costs by using a scratch space to cache QNW project files [#341].
+
 ## [v0.17.4] - 2025-09-26
 
 ### Added
@@ -473,3 +475,4 @@ caching is enabled. Delete this folder to clear the cache. [#259]
 [#306]: https://github.com/PumasAI/QuartoNotebookRunner.jl/issues/306
 [#335]: https://github.com/PumasAI/QuartoNotebookRunner.jl/issues/335
 [#339]: https://github.com/PumasAI/QuartoNotebookRunner.jl/issues/339
+[#341]: https://github.com/PumasAI/QuartoNotebookRunner.jl/issues/341

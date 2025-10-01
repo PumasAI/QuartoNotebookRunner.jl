@@ -28,11 +28,12 @@ mutable struct File
                 timeout = _extract_timeout(merged_options)
 
                 exe, _exeflags = _julia_exe(exeflags)
+
                 worker = cd(
                     () -> Malt.Worker(;
                         exe,
                         exeflags = _exeflags,
-                        env = vcat(env, quarto_env),
+                        env = vcat(env, quarto_env, startup_env_variables()),
                     ),
                     dirname(path),
                 )
@@ -64,6 +65,14 @@ mutable struct File
             throw(ArgumentError("file does not exist: $path"))
         end
     end
+end
+
+function startup_env_variables()
+    qnw_env_dir = Scratch.@get_scratch!("qnw-env-$(hash(Malt.worker_package))")
+    return [
+        "QUARTONOTEBOOKWORKER_ENV_DIR=$qnw_env_dir",
+        "QUARTONOTEBOOKWORKER_PACKAGE_DIR=$(Malt.worker_package)",
+    ]
 end
 
 struct SourceRange
@@ -237,7 +246,11 @@ function refresh!(file::File, options::Dict)
         Malt.stop(file.worker)
         exe, _exeflags = _julia_exe(exeflags)
         file.worker = cd(
-            () -> Malt.Worker(; exe, exeflags = _exeflags, env = vcat(env, quarto_env)),
+            () -> Malt.Worker(;
+                exe,
+                exeflags = _exeflags,
+                env = vcat(env, quarto_env, startup_env_variables()),
+            ),
             dirname(file.path),
         )
         file.exe = exe
@@ -1575,7 +1588,6 @@ function run!(
 
             # block until a decision is reached
             decision = take!(file.run_decision_channel)
-
             # :forceclose might have been set from another task
             if decision === :forceclose
                 close!(server, file.path) # this is in the same task, so reentrant lock allows access
