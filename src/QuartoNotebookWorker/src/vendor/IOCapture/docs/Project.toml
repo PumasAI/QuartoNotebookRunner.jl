@@ -1,2 +1,4 @@
 [deps]
 Changelog = "5217a498-cd5d-4ec6-b8c2-9b85a09b6e3e"
+Documenter = "e30172f5-a6a5-5a46-863b-614d45cd2de4"
+IOCapture = "b5f81e59-6552-4d32-b1f0-c071b021bf89"
