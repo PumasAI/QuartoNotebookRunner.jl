@@ -3,6 +3,12 @@
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## Version [v1.0.0] - 2025-10-22
+
+### Other
+
+* A 1.0 release of the package with no changes relative to the last release. ([#24], [#28])
+
 ## Version [v0.2.5] - 2024-06-12
 
 ### Added
@@ -72,6 +78,7 @@ Initial release exporting the `iocapture` function.
 [v0.2.3]: https://github.com/JuliaDocs/IOCapture.jl/releases/tag/v0.2.3
 [v0.2.4]: https://github.com/JuliaDocs/IOCapture.jl/releases/tag/v0.2.4
 [v0.2.5]: https://github.com/JuliaDocs/IOCapture.jl/releases/tag/v0.2.5
+[v1.0.0]: https://github.com/JuliaDocs/IOCapture.jl/releases/tag/v1.0.0
 [#1]: https://github.com/JuliaDocs/IOCapture.jl/issues/1
 [#2]: https://github.com/JuliaDocs/IOCapture.jl/issues/2
 [#3]: https://github.com/JuliaDocs/IOCapture.jl/issues/3
@@ -83,5 +90,7 @@ Initial release exporting the `iocapture` function.
 [#20]: https://github.com/JuliaDocs/IOCapture.jl/issues/20
 [#21]: https://github.com/JuliaDocs/IOCapture.jl/issues/21
 [#23]: https://github.com/JuliaDocs/IOCapture.jl/issues/23
+[#24]: https://github.com/JuliaDocs/IOCapture.jl/issues/24
 [#26]: https://github.com/JuliaDocs/IOCapture.jl/issues/26
+[#28]: https://github.com/JuliaDocs/IOCapture.jl/issues/28
 [fredrikekre/Literate.jl#138]: https://github.com/fredrikekre/Literate.jl/issues/138
