@@ -43,31 +43,29 @@ jobs:
       fail-fast: false
       matrix:
         version:
-          - "1.6"
-          - "1.11"
+          - "min"
+          - "1"
         os:
           - ubuntu-latest
           - macos-13
           - windows-latest
-        # macOS 1.6 seems to consistently stall on `Plots` notebooks. Skip this
+        # macOS min seems to consistently stall on `Plots` notebooks. Skip this
         # combination and test on a slightly newer macOS version instead.
-        # 1.6 windows has recently stalled out on mimetypes, use 1.7 windows in
-        # the tests. We still test 1.6 on Linux.
+        # min windows has recently stalled out on mimetypes, use lts windows in
+        # the tests. We still test min on Linux.
         exclude:
-          - version: "1.6"
+          - version: "min"
             os: macos-13
-          - version: "1.6"
+          - version: "min"
             os: windows-latest
-          # Performance regressions on Julia 1.11 on Windows. Currently not
+          # Performance regressions on Julia 1 on Windows. Currently not
           # viable to run the test suite there.
-          - version: "1.11"
+          - version: "1"
             os: windows-latest
         include:
-          - version: "1.7"
+          - version: "lts"
             os: macos-13
-          - version: "1.7"
-            os: windows-latest
-          - version: "1.10"
+          - version: "lts"
             os: windows-latest
     steps:
       - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
@@ -91,8 +89,8 @@ jobs:
           r-version: "4.3.3"
       - run: echo "LD_LIBRARY_PATH=$(R RHOME)/lib:$LD_LIBRARY_PATH" >> $GITHUB_ENV
         if: matrix.os == 'ubuntu-latest'
-      - run: julia -e 'cp("/usr/lib/x86_64-linux-gnu/libstdc++.so.6", joinpath(dirname(Sys.BINDIR), "lib", "julia", "libstdc++.so.6"); force = true)' 
-        if: matrix.os == 'ubuntu-latest' && matrix.version == '1.6'
+      - run: julia -e 'cp("/usr/lib/x86_64-linux-gnu/libstdc++.so.6", joinpath(dirname(Sys.BINDIR), "lib", "julia", "libstdc++.so.6"); force = true)'
+        if: matrix.os == 'ubuntu-latest' && matrix.version == 'min'
 
       # TODO: use quarto_jll for integration tests once modern enough versions are available
       - uses: quarto-dev/quarto-actions/setup@9e48da27e184aa238fcb49f5db75469626d43adb # v2.1.9
@@ -104,9 +102,9 @@ jobs:
         with:
           depwarn: "yes"
       - uses: julia-actions/julia-processcoverage@03114f09f119417c3242a9fb6e0b722676aedf38 # v1.2.2
-        if: matrix.os == 'ubuntu-latest' && matrix.version == '1.11'
+        if: matrix.os == 'ubuntu-latest' && matrix.version == '1'
       - uses: codecov/codecov-action@5a1091511ad55cbe89839c7260b706298ca349f7 # v5.5.1
-        if: matrix.os == 'ubuntu-latest' && matrix.version == '1.11'
+        if: matrix.os == 'ubuntu-latest' && matrix.version == '1'
         with:
           verbose: true
           files: lcov.info
