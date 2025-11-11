@@ -18,6 +18,9 @@ concurrency:
 permissions:
   contents: read
 
+env:
+  JULIA_PYTHONCALL_EXE: "@CondaPkg"
+
 jobs:
   finalize:
     timeout-minutes: 10
