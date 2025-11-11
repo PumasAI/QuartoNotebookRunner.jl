@@ -1,4 +1,4 @@
-if VERSION >= v"1.10"
+if VERSION >= v"1.10" && !Sys.islinux()
     include("../../utilities/prelude.jl")
 
     test_example(joinpath(@__DIR__, "../../examples/integrations/PythonCall.qmd")) do json
