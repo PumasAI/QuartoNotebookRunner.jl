@@ -1,0 +1,9 @@
+---
+engine: julia
+julia:
+    exeflags: ["+1.12"]
+---
+
+```{julia}
+VERSION
+```

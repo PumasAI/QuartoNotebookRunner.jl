@@ -14,6 +14,7 @@ test_example(joinpath(@__DIR__, "../examples/parameters.qmd")) do json
     @test cells[18]["outputs"][1]["output_type"] == "error"
     @test contains(
         cells[18]["outputs"][1]["traceback"][1],
+        VERSION >= v"1.12" ? "invalid assignment to constant" :
         "invalid redefinition of constant",
     )
 end
