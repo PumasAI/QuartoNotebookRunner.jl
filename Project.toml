@@ -29,7 +29,7 @@ YAML = "ddb6d928-2868-570f-bddf-ab3f9cf99eb6"
 [compat]
 BSON = "0.3"
 Base64 = "1.6"
-CommonMark = "0.8, 0.9"
+CommonMark = "0.8, 0.9, 0.10"
 Compat = "4"
 Dates = "1.6"
 IOCapture = "0.2, 1"
