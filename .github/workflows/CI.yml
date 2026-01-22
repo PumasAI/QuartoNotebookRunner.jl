@@ -47,7 +47,7 @@ jobs:
           - "1.11"
         os:
           - ubuntu-latest
-          - macos-13
+          - macos-15-intel
           - windows-latest
         # macOS 1.6 seems to consistently stall on `Plots` notebooks. Skip this
         # combination and test on a slightly newer macOS version instead.
@@ -55,7 +55,7 @@ jobs:
         # the tests. We still test 1.6 on Linux.
         exclude:
           - version: "1.6"
-            os: macos-13
+            os: macos-15-intel
           - version: "1.6"
             os: windows-latest
           # Performance regressions on Julia 1.11 on Windows. Currently not
@@ -64,7 +64,7 @@ jobs:
             os: windows-latest
         include:
           - version: "1.7"
-            os: macos-13
+            os: macos-15-intel
           - version: "1.7"
             os: windows-latest
           - version: "1.10"
