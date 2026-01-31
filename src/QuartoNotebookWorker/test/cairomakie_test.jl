@@ -56,3 +56,34 @@ end
     @test size[1] ≈ 8 * 96
     @test size[2] ≈ 6 * 96
 end
+
+@testitem "CairoMakie dpi affects pixel dimensions" tags = [:integration] begin
+    import QuartoNotebookWorker as QNW
+    import CairoMakie
+
+    for (dpi, expected_width) in [(100, 400), (200, 800)]
+        QNW.NotebookState.OPTIONS[] = Dict{String,Any}(
+            "format" => Dict(
+                "execute" => Dict(
+                    "fig-width" => 4,
+                    "fig-height" => 3,
+                    "fig-dpi" => dpi,
+                    "fig-format" => "png",
+                ),
+            ),
+        )
+        QNW.NotebookState.CELL_OPTIONS[] = Dict{String,Any}()
+        QNW.NotebookState.define_notebook_module!()
+        QNW.run_package_refresh_hooks()
+
+        fig = CairoMakie.Figure()
+        CairoMakie.Axis(fig[1, 1])
+        result = QNW.render_mimetypes(fig, Dict{String,Any}())
+
+        png_data = result["image/png"].data
+        @test length(png_data) > 24
+        # PNG IHDR width is at bytes 17-20 (1-indexed), big-endian
+        width = ntoh(reinterpret(UInt32, @view(png_data[17:20]))[])
+        @test width == expected_width
+    end
+end
