@@ -21,85 +21,19 @@ permissions:
 jobs:
   finalize:
     timeout-minutes: 10
-    needs: [worker-test, test, format]
+    needs: [test, format]
     if: always()
     runs-on: ubuntu-latest
     steps:
       - run: |
-          echo worker-test: ${{ needs.worker-test.result }}
           echo test: ${{ needs.test.result }}
           echo format: ${{ needs.format.result }}
       - run: exit 1
         if: |
-          (needs.worker-test.result != 'success') ||
           (needs.test.result != 'success') ||
           (needs.format.result != 'success')
 
-  worker-test:
-    runs-on: ${{ matrix.os }}
-    timeout-minutes: 30
-    strategy:
-      fail-fast: false
-      matrix:
-        version:
-          - "1.6"
-          - "1.11"
-        os:
-          - ubuntu-latest
-          - macos-15-intel
-          - windows-latest
-        exclude:
-          - version: "1.6"
-            os: macos-15-intel
-          - version: "1.6"
-            os: windows-latest
-          - version: "1.11"
-            os: windows-latest
-        include:
-          - version: "1.7"
-            os: macos-15-intel
-          - version: "1.7"
-            os: windows-latest
-          - version: "1.10"
-            os: windows-latest
-    steps:
-      - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
-        with:
-          persist-credentials: false
-
-      - uses: julia-actions/setup-julia@5c9647d97b78a5debe5164e9eec09d653d29bd71 # v2.6.1
-        with:
-          version: ${{ matrix.version }}
-
-      - uses: julia-actions/cache@d10a6fd8f31b12404a54613ebad242900567f2b9 # v2.1.0
-
-      - uses: r-lib/actions/setup-r@6f6e5bc62fba3a704f74e7ad7ef7676c5c6a2590 # v2.11.4
-        with:
-          use-public-rspm: true
-          r-version: "4.3.3"
-
-      - run: echo "LD_LIBRARY_PATH=$(R RHOME)/lib:$LD_LIBRARY_PATH" >> $GITHUB_ENV
-        if: matrix.os == 'ubuntu-latest'
-
-      - run: julia -e 'cp("/usr/lib/x86_64-linux-gnu/libstdc++.so.6", joinpath(dirname(Sys.BINDIR), "lib", "julia", "libstdc++.so.6"); force = true)'
-        if: matrix.os == 'ubuntu-latest' && matrix.version == '1.6'
-
-      # Plots.jl's GR backend uses Julia 1.10+ syntax. Remove it on older
-      # Julia to avoid compile errors; the test is filtered out via tags.
-      - run: julia --project=src/QuartoNotebookWorker/test -e 'using Pkg; Pkg.rm("Plots"; io=devnull)'
-        if: matrix.version == '1.6' || matrix.version == '1.7'
-
-      - uses: julia-actions/julia-buildpkg@e3eb439fad4f9aba7da2667e7510e4a46ebc46e1 # v1.7.0
-        with:
-          project: src/QuartoNotebookWorker
-
-      - uses: julia-actions/julia-runtest@d60b785c6f2bdf4ebfb18b2b6f7d93b7dfb0efe3 # v1.11.4
-        with:
-          project: src/QuartoNotebookWorker
-          depwarn: "yes"
-
   test:
-    needs: [worker-test]
     permissions:
       actions: write
       contents: read
@@ -157,9 +91,25 @@ jobs:
           r-version: "4.3.3"
       - run: echo "LD_LIBRARY_PATH=$(R RHOME)/lib:$LD_LIBRARY_PATH" >> $GITHUB_ENV
         if: matrix.os == 'ubuntu-latest'
-      - run: julia -e 'cp("/usr/lib/x86_64-linux-gnu/libstdc++.so.6", joinpath(dirname(Sys.BINDIR), "lib", "julia", "libstdc++.so.6"); force = true)' 
+      - run: julia -e 'cp("/usr/lib/x86_64-linux-gnu/libstdc++.so.6", joinpath(dirname(Sys.BINDIR), "lib", "julia", "libstdc++.so.6"); force = true)'
         if: matrix.os == 'ubuntu-latest' && matrix.version == '1.6'
 
+      # Worker tests
+      # Plots.jl's GR backend uses Julia 1.10+ syntax. Remove it on older
+      # Julia to avoid compile errors; the test is filtered out via tags.
+      - run: julia --project=src/QuartoNotebookWorker/test -e 'using Pkg; Pkg.rm("Plots"; io=devnull)'
+        if: matrix.version == '1.6' || matrix.version == '1.7'
+
+      - uses: julia-actions/julia-buildpkg@e3eb439fad4f9aba7da2667e7510e4a46ebc46e1 # v1.7.0
+        with:
+          project: src/QuartoNotebookWorker
+
+      - uses: julia-actions/julia-runtest@d60b785c6f2bdf4ebfb18b2b6f7d93b7dfb0efe3 # v1.11.4
+        with:
+          project: src/QuartoNotebookWorker
+          depwarn: "yes"
+
+      # Runner tests
       # TODO: use quarto_jll for integration tests once modern enough versions are available
       - uses: quarto-dev/quarto-actions/setup@8a96df13519ee81fd526f2dfca5962811136661b # v2.2.0
         with:
