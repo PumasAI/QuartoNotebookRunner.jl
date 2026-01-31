@@ -2,6 +2,8 @@
 title: Cell Options
 ---
 
+Cell-level eval options:
+
 ```{julia}
 a = 1
 ```
@@ -14,4 +16,16 @@ a = 2
 ```{julia}
 #| eval: true
 a
+```
+
+Frontmatter-level eval: false with cell overrides:
+
+```{julia}
+#| eval: false
+println("shouldn't run")
+```
+
+```{julia}
+#| eval: true
+println("should run")
 ```
