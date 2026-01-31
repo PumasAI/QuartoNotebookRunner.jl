@@ -82,3 +82,118 @@ end
     @test mime == "text/markdown"
     @test contains(String(take!(out)), "```{=typst}")
 end
+
+@testitem "render with custom typst MIME" begin
+    import QuartoNotebookWorker as QNW
+
+    QNW.NotebookState.OPTIONS[] =
+        Dict{String,Any}("format" => Dict("pandoc" => Dict("to" => "typst")))
+    QNW.NotebookState.CELL_OPTIONS[] = Dict{String,Any}()
+    QNW.NotebookState.define_notebook_module!()
+
+    nb_mod = QNW.NotebookState.notebook_module()
+    Core.eval(
+        nb_mod,
+        quote
+            struct TypstTable end
+            Base.show(io::IO, ::MIME"QuartoNotebookRunner/typst", ::TypstTable) =
+                print(io, "#table()")
+        end,
+    )
+
+    results, _ = QNW.render("TypstTable()", "test.jl", 1)
+
+    @test length(results) == 1
+    @test haskey(results[1].results, "text/markdown")
+    md = String(results[1].results["text/markdown"].data)
+    @test contains(md, "```{=typst}")
+    @test contains(md, "#table()")
+end
+
+@testitem "soft scope" begin
+    import QuartoNotebookWorker as QNW
+
+    QNW.NotebookState.OPTIONS[] = Dict{String,Any}()
+    QNW.NotebookState.CELL_OPTIONS[] = Dict{String,Any}()
+    QNW.NotebookState.define_notebook_module!()
+
+    code = """
+    s = 0
+    for i = 1:10
+        s += i
+    end
+    s
+    """
+    result, _ = QNW.render(code, "test.jl", 1)
+    @test String(result[1].results["text/plain"].data) == "55"
+end
+
+@testitem "shell mode execution" begin
+    import QuartoNotebookWorker as QNW
+
+    QNW.NotebookState.OPTIONS[] = Dict{String,Any}()
+    QNW.NotebookState.CELL_OPTIONS[] = Dict{String,Any}()
+    QNW.NotebookState.define_notebook_module!()
+
+    if !Sys.iswindows()
+        result, _ = QNW.render(";echo OK", "test.jl", 1)
+        @test contains(result[1].output, "OK")
+    else
+        result, _ = QNW.render(";cmd /c echo OK", "test.jl", 1)
+        @test contains(result[1].output, "OK")
+    end
+end
+
+@testitem "pkg mode execution" begin
+    import QuartoNotebookWorker as QNW
+
+    QNW.NotebookState.OPTIONS[] = Dict{String,Any}()
+    QNW.NotebookState.CELL_OPTIONS[] = Dict{String,Any}()
+    QNW.NotebookState.define_notebook_module!()
+
+    result, _ = QNW.render("]status", "test.jl", 1)
+    @test contains(result[1].output, "Status") || contains(result[1].output, "Project")
+end
+
+@testitem "help mode execution" begin
+    import QuartoNotebookWorker as QNW
+
+    QNW.NotebookState.OPTIONS[] = Dict{String,Any}()
+    QNW.NotebookState.CELL_OPTIONS[] = Dict{String,Any}()
+    QNW.NotebookState.define_notebook_module!()
+
+    result, _ = QNW.render("?Int64", "test.jl", 1)
+    @test haskey(result[1].results, "text/plain")
+    @test contains(String(result[1].results["text/plain"].data), "64-bit signed integer")
+end
+
+@testitem "print custom struct" begin
+    import QuartoNotebookWorker as QNW
+
+    QNW.NotebookState.OPTIONS[] = Dict{String,Any}()
+    QNW.NotebookState.CELL_OPTIONS[] = Dict{String,Any}()
+    QNW.NotebookState.define_notebook_module!()
+
+    code = """
+    struct M
+        a::Int
+    end
+    x = M(22)
+    print(x)
+    """
+    result, _ = QNW.render(code, "test.jl", 1)
+    @test result[1].output == "M(22)"
+end
+
+@testitem "display with specific MIME" begin
+    import QuartoNotebookWorker as QNW
+
+    QNW.NotebookState.OPTIONS[] = Dict{String,Any}()
+    QNW.NotebookState.CELL_OPTIONS[] = Dict{String,Any}()
+    QNW.NotebookState.define_notebook_module!()
+
+    result, _ = QNW.render("display(MIME(\"text/html\"), HTML(\"<p></p>\"))", "test.jl", 1)
+    @test length(result[1].display_results) == 1
+    @test haskey(result[1].display_results[1], "text/html")
+    @test String(result[1].display_results[1]["text/html"].data) == "<p></p>"
+end
