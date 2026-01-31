@@ -27,7 +27,7 @@ jobs:
     steps:
       - run: |
           echo test: ${{ needs.test.result }}
-          echo test: ${{ needs.format.result }}
+          echo format: ${{ needs.format.result }}
       - run: exit 1
         if: |
           (needs.test.result != 'success') ||
@@ -91,9 +91,25 @@ jobs:
           r-version: "4.3.3"
       - run: echo "LD_LIBRARY_PATH=$(R RHOME)/lib:$LD_LIBRARY_PATH" >> $GITHUB_ENV
         if: matrix.os == 'ubuntu-latest'
-      - run: julia -e 'cp("/usr/lib/x86_64-linux-gnu/libstdc++.so.6", joinpath(dirname(Sys.BINDIR), "lib", "julia", "libstdc++.so.6"); force = true)' 
+      - run: julia -e 'cp("/usr/lib/x86_64-linux-gnu/libstdc++.so.6", joinpath(dirname(Sys.BINDIR), "lib", "julia", "libstdc++.so.6"); force = true)'
         if: matrix.os == 'ubuntu-latest' && matrix.version == '1.6'
 
+      # Worker tests
+      # Plots.jl's GR backend uses Julia 1.10+ syntax. Remove it on older
+      # Julia to avoid compile errors; the test is filtered out via tags.
+      - run: julia --project=src/QuartoNotebookWorker/test -e 'using Pkg; Pkg.rm("Plots"; io=devnull)'
+        if: matrix.version == '1.6' || matrix.version == '1.7'
+
+      - uses: julia-actions/julia-buildpkg@e3eb439fad4f9aba7da2667e7510e4a46ebc46e1 # v1.7.0
+        with:
+          project: src/QuartoNotebookWorker
+
+      - uses: julia-actions/julia-runtest@d60b785c6f2bdf4ebfb18b2b6f7d93b7dfb0efe3 # v1.11.4
+        with:
+          project: src/QuartoNotebookWorker
+          depwarn: "yes"
+
+      # Runner tests
       # TODO: use quarto_jll for integration tests once modern enough versions are available
       - uses: quarto-dev/quarto-actions/setup@8a96df13519ee81fd526f2dfca5962811136661b # v2.2.0
         with:

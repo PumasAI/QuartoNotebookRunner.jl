@@ -6,6 +6,7 @@ Manifest.toml
 *.typ
 *.png
 *.jls
+*.cov
 .DS_Store
 .CondaPkg
 .cache

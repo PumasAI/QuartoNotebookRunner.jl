@@ -38,3 +38,25 @@ end
 Base.show(io::IO, c::Color) = printstyled(io, c.text; color = :red)
 Color("red")
 ```
+
+Warning suppression:
+
+```{julia}
+#| warning: false
+@info "suppressed info"
+@warn "suppressed warn"
+@error "suppressed error"
+```
+
+```{julia}
+@info "visible info"
+@warn "visible warn"
+@error "visible error"
+```
+
+```{julia}
+#| warning: true
+@info "explicit info"
+@warn "explicit warn"
+@error "explicit error"
+```
