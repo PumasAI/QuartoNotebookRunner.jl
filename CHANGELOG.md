@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+### Added
+
+- Unit tests for QuartoNotebookWorker using TestItemRunner, run in CI before main test suite [#385]
+
 ## [v0.17.4] - 2025-09-26
 
 ### Added
