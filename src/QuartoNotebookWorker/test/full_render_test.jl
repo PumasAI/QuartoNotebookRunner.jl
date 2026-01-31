@@ -56,7 +56,8 @@ end
     QNW.NotebookState.define_notebook_module!()
 
     result, _ = QNW.render("1 +", "test.jl", 1)
-    @test result[1].error == "Base.Meta.ParseError"
+    # Julia 1.6 throws ErrorException, later versions throw ParseError
+    @test result[1].error in ("Base.Meta.ParseError", "ErrorException")
 end
 
 @testitem "render with cell expansion" begin
