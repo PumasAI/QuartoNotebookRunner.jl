@@ -84,6 +84,11 @@ jobs:
       - run: julia -e 'cp("/usr/lib/x86_64-linux-gnu/libstdc++.so.6", joinpath(dirname(Sys.BINDIR), "lib", "julia", "libstdc++.so.6"); force = true)'
         if: matrix.os == 'ubuntu-latest' && matrix.version == '1.6'
 
+      # Plots.jl's GR backend uses Julia 1.10+ syntax. Remove it on older
+      # Julia to avoid compile errors; the test is filtered out via tags.
+      - run: julia --project=src/QuartoNotebookWorker/test -e 'using Pkg; Pkg.rm("Plots"; io=devnull)'
+        if: matrix.version == '1.6' || matrix.version == '1.7'
+
       - uses: julia-actions/julia-buildpkg@e3eb439fad4f9aba7da2667e7510e4a46ebc46e1 # v1.7.0
         with:
           project: src/QuartoNotebookWorker

@@ -1,4 +1,4 @@
-@testitem "Plots extension renders" tags = [:integration] begin
+@testitem "Plots extension renders" tags = [:integration, :julia110] begin
     import QuartoNotebookWorker as QNW
     import Plots
 
