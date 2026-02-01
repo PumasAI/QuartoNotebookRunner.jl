@@ -10,8 +10,7 @@ QuartoNotebookRunner.jl serves as the Julia evaluation engine for Quarto's `engi
 - Manages notebook parsing and worker process orchestration
 - `server.jl`: Core server managing notebook execution
 - `socket.jl`: JSON API for Quarto CLI communication
-- `worker.jl`: Worker process lifecycle management
-- `Malt.jl`: Custom vendored process management
+- `WorkerIPC.jl`: Host-side worker process communication
 
 ### Worker Package (`src/QuartoNotebookWorker/`)
 - Runs in isolated Julia processes for notebook execution

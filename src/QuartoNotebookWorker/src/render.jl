@@ -12,7 +12,7 @@ function render(
     # output is `is_expandable` or not. Recursive calls to `_render_thunk` don't
     # matter to the server, it's just the outermost cell that matters.
     is_expansion_ref = Ref(false)
-    result = Base.@invokelatest(
+    cells = Base.@invokelatest(
         collect(
             _render_thunk(code, cell_options, is_expansion_ref; inline) do
                 Base.@invokelatest include_str(
@@ -25,7 +25,7 @@ function render(
             end,
         )
     )
-    return (result, is_expansion_ref[])
+    return WorkerIPC.RenderResponse(cells, is_expansion_ref[])
 end
 
 # Recursively render cell thunks. This might be an `include_str` call,
@@ -54,17 +54,17 @@ function _render_thunk(
             is_expansion = _is_expanded(captured.value, expansion)
         catch error
             backtrace = catch_backtrace()
-            return ((;
-                code = "", # an expanded cell that errored can't have returned code
-                cell_options = Dict{String,Any}(), # or options
-                results = Dict{String,@NamedTuple{error::Bool, data::Vector{UInt8}}}(),
-                display_results,
-                output = captured.output,
-                error = string(typeof(error)),
-                backtrace = collect(
-                    eachline(IOBuffer(clean_bt_str(true, backtrace, error))),
+            return (
+                WorkerIPC.CellResult(
+                    "", # an expanded cell that errored can't have returned code
+                    Dict{String,Any}(), # or options
+                    Dict{String,WorkerIPC.MimeResult}(),
+                    display_results,
+                    captured.output,
+                    string(typeof(error)),
+                    collect(eachline(IOBuffer(clean_bt_str(true, backtrace, error)))),
                 ),
-            ),)
+            )
         end
         # Track in this side-channel whether the cell is an expansion or not.
         is_expansion_ref[] = is_expansion
@@ -98,24 +98,29 @@ function _render_thunk(
             cell_options;
             inline,
         )
-        # Wrap the `NamedTuple` in a `Tuple` to avoid the `NamedTuple`
-        # being flattened into just it's values when passed into
+        # Wrap in a Tuple to avoid being flattened when passed into
         # `flatmap` and `collect`.
-        return ((;
-            code,
-            cell_options,
-            results,
-            display_results,
-            output = captured.output,
-            error = captured.error ? string(typeof(captured.value)) : nothing,
-            backtrace = collect(
-                eachline(
-                    IOBuffer(
-                        clean_bt_str(captured.error, captured.backtrace, captured.value),
+        return (
+            WorkerIPC.CellResult(
+                code,
+                Dict{String,Any}(cell_options),
+                results,
+                display_results,
+                captured.output,
+                captured.error ? string(typeof(captured.value)) : nothing,
+                collect(
+                    eachline(
+                        IOBuffer(
+                            clean_bt_str(
+                                captured.error,
+                                captured.backtrace,
+                                captured.value,
+                            ),
+                        ),
                     ),
                 ),
             ),
-        ),)
+        )
     end
 end
 
@@ -342,7 +347,7 @@ function render_mimetypes(
     options = NotebookState.OPTIONS[]
     to_format = rget(options, ("format", "pandoc", "to"), nothing)
 
-    result = Dict{String,@NamedTuple{error::Bool, data::Vector{UInt8}}}()
+    result = Dict{String,WorkerIPC.MimeResult}()
     # Some output formats that we want to write to need different
     # handling of valid MIME types. Currently `docx` and `typst`. When
     # we detect that the `to` format is one of these then we select a
@@ -407,9 +412,10 @@ function render_mimetypes(
                 end
             catch error
                 backtrace = catch_backtrace()
-                result[mime] = (;
-                    error = true,
-                    data = clean_bt_str(
+                result[mime] = WorkerIPC.MimeResult(
+                    mime,
+                    true,
+                    clean_bt_str(
                         true,
                         backtrace,
                         error,
@@ -430,14 +436,14 @@ function render_mimetypes(
             # of a PNG image or converting a JSON string to an
             # actual JSON object that avoids double serializing it
             # in the notebook output.
-            result[new_mime] = (; error = false, data = take!(new_buffer))
+            result[new_mime] = WorkerIPC.MimeResult(new_mime, false, take!(new_buffer))
             skip_other_mimes && break
         end
     end
     return result
 end
 render_mimetypes(value::Nothing, cell_options; inline::Bool = false, only = nothing) =
-    Dict{String,@NamedTuple{error::Bool, data::Vector{UInt8}}}()
+    Dict{String,WorkerIPC.MimeResult}()
 
 _matching_mimetype(mime::String, only::Nothing) = true
 _matching_mimetype(mime::String, only::String) = mime == only

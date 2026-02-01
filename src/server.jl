@@ -1,7 +1,7 @@
 # Types.
 
 mutable struct File
-    worker::Malt.Worker
+    worker::WorkerIPC.Worker
     path::String
     source_code_hash::UInt64
     output_chunks::Vector
@@ -29,7 +29,7 @@ mutable struct File
 
                 exe, _exeflags = _julia_exe(exeflags)
                 worker = cd(
-                    () -> Malt.Worker(;
+                    () -> WorkerIPC.Worker(;
                         exe,
                         exeflags = _exeflags,
                         env = vcat(env, quarto_env),
@@ -220,16 +220,20 @@ end
 
 function init!(file::File, options::Dict)
     worker = file.worker
-    Malt.remote_eval_fetch(worker, worker_init(file, options))
+    WorkerIPC.call(worker, WorkerIPC.WorkerInitRequest(path = file.path, options = options))
 end
 
 function refresh!(file::File, options::Dict)
     exeflags, env, quarto_env = _exeflags_and_env(options)
-    if exeflags != file.exeflags || env != file.env || !Malt.isrunning(file.worker) # the worker might have been killed on another task
-        Malt.stop(file.worker)
+    if exeflags != file.exeflags || env != file.env || !WorkerIPC.isrunning(file.worker) # the worker might have been killed on another task
+        WorkerIPC.stop(file.worker)
         exe, _exeflags = _julia_exe(exeflags)
         file.worker = cd(
-            () -> Malt.Worker(; exe, exeflags = _exeflags, env = vcat(env, quarto_env)),
+            () -> WorkerIPC.Worker(;
+                exe,
+                exeflags = _exeflags,
+                env = vcat(env, quarto_env),
+            ),
             dirname(file.path),
         )
         file.exe = exe
@@ -240,7 +244,7 @@ function refresh!(file::File, options::Dict)
         init!(file, options)
     end
     refresh_quarto_env_vars!(file, quarto_env)
-    Malt.remote_eval_fetch(file.worker, :(refresh!($(options)); revise_hook()))
+    WorkerIPC.call(file.worker, WorkerIPC.WorkerRefreshRequest(options = options))
 end
 
 # Environment variables provided by Quarto may change between `quarto render`
@@ -248,12 +252,7 @@ end
 # them before each run.
 function refresh_quarto_env_vars!(file::File, quarto_env)
     if !isempty(quarto_env)
-        Malt.remote_eval_fetch(file.worker, quote
-            for each in $quarto_env
-                k, v = Base.splitenv(each)
-                ENV[k] = v
-            end
-        end)
+        WorkerIPC.call(file.worker, WorkerIPC.SetEnvVarsRequest(vars = quarto_env))
     end
     return nothing
 end
@@ -995,14 +994,17 @@ function evaluate_raw_cells!(
 
                 # Offset the line number by 1 to account for the triple backticks
                 # that are part of the markdown syntax for code blocks.
-                expr = :(render(
-                    $source,
-                    $(chunk.file),
-                    $(chunk.line + 1),
-                    $(chunk.cell_options),
-                ))
-
-                worker_results, expand_cell = Malt.remote_eval_fetch(f.worker, expr)
+                render_response = WorkerIPC.call(
+                    f.worker,
+                    WorkerIPC.RenderRequest(
+                        code = source,
+                        file = chunk.file,
+                        line = chunk.line + 1,
+                        cell_options = chunk.cell_options,
+                    ),
+                )
+                worker_results = render_response.cells
+                expand_cell = render_response.is_expansion
 
                 # When the result of the cell evaluation is a cell expansion
                 # then we insert the original cell contents before the expanded
@@ -1203,19 +1205,22 @@ function evaluate_raw_cells!(
                             if startswith(node.literal, "{python}")
                                 source_code = wrap_with_python_boilerplate(source_code)
                             end
-                            expr = :(render(
-                                $(source_code),
-                                $(chunk.file),
-                                $(chunk.line);
-                                inline = true,
-                            ))
                             # There should only ever be a single result from an
                             # inline evaluation since you can't pass cell
                             # options and so `expand` will always be `false`.
-                            worker_results, expand_cell =
-                                Malt.remote_eval_fetch(f.worker, expr)
-                            expand_cell && error("inline code cells cannot be expanded")
-                            remote = only(worker_results)
+                            render_response = WorkerIPC.call(
+                                f.worker,
+                                WorkerIPC.RenderRequest(
+                                    code = source_code,
+                                    file = chunk.file,
+                                    line = chunk.line,
+                                    cell_options = Dict{String,Any}(),
+                                    inline = true,
+                                ),
+                            )
+                            render_response.is_expansion &&
+                                error("inline code cells cannot be expanded")
+                            remote = only(render_response.cells)
                             if !isnothing(remote.error)
                                 # file location is not straightforward to determine with inline literals, but just printing the (presumably short)
                                 # code back instead of a location should be quite helpful
@@ -1270,11 +1275,7 @@ function evaluate_params!(f, params::Dict{String})
         )
     end
 
-    exprs = map(collect(pairs(params))) do (key, value)
-        :(@eval getfield(Main, :Notebook) const $(Symbol(key::String)) = $value)
-    end
-    expr = Expr(:block, exprs...)
-    Malt.remote_eval_fetch(f.worker, expr)
+    WorkerIPC.call(f.worker, WorkerIPC.EvaluateParamsRequest(params = params))
     return
 end
 
@@ -1379,16 +1380,16 @@ function extract_cell_options(source::AbstractString; file::AbstractString, line
     end
 end
 
-function process_inline_results(dict::Dict)
+function process_inline_results(dict::Dict{String,WorkerIPC.MimeResult})
     isempty(dict) && return ""
     # A reduced set of mimetypes are available for inline use.
     for (mime, func) in ["text/markdown" => String, "text/plain" => _escape_markdown]
         if haskey(dict, mime)
-            payload = dict[mime]
-            if payload.error
-                error("Error rendering inline code: $(String(payload.data))")
+            r = dict[mime]
+            if r.error
+                error("Error rendering inline code: $(String(r.data))")
             else
-                return func(payload.data)
+                return func(r.data)
             end
         end
     end
@@ -1399,14 +1400,14 @@ _escape_markdown(s::AbstractString) = replace(s, r"([\\`*_{}[\]()#+\-.!|])" => s
 _escape_markdown(bytes::Vector{UInt8}) = _escape_markdown(String(bytes))
 
 """
-    process_results(dict::Dict{String,Vector{UInt8}})
+    process_results(dict::Dict{String,WorkerIPC.MimeResult})
 
 Process the results of a remote evaluation into a dictionary of mimetypes to
 values. We do here rather than in the worker because we don't want to have to
 define additional functions in the worker and import `Base64` there. The worker
 just has to provide bytes.
 """
-function process_results(dict::Dict{String,@NamedTuple{error::Bool, data::Vector{UInt8}}})
+function process_results(dict::Dict{String,WorkerIPC.MimeResult})
     funcs = Dict(
         "application/json" => json_reader,
         "application/pdf" => Base64.base64encode,
@@ -1737,7 +1738,7 @@ function close!(server::Server, path::String)
             if file.timeout_timer !== nothing
                 close(file.timeout_timer)
             end
-            Malt.stop(file.worker)
+            WorkerIPC.stop(file.worker)
             lock(server.lock) do
                 pop!(server.workers, file.path)
                 _gc_cache_files(joinpath(dirname(path), ".cache"))
@@ -1782,7 +1783,7 @@ function forceclose!(server::Server, path::String)
         else
             put!(file.run_decision_channel, :forceclose)
             t = time()
-            while Malt.isrunning(file.worker)
+            while WorkerIPC.isrunning(file.worker)
                 timeout = 10
                 (time() - t) > timeout && error(
                     "Force close was requested but worker was still running after $timeout seconds.",

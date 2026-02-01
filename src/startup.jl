@@ -13,7 +13,7 @@ function capture(func)
     try
         return func()
     catch err
-        errors_log_file = joinpath(ENV["MALT_WORKER_TEMP_DIR"], "errors.log")
+        errors_log_file = joinpath(ENV["WORKERIPC_TEMP_DIR"], "errors.log")
         open(errors_log_file, "w") do io
             showerror(io, err)
             Base.show_backtrace(io, catch_backtrace())
@@ -69,7 +69,7 @@ let temp = mktempdir()
         worker = joinpath(temp, "QuartoNotebookWorker")
         mkpath(worker)
         push!(LOAD_PATH, worker)
-        open(joinpath(ENV["MALT_WORKER_TEMP_DIR"], "pkg.log"), "w") do io
+        open(joinpath(ENV["WORKERIPC_TEMP_DIR"], "pkg.log"), "w") do io
             ap = Base.active_project()
             try
                 Pkg.activate(worker; io)
@@ -95,7 +95,7 @@ end
 # stdlib loading, which could trigger errors that we would then want this
 # metadata to be able to properly inform the user about.
 capture() do
-    metadata_toml_file = joinpath(ENV["MALT_WORKER_TEMP_DIR"], "metadata.toml")
+    metadata_toml_file = joinpath(ENV["WORKERIPC_TEMP_DIR"], "metadata.toml")
     open(metadata_toml_file, "w") do io
         project_toml_file = Base.active_project()
         if !isnothing(project_toml_file) && isfile(project_toml_file)
@@ -157,4 +157,4 @@ popfirst!(LOAD_PATH)
 # the process is finished off and the notebook needs closing. So anything
 # written after this call is "cleanup" code. "Setup" code all needs to appear
 # before this call.
-capture(QuartoNotebookWorker.Malt.main)
+capture(QuartoNotebookWorker.WorkerIPC.main)

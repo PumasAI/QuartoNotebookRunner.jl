@@ -45,18 +45,18 @@ end
     QNW.NotebookState.CELL_OPTIONS[] = Dict{String,Any}()
     QNW.NotebookState.define_notebook_module!()
 
-    results, is_expansion = QNW.render(
+    response = QNW.render(
         PythonCallSetup.wrap_python("sum([1, 2, 3, 4, 5])"),
         "test.qmd",
         1,
         Dict{String,Any}(),
     )
 
-    @test !is_expansion
-    @test length(results) == 1
-    @test isnothing(results[1].error)
-    @test haskey(results[1].results, "text/plain")
-    @test contains(String(results[1].results["text/plain"].data), "15")
+    @test !response.is_expansion
+    @test length(response.cells) == 1
+    @test isnothing(response.cells[1].error)
+    @test haskey(response.cells[1].results, "text/plain")
+    @test contains(String(response.cells[1].results["text/plain"].data), "15")
 end
 
 @testitem "render() inline Python code" tags = [:integration] setup = [PythonCallSetup] begin
@@ -69,7 +69,7 @@ end
     QNW.NotebookState.CELL_OPTIONS[] = Dict{String,Any}()
     QNW.NotebookState.define_notebook_module!()
 
-    results, _ = QNW.render(
+    response = QNW.render(
         PythonCallSetup.wrap_python("2 + 2"),
         "test.qmd",
         1,
@@ -77,9 +77,9 @@ end
         inline = true,
     )
 
-    @test length(results) == 1
-    @test isnothing(results[1].error)
-    @test contains(String(results[1].results["text/plain"].data), "4")
+    @test length(response.cells) == 1
+    @test isnothing(response.cells[1].error)
+    @test contains(String(response.cells[1].results["text/plain"].data), "4")
 end
 
 @testitem "render() Python code error handling" tags = [:integration] setup =
@@ -93,13 +93,13 @@ end
     QNW.NotebookState.CELL_OPTIONS[] = Dict{String,Any}()
     QNW.NotebookState.define_notebook_module!()
 
-    results, _ = QNW.render(
+    response = QNW.render(
         PythonCallSetup.wrap_python("raise ValueError(\"intentional error\")"),
         "test.qmd",
         1,
         Dict{String,Any}(),
     )
 
-    @test length(results) == 1
-    @test !isnothing(results[1].error)
+    @test length(response.cells) == 1
+    @test !isnothing(response.cells[1].error)
 end

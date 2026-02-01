@@ -14,6 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Replace Malt+BSON with custom binary IPC protocol for worker communication [#388]
 - Evaluate notebook code synchronously instead of spawning tasks [#317]
 
 ## [v0.17.4] - 2025-09-26
@@ -485,3 +486,4 @@ caching is enabled. Delete this folder to clear the cache. [#259]
 [#339]: https://github.com/PumasAI/QuartoNotebookRunner.jl/issues/339
 [#385]: https://github.com/PumasAI/QuartoNotebookRunner.jl/issues/385
 [#387]: https://github.com/PumasAI/QuartoNotebookRunner.jl/issues/387
+[#388]: https://github.com/PumasAI/QuartoNotebookRunner.jl/issues/388

@@ -18,7 +18,6 @@ module QuartoNotebookRunner
 
 # Imports.
 
-import BSON
 import Base64
 import CommonMark
 import Compat
@@ -48,11 +47,10 @@ const QNR_VERSION =
 include_dependency(joinpath(@__DIR__, "..", "Project.toml"))
 
 include("UserError.jl")
-include("Malt.jl")
+include("WorkerIPC.jl")
 include("WorkerSetup.jl")
 include("server.jl")
 include("socket.jl")
-include("worker.jl")
 include("utilities.jl")
 include("precompile.jl")
 

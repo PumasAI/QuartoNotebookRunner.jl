@@ -6,12 +6,12 @@
     QNW.NotebookState.define_notebook_module!()
 
     # Basic expression
-    result, is_expansion = QNW.render("1 + 1", "test.jl", 1)
-    @test is_expansion == false
-    @test length(result) == 1
-    @test result[1].error === nothing
-    @test haskey(result[1].results, "text/plain")
-    @test String(result[1].results["text/plain"].data) == "2"
+    response = QNW.render("1 + 1", "test.jl", 1)
+    @test response.is_expansion == false
+    @test length(response.cells) == 1
+    @test response.cells[1].error === nothing
+    @test haskey(response.cells[1].results, "text/plain")
+    @test String(response.cells[1].results["text/plain"].data) == "2"
 end
 
 @testitem "render with output" begin
@@ -21,8 +21,8 @@ end
     QNW.NotebookState.CELL_OPTIONS[] = Dict{String,Any}()
     QNW.NotebookState.define_notebook_module!()
 
-    result, _ = QNW.render("println(\"hello\")", "test.jl", 1)
-    @test result[1].output == "hello\n"
+    response = QNW.render("println(\"hello\")", "test.jl", 1)
+    @test response.cells[1].output == "hello\n"
 end
 
 @testitem "render with semicolon suppresses output" begin
@@ -32,8 +32,8 @@ end
     QNW.NotebookState.CELL_OPTIONS[] = Dict{String,Any}()
     QNW.NotebookState.define_notebook_module!()
 
-    result, _ = QNW.render("x = 42;", "test.jl", 1)
-    @test isempty(result[1].results)
+    response = QNW.render("x = 42;", "test.jl", 1)
+    @test isempty(response.cells[1].results)
 end
 
 @testitem "render error" begin
@@ -43,9 +43,9 @@ end
     QNW.NotebookState.CELL_OPTIONS[] = Dict{String,Any}()
     QNW.NotebookState.define_notebook_module!()
 
-    result, _ = QNW.render("error(\"test error\")", "test.jl", 1)
-    @test result[1].error == "ErrorException"
-    @test !isempty(result[1].backtrace)
+    response = QNW.render("error(\"test error\")", "test.jl", 1)
+    @test response.cells[1].error == "ErrorException"
+    @test !isempty(response.cells[1].backtrace)
 end
 
 @testitem "render parse error" begin
@@ -55,9 +55,9 @@ end
     QNW.NotebookState.CELL_OPTIONS[] = Dict{String,Any}()
     QNW.NotebookState.define_notebook_module!()
 
-    result, _ = QNW.render("1 +", "test.jl", 1)
+    response = QNW.render("1 +", "test.jl", 1)
     # Julia 1.6 throws ErrorException, later versions throw ParseError
-    @test result[1].error in ("Base.Meta.ParseError", "ErrorException")
+    @test response.cells[1].error in ("Base.Meta.ParseError", "ErrorException")
 end
 
 @testitem "render with cell expansion" begin
@@ -82,9 +82,9 @@ end
         end,
     )
 
-    result, is_expansion = QNW.render("Expandable([1, 2, 3])", "test.jl", 1)
-    @test is_expansion == true
-    @test length(result) == 3
+    response = QNW.render("Expandable([1, 2, 3])", "test.jl", 1)
+    @test response.is_expansion == true
+    @test length(response.cells) == 3
 end
 
 @testitem "render inline mode" begin
@@ -94,9 +94,9 @@ end
     QNW.NotebookState.CELL_OPTIONS[] = Dict{String,Any}()
     QNW.NotebookState.define_notebook_module!()
 
-    result, _ = QNW.render("\"hello\"", "test.jl", 1; inline = true)
+    response = QNW.render("\"hello\"", "test.jl", 1; inline = true)
     # inline mode uses print not show, so no quotes
-    @test String(result[1].results["text/plain"].data) == "hello"
+    @test String(response.cells[1].results["text/plain"].data) == "hello"
 end
 
 @testitem "PNG show method" begin
@@ -165,9 +165,9 @@ end
 
     # warning=false should suppress warnings during render
     cell_options = Dict{String,Any}("warning" => false)
-    result, _ = QNW.render("@warn \"test warning\"; 42", "test.jl", 1, cell_options)
-    @test result[1].error === nothing
-    @test String(result[1].results["text/plain"].data) == "42"
+    response = QNW.render("@warn \"test warning\"; 42", "test.jl", 1, cell_options)
+    @test response.cells[1].error === nothing
+    @test String(response.cells[1].results["text/plain"].data) == "42"
 end
 
 @testitem "clean_bt_str with mimetype=true" begin
