@@ -128,7 +128,7 @@ Base.summary(w::Worker) = "Worker on port $(w.port) with PID $(w.proc_pid)"
 function call(worker::Worker, request::T)::response_type(T) where {T<:IPCRequest}
     state = worker.state
 
-    msg_id, ch = @lock state.lock begin
+    msg_id, ch = lock(state.lock) do
         state.closed && throw(TerminatedWorkerException())
         id = (state.next_id += MsgID(1))
         ch = Channel{Any}(1)
@@ -145,7 +145,9 @@ function call(worker::Worker, request::T)::response_type(T) where {T<:IPCRequest
             take!(ch)  # Get error from _mark_closed
             throw(TerminatedWorkerException())
         end
-        @lock state.lock delete!(state.pending, msg_id)
+        lock(state.lock) do
+            delete!(state.pending, msg_id)
+        end
         rethrow()
     end
 
@@ -186,7 +188,7 @@ end
 # Internal
 
 function _mark_closed(worker::Worker)
-    @lock worker.state.lock begin
+    lock(worker.state.lock) do
         worker.state.closed && return
         worker.state.closed = true
         for ch in values(worker.state.pending)
@@ -209,7 +211,7 @@ function _receive_loop(worker::Worker)
                 msg = read_message(io)
 
                 # Atomically get and remove channel from pending to avoid race with _mark_closed
-                ch = @lock state.lock begin
+                ch = lock(state.lock) do
                     ch = get(state.pending, msg.id, nothing)
                     if ch !== nothing
                         delete!(state.pending, msg.id)
@@ -218,8 +220,8 @@ function _receive_loop(worker::Worker)
                 end
 
                 if ch === nothing
-                    Logging.@error "HOST: response for unknown msg_id" msg.id
-                    continue
+                    Logging.@error "HOST: response for unknown msg_id, treating as protocol corruption" msg.id
+                    break
                 end
 
                 data = try
