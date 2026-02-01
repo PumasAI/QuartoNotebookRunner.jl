@@ -11,6 +11,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Unit tests for QuartoNotebookWorker using TestItemRunner, run in CI before main test suite [#385]
 
+### Changed
+
+- Evaluate notebook code synchronously instead of spawning tasks [#317]
+
 ## [v0.17.4] - 2025-09-26
 
 ### Added
@@ -475,6 +479,7 @@ caching is enabled. Delete this folder to clear the cache. [#259]
 [#304]: https://github.com/PumasAI/QuartoNotebookRunner.jl/issues/304
 [#305]: https://github.com/PumasAI/QuartoNotebookRunner.jl/issues/305
 [#306]: https://github.com/PumasAI/QuartoNotebookRunner.jl/issues/306
+[#317]: https://github.com/PumasAI/QuartoNotebookRunner.jl/issues/317
 [#335]: https://github.com/PumasAI/QuartoNotebookRunner.jl/issues/335
 [#339]: https://github.com/PumasAI/QuartoNotebookRunner.jl/issues/339
 [#385]: https://github.com/PumasAI/QuartoNotebookRunner.jl/issues/385
