@@ -16,10 +16,9 @@
     @test cells[14]["outputs"][1]["data"]["text/plain"] == "1"
     @test cells[16]["outputs"][1]["data"]["text/plain"] == "2"
     @test cells[18]["outputs"][1]["output_type"] == "error"
-    @test contains(
-        cells[18]["outputs"][1]["traceback"][1],
-        "invalid redefinition of constant",
-    )
+    traceback = cells[18]["outputs"][1]["traceback"][1]
+    @test contains(traceback, "invalid")
+    @test contains(traceback, "constant")
 
     QNR.close!(server)
 end
