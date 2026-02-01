@@ -27,15 +27,49 @@ function Base.showerror(io::IO, e::RemoteException)
     print(io, "Remote exception from $(e.worker_summary):\n\n$(e.message)")
 end
 
+# Type-stable result types for pending calls
+
+struct CallOk{T}
+    value::T
+end
+
+struct CallErr
+    exception::Exception
+end
+
+const CallResult{T} = Union{CallOk{T},CallErr}
+
+# Pending call with parametric response type for type-stable dispatch
+
+abstract type AbstractPendingCall end
+
+struct PendingCall{R} <: AbstractPendingCall
+    channel::Channel{CallResult{R}}
+    worker_summary::String
+end
+
+function deliver!(p::PendingCall{R}, success::Bool, data) where {R}
+    if success
+        put!(p.channel, CallOk{R}(data::R))
+    else
+        put!(p.channel, CallErr(RemoteException(p.worker_summary, data::String)))
+    end
+end
+
+function deliver_failure!(p::AbstractPendingCall)
+    put!(p.channel, CallErr(TerminatedWorkerException()))
+end
+
 # Connection state with locking
 
 mutable struct ConnectionState
     lock::ReentrantLock
     next_id::MsgID
-    pending::Dict{MsgID,Channel{Any}}
+    pending::Dict{MsgID,AbstractPendingCall}
     closed::Bool
 
-    ConnectionState() = new(ReentrantLock(), MsgID(0), Dict{MsgID,Channel{Any}}(), false)
+    ConnectionState() =
+        new(ReentrantLock(), MsgID(0), Dict{MsgID,AbstractPendingCall}(), false)
 end
 
 # Worker struct
@@ -126,14 +160,16 @@ Base.summary(w::Worker) = "Worker on port $(w.port) with PID $(w.proc_pid)"
 # Public API
 
 function call(worker::Worker, request::T)::response_type(T) where {T<:IPCRequest}
+    R = response_type(T)
     state = worker.state
+    ch = Channel{CallResult{R}}(1)
+    pending_call = PendingCall{R}(ch, summary(worker))
 
-    msg_id, ch = lock(state.lock) do
+    msg_id = lock(state.lock) do
         state.closed && throw(TerminatedWorkerException())
         id = (state.next_id += MsgID(1))
-        ch = Channel{Any}(1)
-        state.pending[id] = ch
-        (id, ch)
+        state.pending[id] = pending_call
+        id
     end
 
     try
@@ -152,15 +188,7 @@ function call(worker::Worker, request::T)::response_type(T) where {T<:IPCRequest
     end
 
     result = take!(ch)
-
-    if result isa Tuple{Bool,Any}
-        success, value = result
-        success || throw(RemoteException(summary(worker), value))
-        return value
-    else
-        # :terminated from _mark_closed or :deserialize_error from _receive_loop
-        throw(TerminatedWorkerException())
-    end
+    result isa CallOk ? result.value : throw(result.exception)
 end
 
 isrunning(w::Worker)::Bool = Base.process_running(w.proc)
@@ -191,8 +219,8 @@ function _mark_closed(worker::Worker)
     lock(worker.state.lock) do
         worker.state.closed && return
         worker.state.closed = true
-        for ch in values(worker.state.pending)
-            isready(ch) || put!(ch, :terminated)
+        for p in values(worker.state.pending)
+            deliver_failure!(p)
         end
         empty!(worker.state.pending)
     end
@@ -210,16 +238,11 @@ function _receive_loop(worker::Worker)
 
                 msg = read_message(io)
 
-                # Atomically get and remove channel from pending to avoid race with _mark_closed
-                ch = lock(state.lock) do
-                    ch = get(state.pending, msg.id, nothing)
-                    if ch !== nothing
-                        delete!(state.pending, msg.id)
-                    end
-                    ch
+                pending_call = lock(state.lock) do
+                    pop!(state.pending, msg.id, nothing)
                 end
 
-                if ch === nothing
+                if pending_call === nothing
                     Logging.@error "HOST: response for unknown msg_id, treating as protocol corruption" msg.id
                     break
                 end
@@ -229,12 +252,11 @@ function _receive_loop(worker::Worker)
                 catch e
                     Logging.@error "HOST: deserialize error" exception =
                         (e, catch_backtrace())
-                    put!(ch, :deserialize_error)
+                    deliver_failure!(pending_call)
                     continue
                 end
 
-                success = msg.type == MsgType.RESULT_OK
-                put!(ch, (success, data))
+                deliver!(pending_call, msg.type == MsgType.RESULT_OK, data)
             catch e
                 if e isa InterruptException
                     continue
