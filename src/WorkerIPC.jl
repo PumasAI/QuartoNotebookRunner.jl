@@ -49,11 +49,30 @@ struct PendingCall{R} <: AbstractPendingCall
 end
 
 function deliver!(p::PendingCall{R}, success::Bool, data) where {R}
-    if success
-        put!(p.channel, CallOk{R}(data::R))
+    result = if success
+        if data isa R
+            CallOk{R}(data)
+        else
+            CallErr(
+                RemoteException(
+                    p.worker_summary,
+                    "Type mismatch: expected $R, got $(typeof(data))",
+                ),
+            )
+        end
     else
-        put!(p.channel, CallErr(RemoteException(p.worker_summary, data::String)))
+        if data isa String
+            CallErr(RemoteException(p.worker_summary, data))
+        else
+            CallErr(
+                RemoteException(
+                    p.worker_summary,
+                    "Unknown error (unexpected type: $(typeof(data)))",
+                ),
+            )
+        end
     end
+    put!(p.channel, result)
 end
 
 function deliver_failure!(p::AbstractPendingCall)

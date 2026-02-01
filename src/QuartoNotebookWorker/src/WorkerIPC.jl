@@ -83,15 +83,14 @@ end
 function handle_call(io::LockableIO, msg::Message)
     # Deserialize request
     request = try
-        Base.invokelatest(_ipc_deserialize, msg.payload)
+        _ipc_deserialize(msg.payload)
     catch e
         send_error(io, msg.id, e)
         return
     end
 
-    # Dispatch to worker function
     result, success = try
-        (Base.invokelatest(QuartoNotebookWorker.dispatch, request), true)
+        (QuartoNotebookWorker.dispatch(request), true)
     catch e
         (format_error(e, catch_backtrace()), false)
     end
@@ -99,10 +98,14 @@ function handle_call(io::LockableIO, msg::Message)
     # Send response
     msg_type = success ? MsgType.RESULT_OK : MsgType.RESULT_ERR
     payload = try
-        Base.invokelatest(_ipc_serialize, result)
+        _ipc_serialize(result)
     catch e
         msg_type = MsgType.RESULT_ERR
-        Base.invokelatest(_ipc_serialize, format_error(e, catch_backtrace()))
+        try
+            _ipc_serialize(format_error(e, catch_backtrace()))
+        catch
+            _ipc_serialize("Internal error: failed to serialize error")
+        end
     end
 
     try
@@ -113,7 +116,11 @@ function handle_call(io::LockableIO, msg::Message)
 end
 
 function send_error(io::LockableIO, msg_id::MsgID, err)
-    payload = Base.invokelatest(_ipc_serialize, format_error(err, catch_backtrace()))
+    payload = try
+        _ipc_serialize(format_error(err, catch_backtrace()))
+    catch
+        _ipc_serialize("Internal error: failed to serialize error")
+    end
     try
         write_message(io, Message(MsgType.RESULT_ERR, msg_id, payload))
     catch
@@ -121,8 +128,10 @@ function send_error(io::LockableIO, msg_id::MsgID, err)
 end
 
 function format_error(err, bt)
-    sprint() do io
-        Base.invokelatest(showerror, io, err, bt)
+    try
+        sprint(showerror, err, bt)
+    catch
+        "Error formatting failed: $(typeof(err))"
     end
 end
 
