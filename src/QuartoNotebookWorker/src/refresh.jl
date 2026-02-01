@@ -1,8 +1,7 @@
 function refresh!(path, original_options, options = original_options)
-    # Current directory should always start out as the directory of the
-    # notebook file, which is not necessarily right initially if the parent
-    # process was started from a different directory to the notebook.
-    cd(dirname(path))
+    # Set working directory based on cwd option (from execute-dir) or default
+    # to notebook directory.
+    cd(something(options["cwd"], dirname(path)))
     task_local_storage()[:SOURCE_PATH] = path
 
     # Reset back to the original project environment if it happens to

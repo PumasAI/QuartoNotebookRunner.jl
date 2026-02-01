@@ -12,3 +12,4 @@ Manifest.toml
 .cache
 !/test/assets/*
 !/src/QuartoNotebookWorker/src/vendor/Manifest.toml
+tmp/
