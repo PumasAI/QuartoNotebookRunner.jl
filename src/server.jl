@@ -1548,14 +1548,8 @@ function run!(
             file.run_started = Dates.now()
             file.run_finished = nothing
 
-            # we want to be able to force close the worker while `evaluate!` is running,
-            # so we run `evaluate!` in a task and wait for the `run_decision_channel`
-            # further down. Depending on the value fetched from that channel, we either
-            # know that evaluation has finished, or that force closing was requested.
-            while !isempty(file.run_decision_channel)
-                take!(file.run_decision_channel) # empty! not defined on channels in earlier julia versions
-            end
-
+            # Run evaluate! in a task so we can detect force-close requests.
+            # The forceclose! function will directly stop the worker if needed.
             result_task = Threads.@spawn begin
                 try
                     evaluate!(
@@ -1575,9 +1569,15 @@ function run!(
             # block until a decision is reached
             decision = take!(file.run_decision_channel)
 
-            # :forceclose might have been set from another task
+            # forceclose! directly kills the worker, so check if it's still running.
+            # This handles the race where we got :evaluate_finished but the worker
+            # was killed by forceclose! before or during evaluation completion.
+            if !WorkerIPC.isrunning(file.worker)
+                error("File was force-closed during run")
+            end
+
             if decision === :forceclose
-                close!(server, file.path) # this is in the same task, so reentrant lock allows access
+                # Worker already stopped by forceclose!, just error out
                 error("File was force-closed during run")
             elseif decision === :evaluate_finished
                 result = try
@@ -1778,18 +1778,11 @@ function forceclose!(server::Server, path::String)
         # if we've attained the lock, we can close normally
         if lock_attained
             close!(server, path)
-            # but if not, we request a forced close via the run decision channel that
-            # is being waited for in `run!` function
         else
+            # Signal to run! that we're force-closing, then directly stop the worker.
+            # This avoids a race where run! might consume :evaluate_finished first.
             put!(file.run_decision_channel, :forceclose)
-            t = time()
-            while WorkerIPC.isrunning(file.worker)
-                timeout = 10
-                (time() - t) > timeout && error(
-                    "Force close was requested but worker was still running after $timeout seconds.",
-                )
-                sleep(0.1)
-            end
+            WorkerIPC.stop(file.worker)
         end
     finally
         lock_attained && unlock(file.lock)
