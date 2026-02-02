@@ -4,7 +4,8 @@ import Pkg
 
 import ..QuartoNotebookWorker
 
-const PROJECT = Ref("")
+const PROJECT = Ref{String}("")
+const PATH = Ref{String}("")
 const OPTIONS = Ref(Dict{String,Any}())
 const CELL_OPTIONS = Ref(Dict{String,Any}())
 

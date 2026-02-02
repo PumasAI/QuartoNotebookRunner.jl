@@ -2,6 +2,8 @@
     import QuartoNotebookRunner as QNR
     import Base64
 
+    MimeResult = QNR.WorkerIPC.MimeResult
+
     # Helper: create minimal PNG with pHYs chunk for DPI testing
     function make_test_png(width, height, dpi)
         buf = IOBuffer()
@@ -45,9 +47,8 @@
     # 800x600 at 192 DPI -> 400x300 CSS pixels
     png_bytes = make_test_png(800, 600, 192)
 
-    results = Dict{String,@NamedTuple{error::Bool, data::Vector{UInt8}}}(
-        "image/png" => (error = false, data = png_bytes),
-    )
+    results =
+        Dict{String,MimeResult}("image/png" => MimeResult("image/png", false, png_bytes))
 
     processed = QNR.process_results(results)
 
@@ -60,9 +61,11 @@ end
 @testitem "process_results handles multiple MIME types" tags = [:unit] begin
     import QuartoNotebookRunner as QNR
 
-    results = Dict{String,@NamedTuple{error::Bool, data::Vector{UInt8}}}(
-        "text/plain" => (error = false, data = Vector{UInt8}("hello")),
-        "text/html" => (error = false, data = Vector{UInt8}("<b>hello</b>")),
+    MimeResult = QNR.WorkerIPC.MimeResult
+
+    results = Dict{String,MimeResult}(
+        "text/plain" => MimeResult("text/plain", false, Vector{UInt8}("hello")),
+        "text/html" => MimeResult("text/html", false, Vector{UInt8}("<b>hello</b>")),
     )
 
     processed = QNR.process_results(results)
@@ -75,10 +78,13 @@ end
 @testitem "process_results collects show errors" tags = [:unit] begin
     import QuartoNotebookRunner as QNR
 
-    results = Dict{String,@NamedTuple{error::Bool, data::Vector{UInt8}}}(
-        "text/plain" => (
-            error = true,
-            data = Vector{UInt8}("MethodError: no method matching show(...)"),
+    MimeResult = QNR.WorkerIPC.MimeResult
+
+    results = Dict{String,MimeResult}(
+        "text/plain" => MimeResult(
+            "text/plain",
+            true,
+            Vector{UInt8}("MethodError: no method matching show(...)"),
         ),
     )
 
@@ -92,10 +98,13 @@ end
 @testitem "process_results passes through markdown" tags = [:unit] begin
     import QuartoNotebookRunner as QNR
 
+    MimeResult = QNR.WorkerIPC.MimeResult
+
     # typst raw block example
     typst_content = "```{=typst}\n#figure(...)\n```"
-    results = Dict{String,@NamedTuple{error::Bool, data::Vector{UInt8}}}(
-        "text/markdown" => (error = false, data = Vector{UInt8}(typst_content)),
+    results = Dict{String,MimeResult}(
+        "text/markdown" =>
+            MimeResult("text/markdown", false, Vector{UInt8}(typst_content)),
     )
 
     processed = QNR.process_results(results)
@@ -106,9 +115,12 @@ end
 @testitem "process_results handles JSON content" tags = [:unit] begin
     import QuartoNotebookRunner as QNR
 
+    MimeResult = QNR.WorkerIPC.MimeResult
+
     json_content = """{"key": "value", "number": 42}"""
-    results = Dict{String,@NamedTuple{error::Bool, data::Vector{UInt8}}}(
-        "application/json" => (error = false, data = Vector{UInt8}(json_content)),
+    results = Dict{String,MimeResult}(
+        "application/json" =>
+            MimeResult("application/json", false, Vector{UInt8}(json_content)),
     )
 
     processed = QNR.process_results(results)
@@ -121,10 +133,12 @@ end
     import QuartoNotebookRunner as QNR
     import Base64
 
+    MimeResult = QNR.WorkerIPC.MimeResult
+
     # Fake PDF content
     pdf_bytes = Vector{UInt8}("%PDF-1.4 fake content")
-    results = Dict{String,@NamedTuple{error::Bool, data::Vector{UInt8}}}(
-        "application/pdf" => (error = false, data = pdf_bytes),
+    results = Dict{String,MimeResult}(
+        "application/pdf" => MimeResult("application/pdf", false, pdf_bytes),
     )
 
     processed = QNR.process_results(results)
@@ -135,8 +149,11 @@ end
 @testitem "process_results unknown MIME returns nothing" tags = [:unit] begin
     import QuartoNotebookRunner as QNR
 
-    results = Dict{String,@NamedTuple{error::Bool, data::Vector{UInt8}}}(
-        "application/x-custom" => (error = false, data = Vector{UInt8}("data")),
+    MimeResult = QNR.WorkerIPC.MimeResult
+
+    results = Dict{String,MimeResult}(
+        "application/x-custom" =>
+            MimeResult("application/x-custom", false, Vector{UInt8}("data")),
     )
 
     processed = QNR.process_results(results)

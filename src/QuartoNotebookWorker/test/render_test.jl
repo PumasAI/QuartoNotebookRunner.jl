@@ -5,7 +5,7 @@
     QNW.NotebookState.CELL_OPTIONS[] = Dict{String,Any}()
     QNW.NotebookState.define_notebook_module!()
 
-    # String output - result values are NamedTuple{(:error, :data)}
+    # String output - result values are MimeResult(mime, error, data)
     result = QNW.render_mimetypes("hello", Dict{String,Any}())
     @test haskey(result, "text/plain")
     @test result["text/plain"].error == false
@@ -101,11 +101,11 @@ end
         end,
     )
 
-    results, _ = QNW.render("TypstTable()", "test.jl", 1)
+    response = QNW.render("TypstTable()", "test.jl", 1)
 
-    @test length(results) == 1
-    @test haskey(results[1].results, "text/markdown")
-    md = String(results[1].results["text/markdown"].data)
+    @test length(response.cells) == 1
+    @test haskey(response.cells[1].results, "text/markdown")
+    md = String(response.cells[1].results["text/markdown"].data)
     @test contains(md, "```{=typst}")
     @test contains(md, "#table()")
 end
@@ -124,8 +124,8 @@ end
     end
     s
     """
-    result, _ = QNW.render(code, "test.jl", 1)
-    @test String(result[1].results["text/plain"].data) == "55"
+    response = QNW.render(code, "test.jl", 1)
+    @test String(response.cells[1].results["text/plain"].data) == "55"
 end
 
 @testitem "shell mode execution" begin
@@ -136,11 +136,11 @@ end
     QNW.NotebookState.define_notebook_module!()
 
     if !Sys.iswindows()
-        result, _ = QNW.render(";echo OK", "test.jl", 1)
-        @test contains(result[1].output, "OK")
+        response = QNW.render(";echo OK", "test.jl", 1)
+        @test contains(response.cells[1].output, "OK")
     else
-        result, _ = QNW.render(";cmd /c echo OK", "test.jl", 1)
-        @test contains(result[1].output, "OK")
+        response = QNW.render(";cmd /c echo OK", "test.jl", 1)
+        @test contains(response.cells[1].output, "OK")
     end
 end
 
@@ -151,8 +151,9 @@ end
     QNW.NotebookState.CELL_OPTIONS[] = Dict{String,Any}()
     QNW.NotebookState.define_notebook_module!()
 
-    result, _ = QNW.render("]status", "test.jl", 1)
-    @test contains(result[1].output, "Status") || contains(result[1].output, "Project")
+    response = QNW.render("]status", "test.jl", 1)
+    @test contains(response.cells[1].output, "Status") ||
+          contains(response.cells[1].output, "Project")
 end
 
 @testitem "help mode execution" begin
@@ -162,9 +163,12 @@ end
     QNW.NotebookState.CELL_OPTIONS[] = Dict{String,Any}()
     QNW.NotebookState.define_notebook_module!()
 
-    result, _ = QNW.render("?Int64", "test.jl", 1)
-    @test haskey(result[1].results, "text/plain")
-    @test contains(String(result[1].results["text/plain"].data), "64-bit signed integer")
+    response = QNW.render("?Int64", "test.jl", 1)
+    @test haskey(response.cells[1].results, "text/plain")
+    @test contains(
+        String(response.cells[1].results["text/plain"].data),
+        "64-bit signed integer",
+    )
 end
 
 @testitem "print custom struct" begin
@@ -181,8 +185,8 @@ end
     x = M(22)
     print(x)
     """
-    result, _ = QNW.render(code, "test.jl", 1)
-    @test result[1].output == "M(22)"
+    response = QNW.render(code, "test.jl", 1)
+    @test response.cells[1].output == "M(22)"
 end
 
 @testitem "display with specific MIME" begin
@@ -192,8 +196,8 @@ end
     QNW.NotebookState.CELL_OPTIONS[] = Dict{String,Any}()
     QNW.NotebookState.define_notebook_module!()
 
-    result, _ = QNW.render("display(MIME(\"text/html\"), HTML(\"<p></p>\"))", "test.jl", 1)
-    @test length(result[1].display_results) == 1
-    @test haskey(result[1].display_results[1], "text/html")
-    @test String(result[1].display_results[1]["text/html"].data) == "<p></p>"
+    response = QNW.render("display(MIME(\"text/html\"), HTML(\"<p></p>\"))", "test.jl", 1)
+    @test length(response.cells[1].display_results) == 1
+    @test haskey(response.cells[1].display_results[1], "text/html")
+    @test String(response.cells[1].display_results[1]["text/html"].data) == "<p></p>"
 end

@@ -21,7 +21,7 @@ import TOML
 
 is_precompiling() = ccall(:jl_generating_output, Cint, ()) == 1
 
-const packages = map(["BSON", "Requires", "PackageExtensionCompat", "IOCapture"]) do each
+const packages = map(["Requires", "PackageExtensionCompat", "IOCapture"]) do each
     joinpath(@__DIR__, "vendor", each, "src", "$each.jl")
 end
 const rewrites = Set(Symbol.(first.(splitext.(basename.(packages)))))
@@ -86,8 +86,7 @@ import Random
 
 # Includes.
 
-include("shared.jl")
-include("Malt.jl")
+include("WorkerIPC.jl")
 include("package_hooks.jl")
 include("InlineDisplay.jl")
 include("NotebookState.jl")
@@ -100,5 +99,48 @@ include("ojs_define.jl")
 include("notebook_metadata.jl")
 include("manifest_validation.jl")
 include("python.jl")
+
+# Worker IPC dispatch - routes typed requests from host
+dispatch(::WorkerIPC.ManifestInSyncRequest) = _manifest_in_sync()
+dispatch(req::WorkerIPC.WorkerInitRequest) = worker_init(req.path, req.options)
+dispatch(req::WorkerIPC.WorkerRefreshRequest) = worker_refresh(req.options)
+dispatch(req::WorkerIPC.SetEnvVarsRequest) = set_env_vars(req.vars)
+dispatch(req::WorkerIPC.RenderRequest) =
+    render(req.code, req.file, req.line, req.cell_options; inline = req.inline)
+dispatch(req::WorkerIPC.EvaluateParamsRequest) = evaluate_params(req.params)
+
+# Initialize worker for a notebook
+function worker_init(path::String, options::Dict)
+    NotebookState.PROJECT[] = Base.active_project()
+    NotebookState.PATH[] = path
+    NotebookState.OPTIONS[] = options
+    NotebookState.define_notebook_module!(Main)
+    return nothing
+end
+
+# Refresh worker state
+function worker_refresh(options::Dict)
+    refresh!(NotebookState.PATH[], NotebookState.OPTIONS[], options)
+    revise_hook()
+    return nothing
+end
+
+# Set environment variables
+function set_env_vars(vars::Vector)
+    for each in vars
+        k, v = Base.splitenv(each)
+        ENV[k] = v
+    end
+    return nothing
+end
+
+# Evaluate parameter assignments as constants in Notebook module
+function evaluate_params(params::Dict)
+    mod = NotebookState.notebook_module()
+    for (key, value) in params
+        Core.eval(mod, :(const $(Symbol(key)) = $value))
+    end
+    return nothing
+end
 
 end

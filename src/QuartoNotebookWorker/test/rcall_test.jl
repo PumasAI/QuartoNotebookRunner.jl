@@ -42,14 +42,13 @@ end
     QNW.NotebookState.define_notebook_module!()
     Core.eval(QNW.NotebookState.notebook_module(), :(using RCall))
 
-    results, is_expansion =
-        QNW.render(RCallSetup.wrap_r("sum(1:5)"), "test.qmd", 1, Dict{String,Any}())
+    response = QNW.render(RCallSetup.wrap_r("sum(1:5)"), "test.qmd", 1, Dict{String,Any}())
 
-    @test !is_expansion
-    @test length(results) == 1
-    @test isnothing(results[1].error)
-    @test haskey(results[1].results, "text/plain")
-    @test contains(String(results[1].results["text/plain"].data), "15")
+    @test !response.is_expansion
+    @test length(response.cells) == 1
+    @test isnothing(response.cells[1].error)
+    @test haskey(response.cells[1].results, "text/plain")
+    @test contains(String(response.cells[1].results["text/plain"].data), "15")
 end
 
 @testitem "render() inline R code" tags = [:integration] setup = [RCallSetup] begin
@@ -61,7 +60,7 @@ end
     QNW.NotebookState.define_notebook_module!()
     Core.eval(QNW.NotebookState.notebook_module(), :(using RCall))
 
-    results, _ = QNW.render(
+    response = QNW.render(
         RCallSetup.wrap_r("2 + 2"),
         "test.qmd",
         1,
@@ -69,9 +68,9 @@ end
         inline = true,
     )
 
-    @test length(results) == 1
-    @test isnothing(results[1].error)
-    @test contains(String(results[1].results["text/plain"].data), "4")
+    @test length(response.cells) == 1
+    @test isnothing(response.cells[1].error)
+    @test contains(String(response.cells[1].results["text/plain"].data), "4")
 end
 
 @testitem "render() R code error handling" tags = [:integration] setup = [RCallSetup] begin
@@ -83,15 +82,15 @@ end
     QNW.NotebookState.define_notebook_module!()
     Core.eval(QNW.NotebookState.notebook_module(), :(using RCall))
 
-    results, _ = QNW.render(
+    response = QNW.render(
         RCallSetup.wrap_r("stop(\"intentional error\")"),
         "test.qmd",
         1,
         Dict{String,Any}(),
     )
 
-    @test length(results) == 1
-    @test !isnothing(results[1].error)
+    @test length(response.cells) == 1
+    @test !isnothing(response.cells[1].error)
 end
 
 @testitem "render() R without RCall imported" tags = [:integration] setup = [RCallSetup] begin
@@ -101,9 +100,9 @@ end
     QNW.NotebookState.CELL_OPTIONS[] = Dict{String,Any}()
     QNW.NotebookState.define_notebook_module!()
 
-    results, _ = QNW.render(RCallSetup.wrap_r("1 + 1"), "test.qmd", 1, Dict{String,Any}())
+    response = QNW.render(RCallSetup.wrap_r("1 + 1"), "test.qmd", 1, Dict{String,Any}())
 
-    @test length(results) == 1
-    @test !isnothing(results[1].error)
-    @test contains(join(results[1].backtrace, "\n"), "RCall must be imported")
+    @test length(response.cells) == 1
+    @test !isnothing(response.cells[1].error)
+    @test contains(join(response.cells[1].backtrace, "\n"), "RCall must be imported")
 end
