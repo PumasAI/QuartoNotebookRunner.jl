@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Support for Quarto's `execute-dir: project` option to set working directory to project root [#387]
 - Unit tests for QuartoNotebookWorker using TestItemRunner, run in CI before main test suite [#385]
 
+### Fixed
+
+- Wrap package hook invocations in try-catch to prevent worker hangs from hook errors [#390]
+
 ### Changed
 
 - Replace Malt+BSON with custom binary IPC protocol for worker communication [#388]
@@ -487,3 +491,4 @@ caching is enabled. Delete this folder to clear the cache. [#259]
 [#385]: https://github.com/PumasAI/QuartoNotebookRunner.jl/issues/385
 [#387]: https://github.com/PumasAI/QuartoNotebookRunner.jl/issues/387
 [#388]: https://github.com/PumasAI/QuartoNotebookRunner.jl/issues/388
+[#390]: https://github.com/PumasAI/QuartoNotebookRunner.jl/issues/390
