@@ -225,6 +225,31 @@ should_eval(chunk, global_eval::Bool) =
     (chunk.evaluate === true || (chunk.evaluate === Unset() && global_eval))
 
 """
+    _add_language_prefix_cell!(cells, chunk, nth, mth, expand_cell, language)
+
+Add a markdown cell containing a fenced code block for displaying R/Python source.
+Returns true and sets cell_options["echo"] = false to hide the actual code cell.
+"""
+function _add_language_prefix_cell!(cells, chunk, nth, mth, expand_cell, language::Symbol)
+    push!(
+        cells,
+        (;
+            id = string(expand_cell ? string(nth, "_", mth) : string(nth), "_code_prefix"),
+            cell_type = :markdown,
+            metadata = (;),
+            source = process_cell_source(
+                """
+```$(language)
+$(strip_cell_options(chunk.source))
+```
+""",
+                Dict(),
+            ),
+        ),
+    )
+end
+
+"""
     evaluate_raw_cells!(f::File, chunks::Vector)
 
 Evaluate the raw cells in `chunks` and return a vector of cells with the results
@@ -405,61 +430,20 @@ function evaluate_raw_cells!(
 
                     cell_options = expand_cell ? remote.cell_options : Dict()
 
+                    # Non-Julia code cells need a prefix cell with formatted source
+                    # since the notebook language is julia. Hide the actual code cell.
                     if chunk.language === :python
-                        # Code cells always get the language of the notebook assigned, in this case julia,
-                        # so to render an R formatted cell, we need to do a workaround. We push a cell before
-                        # the actual code cell which contains a plain markdown block that wraps the code in ```r
-                        # for the formatting.
-                        push!(
+                        _add_language_prefix_cell!(
                             cells,
-                            (;
-                                id = string(
-                                    expand_cell ? string(nth, "_", mth) : string(nth),
-                                    "_code_prefix",
-                                ),
-                                cell_type = :markdown,
-                                metadata = (;),
-                                source = process_cell_source(
-                                    """
-           ```python
-           $(strip_cell_options(chunk.source))
-           ```
-           """,
-                                    Dict(),
-                                ),
-                            ),
+                            chunk,
+                            nth,
+                            mth,
+                            expand_cell,
+                            :python,
                         )
-                        # We also need to hide the real code cell in this case, which contains possible formatting
-                        # settings in its YAML front-matter and which can therefore not be omitted entirely.
                         cell_options["echo"] = false
-                    end
-
-                    if chunk.language === :r
-                        # Code cells always get the language of the notebook assigned, in this case julia,
-                        # so to render an R formatted cell, we need to do a workaround. We push a cell before
-                        # the actual code cell which contains a plain markdown block that wraps the code in ```r
-                        # for the formatting.
-                        push!(
-                            cells,
-                            (;
-                                id = string(
-                                    expand_cell ? string(nth, "_", mth) : string(nth),
-                                    "_code_prefix",
-                                ),
-                                cell_type = :markdown,
-                                metadata = (;),
-                                source = process_cell_source(
-                                    """
-           ```r
-           $(strip_cell_options(chunk.source))
-           ```
-           """,
-                                    Dict(),
-                                ),
-                            ),
-                        )
-                        # We also need to hide the real code cell in this case, which contains possible formatting
-                        # settings in its YAML front-matter and which can therefore not be omitted entirely.
+                    elseif chunk.language === :r
+                        _add_language_prefix_cell!(cells, chunk, nth, mth, expand_cell, :r)
                         cell_options["echo"] = false
                     end
 
