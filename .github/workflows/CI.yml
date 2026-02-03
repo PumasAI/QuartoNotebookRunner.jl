@@ -90,6 +90,12 @@ jobs:
       - run: julia --project=src/QuartoNotebookWorker/test -e 'using Pkg; Pkg.rm("Plots"; io=devnull)'
         if: matrix.version == '1.6'
 
+      # RCall + Julia 1.12 hangs on Windows during temp file cleanup.
+      # RCall itself only tests lts on Windows. Remove it; tests filtered via tags.
+      # See: https://github.com/JuliaInterop/RCall.jl/pull/589
+      - run: julia --project=src/QuartoNotebookWorker/test -e 'using Pkg; Pkg.rm("RCall"; io=devnull)'
+        if: matrix.os == 'windows-latest' && matrix.version == '1'
+
       - uses: julia-actions/julia-buildpkg@e3eb439fad4f9aba7da2667e7510e4a46ebc46e1 # v1.7.0
         with:
           project: src/QuartoNotebookWorker
