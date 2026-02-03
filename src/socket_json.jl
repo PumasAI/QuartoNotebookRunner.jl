@@ -7,6 +7,8 @@ Thrown when HMAC validation fails for incoming messages.
 """
 struct HMACMismatchError <: Exception end
 
+_key_to_hmac_bytes(key::Base.UUID) = Vector{UInt8}(string(key))
+
 """
     _read_json(key::Base.UUID, data)
 
@@ -18,7 +20,7 @@ function _read_json(key::Base.UUID, data)
     payload = obj.payload
 
     hmac_vec_client = Base64.base64decode(hmac)
-    hmac_vec_server = SHA.hmac_sha256(Vector{UInt8}(string(key)), payload)
+    hmac_vec_server = SHA.hmac_sha256(_key_to_hmac_bytes(key), payload)
     if !isequal_constant_time(hmac_vec_client, hmac_vec_server)
         throw(HMACMismatchError())
     end
@@ -30,7 +32,7 @@ function _read_json(key::Base.UUID, data)
 end
 
 # https://codahale.com/a-lesson-in-timing-attacks/
-@noinline function isequal_constant_time(v1::Vector{UInt8}, v2::Vector{UInt8})
+@noinline function isequal_constant_time(v1::Vector{UInt8}, v2::Vector{UInt8})::Bool
     length(v1) != length(v2) && return false
     result = 0
     for (a, b) in zip(v1, v2)
@@ -46,7 +48,7 @@ Write signed JSON message with HMAC.
 """
 function _write_hmac_json(socket, key::Base.UUID, data)
     payload = JSON3.write(data)
-    hmac = SHA.hmac_sha256(Vector{UInt8}(string(key)), payload)
+    hmac = SHA.hmac_sha256(_key_to_hmac_bytes(key), payload)
     hmac_b64 = Base64.base64encode(hmac)
     write(socket, JSON3.write((; hmac = hmac_b64, payload)), "\n")
     flush(socket)
@@ -95,13 +97,14 @@ function _get_source_ranges(content::Dict)
     return map(ranges) do range
         file = get(range, "file", nothing)
         _lines::Vector{Int} = range["lines"]
-        @assert length(_lines) == 2
+        length(_lines) == 2 || error("sourceRanges lines must be 2-element array")
         lines = _lines[1]:_lines[2]
         _source_lines::Union{Nothing,Vector{Int}} = get(range, "sourceLines", nothing)
         source_lines = if _source_lines === nothing
             1:length(lines) # source lines are only missing in degenerate cases like additional newlines anyway so this doesn't really matter
         else
-            @assert length(_source_lines) == 2
+            length(_source_lines) == 2 ||
+                error("sourceRanges sourceLines must be 2-element array")
             _source_lines[1]:_source_lines[2]
         end
         SourceRange(file, lines, source_lines)

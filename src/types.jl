@@ -7,19 +7,19 @@ Represents a notebook file managed by a Server. Tracks the worker process,
 execution state, and cached outputs.
 """
 mutable struct File
-    worker::WorkerIPC.Worker
-    path::String
-    source_code_hash::UInt64
-    output_chunks::Vector
-    exe::Cmd
-    exeflags::Vector{String}
-    env::Vector{String}
-    lock::ReentrantLock
-    timeout::Float64
-    timeout_timer::Union{Nothing,Timer}
-    run_started::Union{Nothing,Dates.DateTime}
-    run_finished::Union{Nothing,Dates.DateTime}
-    run_decision_channel::Channel{Symbol}
+    worker::WorkerIPC.Worker              # Worker process for notebook execution
+    path::String                          # Absolute path to notebook file
+    source_code_hash::UInt64              # Hash of executable code for caching
+    output_chunks::Vector                 # Cached cell outputs from last run
+    exe::Cmd                              # Julia executable command
+    exeflags::Vector{String}              # Julia command-line flags
+    env::Vector{String}                   # Environment variables for worker
+    lock::ReentrantLock                   # Protects concurrent access
+    timeout::Float64                      # Seconds until auto-close (0 = immediate)
+    timeout_timer::Union{Nothing,Timer}   # Active timeout timer
+    run_started::Union{Nothing,Dates.DateTime}   # Last run start time
+    run_finished::Union{Nothing,Dates.DateTime}  # Last run completion time
+    run_decision_channel::Channel{Symbol} # Communication channel for forceclose
 
     function File(path::String, options::Union{String,Dict{String,Any}})
         if isfile(path)
