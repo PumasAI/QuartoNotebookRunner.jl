@@ -87,6 +87,7 @@ function transform_source(chunk)
     end
 end
 
+# Escape special markdown characters per CommonMark spec (backslash escapes)
 _escape_markdown(s::AbstractString) = replace(s, r"([\\`*_{}[\]()#+\-.!|])" => s"\\\1")
 _escape_markdown(bytes::Vector{UInt8}) = _escape_markdown(String(bytes))
 
