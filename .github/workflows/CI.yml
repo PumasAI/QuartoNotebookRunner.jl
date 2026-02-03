@@ -44,30 +44,20 @@ jobs:
       matrix:
         version:
           - "1.6"
-          - "1.11"
+          - "lts"
+          - "1"
         os:
           - ubuntu-latest
-          - macos-15-intel
+          - macos-latest
           - windows-latest
-        # macOS 1.6 seems to consistently stall on `Plots` notebooks. Skip this
+        # macOS min seems to consistently stall on `Plots` notebooks. Skip this
         # combination and test on a slightly newer macOS version instead.
-        # 1.6 windows has recently stalled out on mimetypes, use 1.7 windows in
-        # the tests. We still test 1.6 on Linux.
+        # min windows has recently stalled out on mimetypes, use lts windows in
+        # the tests. We still test min on Linux.
         exclude:
           - version: "1.6"
-            os: macos-15-intel
+            os: macos-latest
           - version: "1.6"
-            os: windows-latest
-          # Performance regressions on Julia 1.11 on Windows. Currently not
-          # viable to run the test suite there.
-          - version: "1.11"
-            os: windows-latest
-        include:
-          - version: "1.7"
-            os: macos-15-intel
-          - version: "1.7"
-            os: windows-latest
-          - version: "1.10"
             os: windows-latest
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -98,7 +88,13 @@ jobs:
       # Plots.jl's GR backend uses Julia 1.10+ syntax. Remove it on older
       # Julia to avoid compile errors; the test is filtered out via tags.
       - run: julia --project=src/QuartoNotebookWorker/test -e 'using Pkg; Pkg.rm("Plots"; io=devnull)'
-        if: matrix.version == '1.6' || matrix.version == '1.7'
+        if: matrix.version == '1.6'
+
+      # RCall + Julia 1.12 hangs on Windows during temp file cleanup.
+      # RCall itself only tests lts on Windows. Remove it; tests filtered via tags.
+      # See: https://github.com/JuliaInterop/RCall.jl/pull/589
+      - run: julia --project=src/QuartoNotebookWorker/test -e 'using Pkg; Pkg.rm("RCall"; io=devnull)'
+        if: matrix.os == 'windows-latest' && matrix.version == '1'
 
       - uses: julia-actions/julia-buildpkg@e3eb439fad4f9aba7da2667e7510e4a46ebc46e1 # v1.7.0
         with:
@@ -120,9 +116,9 @@ jobs:
         with:
           depwarn: "yes"
       - uses: julia-actions/julia-processcoverage@03114f09f119417c3242a9fb6e0b722676aedf38 # v1.2.2
-        if: matrix.os == 'ubuntu-latest' && matrix.version == '1.11'
+        if: matrix.os == 'ubuntu-latest' && matrix.version == '1'
       - uses: codecov/codecov-action@671740ac38dd9b0130fbe1cec585b89eea48d3de # v5.5.2
-        if: matrix.os == 'ubuntu-latest' && matrix.version == '1.11'
+        if: matrix.os == 'ubuntu-latest' && matrix.version == '1'
         with:
           verbose: true
           files: lcov.info

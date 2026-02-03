@@ -49,6 +49,6 @@ function define_notebook_module!(root = Main)
 end
 
 # `getfield` ends up throwing a segfault here, `getproperty` works fine though.
-notebook_module() = Base.getproperty(Main, :Notebook)::Module
+notebook_module() = Base.invokelatest(getproperty, Main, :Notebook)::Module
 
 end

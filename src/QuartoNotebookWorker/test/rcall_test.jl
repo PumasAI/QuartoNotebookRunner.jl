@@ -12,7 +12,7 @@
     end
 end
 
-@testitem "RCall extension hooks" tags = [:integration] begin
+@testitem "RCall extension hooks" tags = [:integration, :rcall] begin
     import QuartoNotebookWorker as QNW
     using RCall
 
@@ -33,7 +33,8 @@ end
     @test_throws RCall.REvalError RCall.reval("test_var")
 end
 
-@testitem "render() with R code boilerplate" tags = [:integration] setup = [RCallSetup] begin
+@testitem "render() with R code boilerplate" tags = [:integration, :rcall] setup =
+    [RCallSetup] begin
     import QuartoNotebookWorker as QNW
     using RCall
 
@@ -51,7 +52,7 @@ end
     @test contains(String(response.cells[1].results["text/plain"].data), "15")
 end
 
-@testitem "render() inline R code" tags = [:integration] setup = [RCallSetup] begin
+@testitem "render() inline R code" tags = [:integration, :rcall] setup = [RCallSetup] begin
     import QuartoNotebookWorker as QNW
     using RCall
 
@@ -73,7 +74,8 @@ end
     @test contains(String(response.cells[1].results["text/plain"].data), "4")
 end
 
-@testitem "render() R code error handling" tags = [:integration] setup = [RCallSetup] begin
+@testitem "render() R code error handling" tags = [:integration, :rcall] setup =
+    [RCallSetup] begin
     import QuartoNotebookWorker as QNW
     using RCall
 
@@ -93,7 +95,8 @@ end
     @test !isnothing(response.cells[1].error)
 end
 
-@testitem "render() R without RCall imported" tags = [:integration] setup = [RCallSetup] begin
+@testitem "render() R without RCall imported" tags = [:integration, :rcall] setup =
+    [RCallSetup] begin
     import QuartoNotebookWorker as QNW
 
     QNW.NotebookState.OPTIONS[] = Dict{String,Any}()
