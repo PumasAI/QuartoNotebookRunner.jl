@@ -127,7 +127,13 @@ mutable struct Worker
                 _validate_worker_process_manifest(metadata_toml_file, errors_log_file)
 
             if port === nothing
-                Base.kill(proc, Base.SIGTERM)
+                # Process may already be dead; ignore kill errors (esp. EACCES on Windows)
+                try
+                    Base.kill(proc, Base.SIGTERM)
+                catch err
+                    @debug "failed to kill worker process" exception =
+                        (err, catch_backtrace())
+                end
                 _validate_worker_cmd(exe, exeflags)
 
                 err_output = read(errors_log_file, String)
