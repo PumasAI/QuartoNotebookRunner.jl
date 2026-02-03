@@ -101,6 +101,8 @@ function serve(;
         timeout < 0 &&
         throw(ArgumentError("Non-negative timeout value $timeout"))
 
+    _cleanup_stale_transport_file()
+
     port = getport(port)
     @debug "Starting notebook server." port
 
@@ -450,9 +452,13 @@ function _write_hmac_json(socket, key::Base.UUID, data)
     hmac = SHA.hmac_sha256(Vector{UInt8}(string(key)), payload)
     hmac_b64 = Base64.base64encode(hmac)
     write(socket, JSON3.write((; hmac = hmac_b64, payload)), "\n")
+    flush(socket)
 end
 
-_write_json(socket, data) = write(socket, JSON3.write(data), "\n")
+function _write_json(socket, data)
+    write(socket, JSON3.write(data), "\n")
+    flush(socket)
+end
 
 function _get_file(content::Dict)
     if haskey(content, "file")

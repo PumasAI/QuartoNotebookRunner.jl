@@ -107,3 +107,59 @@ function _quarto_julia_cache_dir()
 
     error("Could not find a suitable cache directory.")
 end
+
+function _cleanup_stale_transport_file()
+    cache_dir = try
+        _quarto_julia_cache_dir()
+    catch
+        return  # No cache dir found, nothing to clean
+    end
+
+    transport_file = joinpath(cache_dir, "julia_transport.txt")
+    isfile(transport_file) || return
+
+    should_remove = false
+    try
+        json = open(JSON3.read, transport_file)
+        pid = get(json, "pid", nothing)
+        if pid !== nothing && !_process_running(pid)
+            should_remove = true
+        end
+    catch
+        # Parse failed - corrupt/incomplete file
+        should_remove = true
+    end
+
+    if should_remove
+        @info "Removing stale transport file" transport_file
+        rm(transport_file; force = true)
+    end
+end
+
+function _process_running(pid::Integer)
+    if Sys.iswindows()
+        handle = ccall(
+            (:OpenProcess, "kernel32"),
+            Ptr{Cvoid},
+            (UInt32, Cint, UInt32),
+            0x1000,
+            false,
+            pid,
+        )
+        handle == C_NULL && return false
+        exit_code = Ref{UInt32}(0)
+        success = ccall(
+            (:GetExitCodeProcess, "kernel32"),
+            Cint,
+            (Ptr{Cvoid}, Ref{UInt32}),
+            handle,
+            exit_code,
+        )
+        ccall((:CloseHandle, "kernel32"), Cint, (Ptr{Cvoid},), handle)
+        return success != 0 && exit_code[] == 259  # STILL_ACTIVE
+    else
+        result = ccall(:kill, Cint, (Cint, Cint), pid, 0)
+        result == 0 && return true
+        return Base.Libc.errno() != 3  # ESRCH = no such process
+    end
+end
