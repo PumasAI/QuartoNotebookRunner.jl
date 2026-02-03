@@ -1,5 +1,10 @@
 # Worker process setup and configuration.
 
+# Julia JLOptions code_coverage values (from Base)
+const COVERAGE_USER = 1
+const COVERAGE_ALL = 2
+const COVERAGE_TRACKED = 3
+
 """
     _has_juliaup()
 
@@ -128,11 +133,11 @@ function _exeflags_and_env(options)
             (opts.output_code_coverage != C_NULL) ?
             unsafe_string(opts.output_code_coverage) : ""
         if isempty(coverage_file) || occursin("%p", coverage_file)
-            if opts.code_coverage == 1
+            if opts.code_coverage == COVERAGE_USER
                 push!(exeflags, "--code-coverage=user")
-            elseif opts.code_coverage == 2
+            elseif opts.code_coverage == COVERAGE_ALL
                 push!(exeflags, "--code-coverage=all")
-            elseif opts.code_coverage == 3
+            elseif opts.code_coverage == COVERAGE_TRACKED
                 push!(exeflags, "--code-coverage=@$(unsafe_string(opts.tracked_path))")
             end
             isempty(coverage_file) || push!(exeflags, "--code-coverage=$coverage_file")

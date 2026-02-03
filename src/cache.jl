@@ -1,6 +1,7 @@
 # Notebook output caching.
 
 const SCHEMA_VERSION = v"1.0.0"
+const MAX_CACHE_ENTRIES_PER_NOTEBOOK = 3
 
 """
     _cache_file(f::File, source_code_hash)
@@ -41,7 +42,7 @@ function _gc_cache_files(dir::AbstractString)
         end
         for v in values(qmds)
             sort!(v, by = x -> x.timestamp, rev = true)
-            for each in v[4:end]
+            for each in v[(MAX_CACHE_ENTRIES_PER_NOTEBOOK+1):end]
                 rm(each.file; force = true)
             end
         end
@@ -60,9 +61,19 @@ function load_from_file!(f::File, source_code_hash)
         file = _cache_file(f, source_code_hash)
         if isfile(file)
             try
-                json = JSON3.read(file, @NamedTuple{cells::Vector{NamedTuple}})
-                f.output_chunks = json.cells
-                f.source_code_hash = source_code_hash
+                json = JSON3.read(
+                    file,
+                    @NamedTuple{
+                        cells::Vector{NamedTuple},
+                        qnr_schema_version::VersionNumber,
+                    }
+                )
+                if json.qnr_schema_version == SCHEMA_VERSION
+                    f.output_chunks = json.cells
+                    f.source_code_hash = source_code_hash
+                else
+                    @debug "cache schema version mismatch" json.qnr_schema_version SCHEMA_VERSION
+                end
             catch error
                 @debug "invalid cache file, skipping" error
             end
@@ -80,8 +91,7 @@ Save notebook outputs to the cache file.
 """
 function save_to_file!(f::File)
     file = _cache_file(f, f.source_code_hash)
-    dir = dirname(file)
-    isdir(dir) || mkpath(dir)
+    mkpath(dirname(file))
     json = (;
         cells = f.output_chunks,
         timestamp = Dates.now(),
