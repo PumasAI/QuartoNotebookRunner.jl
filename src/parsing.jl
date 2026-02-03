@@ -131,8 +131,8 @@ Return a vector of raw markdown and code chunks from `file` ready
 for evaluation by `evaluate_raw_cells!`.
 """
 raw_markdown_chunks(file::File) =
-    endswith(path, ".qmd") ? raw_markdown_chunks(file.path) :
-    throw(ArgumentError("file is not a quarto markdown file: $(path)"))
+    endswith(file.path, ".qmd") ? raw_markdown_chunks(file.path) :
+    throw(ArgumentError("file is not a quarto markdown file: $(file.path)"))
 raw_markdown_chunks(path::String) =
     raw_markdown_chunks_from_string(path, read(path, String))
 

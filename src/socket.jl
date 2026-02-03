@@ -308,7 +308,7 @@ function _handle_response_internal(
 
     if type == "close" && isempty(file)
         close!(notebooks)
-        return (; message = "Notebooks closed.")
+        return _write_json(socket, (; message = "Notebooks closed."))
     end
 
     isabspath(file) ||

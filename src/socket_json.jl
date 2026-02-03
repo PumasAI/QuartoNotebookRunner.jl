@@ -25,7 +25,7 @@ function _read_json(key::Base.UUID, data)
 
     return JSON3.read(
         payload,
-        @NamedTuple{type::String, content::Union{String,Union{String,Dict{String,Any}}}}
+        @NamedTuple{type::String, content::Union{String,Dict{String,Any}}}
     )
 end
 
@@ -81,7 +81,7 @@ _get_file(content::String) = content
 
 Extract options from request content.
 """
-_get_options(content::Dict) = get(Dict{String,Any}, content, "options")
+_get_options(content::Dict) = get(content, "options", Dict{String,Any}())
 _get_options(::String) = Dict{String,Any}()
 
 """
