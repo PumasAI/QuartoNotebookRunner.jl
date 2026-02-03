@@ -92,13 +92,13 @@ Handles QUARTONOTEBOOKRUNNER_EXEFLAGS, project settings, and coverage flags.
 function _exeflags_and_env(options)
     env_exeflags =
         JSON3.read(get(ENV, "QUARTONOTEBOOKRUNNER_EXEFLAGS", "[]"), Vector{String})
-    options_exeflags = map(String, options["format"]["metadata"]["julia"]["exeflags"])
+    julia_config = julia_worker_config(options)
     # We want to be able to override exeflags that are defined via environment variable,
     # but leave the remaining flags intact (for example override number of threads but leave sysimage).
     # We can do this by adding the options exeflags after the env exeflags.
     # Julia will ignore earlier uses of the same flag.
-    exeflags = [env_exeflags; options_exeflags]
-    env = map(String, options["format"]["metadata"]["julia"]["env"])
+    exeflags = [env_exeflags; julia_config.exeflags]
+    env = julia_config.env
     # Use `--project=@.` if neither `JULIA_PROJECT=...` nor `--project=...` are specified
     if !any(startswith("JULIA_PROJECT="), env) && !any(startswith("--project="), exeflags)
         # Set it via the env variable since this is the "weakest" form of

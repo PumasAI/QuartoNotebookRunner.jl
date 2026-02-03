@@ -1,5 +1,7 @@
 # Notebook parsing and chunk extraction.
 
+const INLINE_CODE_PATTERN = r"`{(?:julia|python|r)} "
+
 """
     yaml_reader(str)
 
@@ -37,6 +39,23 @@ is_r_toplevel(node) =
     node.t isa CommonMark.CodeBlock &&
     node.t.info == "{r}" &&
     node.parent.t isa CommonMark.Document
+
+"""
+    toplevel_language(node)
+
+Return the language symbol (:julia, :python, :r) for toplevel code blocks, or nothing.
+"""
+function toplevel_language(node)::Union{Symbol,Nothing}
+    node.t isa CommonMark.CodeBlock || return nothing
+    parent = node.parent
+    parent === nothing && return nothing
+    parent.t isa CommonMark.Document || return nothing
+    info = node.t.info
+    info == "{julia}" && return :julia
+    info == "{python}" && return :python
+    info == "{r}" && return :r
+    return nothing
+end
 
 """
     extract_cell_options(source; file, line)
@@ -147,23 +166,23 @@ function raw_markdown_chunks_from_string(
     ast = pars(markdown; source = path)
     file_fromtmatter = CommonMark.frontmatter(ast)
     source_code_hash = hash(file_fromtmatter, source_code_hash)
-    source_lines = collect(eachline(IOBuffer(markdown)))
+    lines = source_lines(markdown)
     terminal_line = 1
 
-    line_file_lookup = compute_line_file_lookup(length(source_lines), path, source_ranges)
+    line_file_lookup = compute_line_file_lookup(length(lines), path, source_ranges)
 
     code_cells = false
     for (node, enter) in ast
-        if enter &&
-           (is_julia_toplevel(node) || is_python_toplevel(node) || is_r_toplevel(node))
+        language = enter ? toplevel_language(node) : nothing
+        if language !== nothing
             code_cells = true
             line = node.sourcepos[1][1]
-            md = join(source_lines[terminal_line:(line-1)], "\n")
+            md = join(lines[terminal_line:(line-1)], "\n")
             push!(
                 raw_chunks,
                 (; type = :markdown, source = md, line_file_lookup[terminal_line]...),
             )
-            if contains(md, r"`{(?:julia|python|r)} ")
+            if contains(md, INLINE_CODE_PATTERN)
                 source_code_hash = hash(md, source_code_hash)
             end
             terminal_line = node.sourcepos[2][1] + 1
@@ -179,10 +198,6 @@ function raw_markdown_chunks_from_string(
                     "Cannot handle an `eval` code cell option with value $(repr(evaluate)), only true or false.",
                 )
             end
-            language =
-                is_julia_toplevel(node) ? :julia :
-                is_python_toplevel(node) ? :python :
-                is_r_toplevel(node) ? :r : error("Unhandled code block language")
             push!(
                 raw_chunks,
                 (;
@@ -197,13 +212,13 @@ function raw_markdown_chunks_from_string(
             source_code_hash = hash(source, source_code_hash)
         end
     end
-    if terminal_line <= length(source_lines)
-        md = join(source_lines[terminal_line:end], "\n")
+    if terminal_line <= length(lines)
+        md = join(lines[terminal_line:end], "\n")
         push!(
             raw_chunks,
             (; type = :markdown, source = md, line_file_lookup[terminal_line]...),
         )
-        if contains(md, r"`{(?:julia|python|r)} ")
+        if contains(md, INLINE_CODE_PATTERN)
             source_code_hash = hash(md, source_code_hash)
         end
     end
@@ -211,7 +226,7 @@ function raw_markdown_chunks_from_string(
     # The case where the notebook has no code cells.
     if isempty(raw_chunks) && !code_cells
         push!(raw_chunks, (type = :markdown, source = markdown, file = path, line = 1))
-        if contains(markdown, r"`{(?:julia|python|r)} ")
+        if contains(markdown, INLINE_CODE_PATTERN)
             source_code_hash = hash(markdown, source_code_hash)
         end
     end

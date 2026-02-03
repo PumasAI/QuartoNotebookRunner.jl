@@ -1,6 +1,13 @@
 # Cell source and output processing.
 
 """
+    source_lines(s; keep=false)
+
+Split source string into lines.
+"""
+source_lines(s::AbstractString; keep = false) = collect(eachline(IOBuffer(s); keep = keep))
+
+"""
     json_reader(str)
 
 Parse JSON string content.
@@ -13,7 +20,7 @@ json_reader(str) = JSON3.read(str, Any)
 Process cell source into lines, optionally prepending YAML cell options.
 """
 function process_cell_source(source::AbstractString, cell_options::Dict = Dict())
-    lines = collect(eachline(IOBuffer(source); keep = true))
+    lines = source_lines(source; keep = true)
     if !isempty(lines)
         lines[end] = rstrip(lines[end])
     end
@@ -21,10 +28,7 @@ function process_cell_source(source::AbstractString, cell_options::Dict = Dict()
         return lines
     else
         yaml = YAML.write(cell_options)
-        return vcat(
-            String["#| $line" for line in eachline(IOBuffer(yaml); keep = true)],
-            lines,
-        )
+        return vcat(String["#| $line" for line in source_lines(yaml; keep = true)], lines)
     end
 end
 
@@ -34,10 +38,8 @@ end
 Remove `#|` prefixed lines from cell source.
 """
 function strip_cell_options(source::AbstractString)
-    lines = collect(eachline(IOBuffer(source); keep = true))
-    keep_from = something(findfirst(lines) do line
-        !startswith(line, "#|")
-    end, 1)
+    lines = source_lines(source; keep = true)
+    keep_from = something(findfirst(!startswith("#|"), lines), 1)
     join(lines[keep_from:end])
 end
 
@@ -136,7 +138,7 @@ function process_results(dict::Dict{String,WorkerIPC.MimeResult})
 
     for (mime, payload) in dict
         if payload.error
-            traceback = collect(eachline(IOBuffer(payload.data)))
+            traceback = source_lines(String(payload.data))
             push!(
                 errors,
                 (;

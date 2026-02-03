@@ -5,11 +5,9 @@
 
 Check if two dates fall on the same calendar day.
 """
-function is_same_day(date1, date2)::Bool
-    return Dates.year(date1) == Dates.year(date2) &&
-           Dates.month(date1) == Dates.month(date2) &&
-           Dates.day(date1) == Dates.day(date2)
-end
+is_same_day(d1, d2)::Bool = Dates.Date(d1) == Dates.Date(d2)
+
+_seconds_between(dt1, dt2) = Dates.value(dt2 - dt1) / 1000
 
 """
     simple_date_time_string(date)
@@ -68,7 +66,7 @@ function server_status(socketserver::SocketServer)
         io = IOBuffer()
         current_time = Dates.now()
 
-        running_since_seconds = Dates.value(current_time - socketserver.started_at) / 1000
+        running_since_seconds = _seconds_between(socketserver.started_at, current_time)
 
         println(io, "QuartoNotebookRunner server status:")
         println(
@@ -93,7 +91,7 @@ function server_status(socketserver::SocketServer)
            server_timeout !== nothing &&
            timeout_started_at !== nothing
             seconds_until_server_timeout =
-                server_timeout - Dates.value(Dates.now() - timeout_started_at) / 1000
+                server_timeout - _seconds_between(timeout_started_at, Dates.now())
             println(io, " ($(format_seconds(seconds_until_server_timeout)) left)")
         else
             println(io)
@@ -105,23 +103,17 @@ function server_status(socketserver::SocketServer)
             run_started = file.run_started
             run_finished = file.run_finished
 
-            if isnothing(run_started)
-                seconds_since_started = nothing
-            else
-                seconds_since_started = Dates.value(current_time - run_started) / 1000
-            end
+            seconds_since_started =
+                isnothing(run_started) ? nothing :
+                _seconds_between(run_started, current_time)
 
-            if isnothing(run_started) || isnothing(run_finished)
-                run_duration_seconds = nothing
-            else
-                run_duration_seconds = Dates.value(run_finished - run_started) / 1000
-            end
+            run_duration_seconds =
+                isnothing(run_started) || isnothing(run_finished) ? nothing :
+                _seconds_between(run_started, run_finished)
 
-            if isnothing(run_finished)
-                seconds_since_finished = nothing
-            else
-                seconds_since_finished = Dates.value(current_time - run_finished) / 1000
-            end
+            seconds_since_finished =
+                isnothing(run_finished) ? nothing :
+                _seconds_between(run_finished, current_time)
 
             if file.timeout > 0 && !isnothing(seconds_since_finished)
                 time_until_timeout = file.timeout - seconds_since_finished

@@ -37,6 +37,19 @@ end
 _parsed_options(options::Dict{String,Any}) = options
 
 """
+    julia_worker_config(options)
+
+Extract Julia worker configuration (exeflags, env) from nested options.
+"""
+function julia_worker_config(options::Dict)
+    meta = get(get(get(options, "format", Dict()), "metadata", Dict()), "julia", Dict())
+    (
+        exeflags = map(String, get(meta, "exeflags", String[])),
+        env = map(String, get(meta, "env", String[])),
+    )
+end
+
+"""
     _options_template(; kwargs...)
 
 Create a standardized options dictionary structure.

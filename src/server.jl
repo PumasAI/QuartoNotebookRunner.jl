@@ -115,7 +115,7 @@ function evaluate!(
                     # Skip any markdown chunk if it contains potential inline
                     # executable code otherwise they would be replaced with
                     # their unexpanded raw chunk.
-                    if !contains(new_raw_chunk.source, r"`{(?:julia|python|r)} ")
+                    if !contains(new_raw_chunk.source, INLINE_CODE_PATTERN)
                         # Swap out any markdown chunks with their updated content.
                         new_source = process_cell_source(new_raw_chunk.source)
                         empty!(output_chunk.source)
@@ -270,6 +270,7 @@ function evaluate_raw_cells!(
     cells = []
 
     error_metadata = NamedTuple{(:kind, :file, :traceback),Tuple{Symbol,String,String}}[]
+    _record_error!(kind, file, traceback) = push!(error_metadata, (; kind, file, traceback))
     allow_error_global = options["format"]["execute"]["error"]
     global_eval::Bool = options["format"]["execute"]["eval"]
 
@@ -361,11 +362,10 @@ function evaluate_raw_cells!(
                                 append!(outputs, processed_display.errors)
                                 if !allow_error_cell
                                     for each_error in processed_display.errors
-                                        file = "$(chunk.file):$(chunk.line)"
-                                        traceback = join(each_error.traceback, "\n")
-                                        push!(
-                                            error_metadata,
-                                            (; kind = :show, file, traceback),
+                                        _record_error!(
+                                            :show,
+                                            "$(chunk.file):$(chunk.line)",
+                                            join(each_error.traceback, "\n"),
                                         )
                                     end
                                 end
@@ -396,9 +396,11 @@ function evaluate_raw_cells!(
                             ),
                         )
                         if !allow_error_cell
-                            file = "$(chunk.file):$(chunk.line)"
-                            traceback = join(remote.backtrace, "\n")
-                            push!(error_metadata, (; kind = :cell, file, traceback))
+                            _record_error!(
+                                :cell,
+                                "$(chunk.file):$(chunk.line)",
+                                join(remote.backtrace, "\n"),
+                            )
                         end
                     end
 
@@ -421,9 +423,11 @@ function evaluate_raw_cells!(
                         append!(outputs, processed.errors)
                         if !allow_error_cell
                             for each_error in processed.errors
-                                file = "$(chunk.file):$(chunk.line)"
-                                traceback = join(each_error.traceback, "\n")
-                                push!(error_metadata, (; kind = :show, file, traceback))
+                                _record_error!(
+                                    :show,
+                                    "$(chunk.file):$(chunk.line)",
+                                    join(each_error.traceback, "\n"),
+                                )
                             end
                         end
                     end
@@ -465,7 +469,7 @@ function evaluate_raw_cells!(
         elseif chunk.type === :markdown
             marker = r"{(?:julia|python|r)} "
             source = chunk.source
-            if contains(chunk.source, r"`{(?:julia|python|r)} ")
+            if contains(chunk.source, INLINE_CODE_PATTERN)
                 parser = Parser()
                 for (node, enter) in parser(chunk.source)
                     if enter && node.t isa CommonMark.Code
@@ -496,13 +500,10 @@ function evaluate_raw_cells!(
                             if !isnothing(remote.error)
                                 # file location is not straightforward to determine with inline literals, but just printing the (presumably short)
                                 # code back instead of a location should be quite helpful
-                                push!(
-                                    error_metadata,
-                                    (;
-                                        kind = :inline,
-                                        file = "inline: `$(node.literal)`",
-                                        traceback = join(remote.backtrace, "\n"),
-                                    ),
+                                _record_error!(
+                                    :inline,
+                                    "inline: `$(node.literal)`",
+                                    join(remote.backtrace, "\n"),
                                 )
                             else
                                 processed = process_inline_results(remote.results)
