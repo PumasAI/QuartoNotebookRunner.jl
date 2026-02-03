@@ -2,12 +2,7 @@
 
 julia_version = "1.12.4"
 manifest_format = "2.0"
-project_hash = "0cacfb686cf3dc24c9b3fb4b96fedcee5b35026d"
-
-[[deps.BSON]]
-git-tree-sha1 = "4c3e506685c527ac6a54ccc0c8c76fd6f91b42fb"
-uuid = "fbb218c0-5317-5bc6-957e-2ee96dd4b1f0"
-version = "0.3.9"
+project_hash = "580f07cb2fc4751a6e36a8fc3dbaa971141ec9f8"
 
 [[deps.IOCapture]]
 deps = ["Logging", "Random"]
