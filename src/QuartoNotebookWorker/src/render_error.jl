@@ -32,5 +32,5 @@ function _showerror(io::IO, err, bt)
 end
 
 _non_worker_stackframe_marker(frame) =
-    contains(String(frame.file), @__FILE__) &&
+    contains(String(frame.file), "render_mimetypes.jl") &&
     frame.func in (:__print_barrier__, :__show_barrier__)
