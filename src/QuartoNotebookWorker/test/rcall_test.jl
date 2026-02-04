@@ -1,13 +1,12 @@
 @testmodule RCallSetup begin
     using RCall
 
-    # Exact pattern from wrap_with_r_boilerplate in server.jl
+    # Exact pattern from wrap_with_r_boilerplate in cell_processing.jl
     function wrap_r(code)
         """
-        @isdefined(RCall) && RCall isa Module && Base.PkgId(RCall).uuid == Base.UUID("6f49c342-dc21-5d91-9882-a32aef131414") || error("RCall must be imported to execute R code cells with QuartoNotebookRunner")
-        RCall.rcopy(RCall.R\"\"\"
+        Main.QuartoNotebookWorker.R\"\"\"
         $code
-        \"\"\")
+        \"\"\"
         """
     end
 end
@@ -38,10 +37,11 @@ end
     import QuartoNotebookWorker as QNW
     using RCall
 
+    Core.eval(Main, :(QuartoNotebookWorker = $QNW))
+
     QNW.NotebookState.OPTIONS[] = Dict{String,Any}()
     QNW.NotebookState.CELL_OPTIONS[] = Dict{String,Any}()
     QNW.NotebookState.define_notebook_module!()
-    Core.eval(QNW.NotebookState.notebook_module(), :(using RCall))
 
     response = QNW.render(RCallSetup.wrap_r("sum(1:5)"), "test.qmd", 1, Dict{String,Any}())
 
@@ -56,10 +56,11 @@ end
     import QuartoNotebookWorker as QNW
     using RCall
 
+    Core.eval(Main, :(QuartoNotebookWorker = $QNW))
+
     QNW.NotebookState.OPTIONS[] = Dict{String,Any}()
     QNW.NotebookState.CELL_OPTIONS[] = Dict{String,Any}()
     QNW.NotebookState.define_notebook_module!()
-    Core.eval(QNW.NotebookState.notebook_module(), :(using RCall))
 
     response = QNW.render(
         RCallSetup.wrap_r("2 + 2"),
@@ -79,10 +80,11 @@ end
     import QuartoNotebookWorker as QNW
     using RCall
 
+    Core.eval(Main, :(QuartoNotebookWorker = $QNW))
+
     QNW.NotebookState.OPTIONS[] = Dict{String,Any}()
     QNW.NotebookState.CELL_OPTIONS[] = Dict{String,Any}()
     QNW.NotebookState.define_notebook_module!()
-    Core.eval(QNW.NotebookState.notebook_module(), :(using RCall))
 
     response = QNW.render(
         RCallSetup.wrap_r("stop(\"intentional error\")"),
@@ -95,17 +97,23 @@ end
     @test !isnothing(response.cells[1].error)
 end
 
-@testitem "render() R without RCall imported" tags = [:integration, :rcall] setup =
-    [RCallSetup] begin
+@testitem "RCall evaluates R code" tags = [:integration, :rcall] begin
     import QuartoNotebookWorker as QNW
+    using RCall
 
     QNW.NotebookState.OPTIONS[] = Dict{String,Any}()
     QNW.NotebookState.CELL_OPTIONS[] = Dict{String,Any}()
     QNW.NotebookState.define_notebook_module!()
 
-    response = QNW.render(RCallSetup.wrap_r("1 + 1"), "test.qmd", 1, Dict{String,Any}())
+    nb_mod = QNW.NotebookState.notebook_module()
 
-    @test length(response.cells) == 1
-    @test !isnothing(response.cells[1].error)
-    @test contains(join(response.cells[1].backtrace, "\n"), "RCall must be imported")
+    # Test basic R evaluation
+    result = QNW._r_expr(nothing, "1 + 2", LineNumberNode(1, :test), nb_mod)
+    value = Core.eval(nb_mod, result)
+    @test value == 3
+
+    # Test R NULL returns Julia nothing
+    result = QNW._r_expr(nothing, "NULL", LineNumberNode(1, :test), nb_mod)
+    value = Core.eval(nb_mod, result)
+    @test isnothing(value)
 end

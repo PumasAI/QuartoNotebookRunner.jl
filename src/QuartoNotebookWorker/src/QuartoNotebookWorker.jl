@@ -103,6 +103,7 @@ include("ojs_define.jl")
 include("notebook_metadata.jl")
 include("manifest_validation.jl")
 include("python.jl")
+include("r.jl")
 
 # Worker IPC dispatch - routes typed requests from host
 dispatch(::WorkerIPC.ManifestInSyncRequest) = _manifest_in_sync()

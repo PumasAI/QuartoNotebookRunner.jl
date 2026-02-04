@@ -1,7 +1,7 @@
 @testmodule PythonCallSetup begin
     using PythonCall
 
-    # Exact pattern from wrap_with_python_boilerplate in server.jl
+    # Exact pattern from wrap_with_python_boilerplate in cell_processing.jl
     function wrap_python(code)
         """
         Main.QuartoNotebookWorker.py\"\"\"
