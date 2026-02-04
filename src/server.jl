@@ -25,7 +25,11 @@ end
 
 function refresh!(file::File, options::Dict)
     exeflags, env, quarto_env = _exeflags_and_env(options)
-    if exeflags != file.exeflags || env != file.env || !WorkerIPC.isrunning(file.worker) # the worker might have been killed on another task
+    julia_config = julia_worker_config(options)
+    if exeflags != file.exeflags ||
+       env != file.env ||
+       julia_config.strict_manifest_versions != file.strict_manifest_versions ||
+       !WorkerIPC.isrunning(file.worker) # the worker might have been killed on another task
         WorkerIPC.stop(file.worker)
         exe, _exeflags = _julia_exe(exeflags)
         file.worker = cd(
@@ -33,12 +37,14 @@ function refresh!(file::File, options::Dict)
                 exe,
                 exeflags = _exeflags,
                 env = vcat(env, quarto_env),
+                strict_manifest_versions = julia_config.strict_manifest_versions,
             ),
             dirname(file.path),
         )
         file.exe = exe
         file.exeflags = exeflags
         file.env = env
+        file.strict_manifest_versions = julia_config.strict_manifest_versions
         file.source_code_hash = hash(VERSION)
         file.output_chunks = []
         init!(file, options)
@@ -594,13 +600,6 @@ function run!(
             # block until a decision is reached
             decision = take!(file.run_decision_channel)
 
-            # forceclose! directly kills the worker, so check if it's still running.
-            # This handles the race where we got :evaluate_finished but the worker
-            # was killed by forceclose! before or during evaluation completion.
-            if !WorkerIPC.isrunning(file.worker)
-                error("File was force-closed during run")
-            end
-
             if decision === :forceclose
                 # Worker already stopped by forceclose!, just error out
                 error("File was force-closed during run")
@@ -610,6 +609,11 @@ function run!(
                 catch err
                     # throw the original exception, not the wrapping TaskFailedException
                     rethrow(err.task.exception)
+                end
+                # Only check isrunning after successful fetch - if task threw, we already rethrew.
+                # This handles the race where forceclose! killed the worker during evaluation.
+                if !WorkerIPC.isrunning(file.worker)
+                    error("File was force-closed during run")
                 end
             else
                 error("Invalid decision $decision")

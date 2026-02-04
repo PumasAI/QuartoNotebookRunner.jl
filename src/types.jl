@@ -14,6 +14,7 @@ mutable struct File
     exe::Cmd                              # Julia executable command
     exeflags::Vector{String}              # Julia command-line flags
     env::Vector{String}                   # Environment variables for worker
+    strict_manifest_versions::Bool        # Require exact patch version match
     lock::ReentrantLock                   # Protects concurrent access
     timeout::Float64                      # Seconds until auto-close (0 = immediate)
     timeout_timer::Union{Nothing,Timer}   # Active timeout timer
@@ -32,6 +33,7 @@ mutable struct File
                 merged_options = _extract_relevant_options(file_frontmatter, options)
                 exeflags, env, quarto_env = _exeflags_and_env(merged_options)
                 timeout = _extract_timeout(merged_options)
+                julia_config = julia_worker_config(merged_options)
 
                 exe, _exeflags = _julia_exe(exeflags)
                 worker = cd(
@@ -39,6 +41,7 @@ mutable struct File
                         exe,
                         exeflags = _exeflags,
                         env = vcat(env, quarto_env),
+                        strict_manifest_versions = julia_config.strict_manifest_versions,
                     ),
                     dirname(path),
                 )
@@ -50,6 +53,7 @@ mutable struct File
                     exe,
                     exeflags,
                     env,
+                    julia_config.strict_manifest_versions,
                     ReentrantLock(),
                     timeout,
                     nothing,
