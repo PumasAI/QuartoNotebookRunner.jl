@@ -160,3 +160,45 @@ end
 
     @test !haskey(processed.data, "application/x-custom")
 end
+
+@testitem "process_cell_source without options" tags = [:unit] begin
+    import QuartoNotebookRunner as QNR
+
+    source = "x = 1\ny = 2"
+    result = QNR.process_cell_source(source)
+    @test result == ["x = 1\n", "y = 2"]
+end
+
+@testitem "process_cell_source with new options only" tags = [:unit] begin
+    import QuartoNotebookRunner as QNR
+
+    source = "x = 1"
+    result = QNR.process_cell_source(source, Dict("echo" => false))
+    @test result[1] == "#| echo: false\n"
+    @test result[2] == "x = 1"
+end
+
+@testitem "process_cell_source merges existing and new options" tags = [:unit] begin
+    import QuartoNotebookRunner as QNR
+
+    source = "#| label: foo\nx = 1"
+    result = QNR.process_cell_source(source, Dict("echo" => false))
+    # Should have both options, and source stripped of original options
+    @test any(contains("echo: false"), result)
+    @test any(contains("label: \"foo\""), result)  # YAML quotes strings
+    @test any(==("x = 1"), result)
+    # Original option line should not be duplicated
+    @test count(contains("label"), result) == 1
+end
+
+@testitem "process_cell_source new options override existing" tags = [:unit] begin
+    import QuartoNotebookRunner as QNR
+
+    source = "#| echo: fenced\nx = 1"
+    result = QNR.process_cell_source(source, Dict("echo" => false))
+    # New value should win
+    @test any(contains("echo: false"), result)
+    @test !any(contains("echo: fenced"), result)
+    # Only one echo key
+    @test count(contains("echo"), result) == 1
+end

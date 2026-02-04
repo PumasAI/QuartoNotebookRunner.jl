@@ -58,11 +58,15 @@ function toplevel_language(node)::Union{Symbol,Nothing}
 end
 
 """
-    extract_cell_options(source; file, line)
+    extract_cell_options(source; file="", line=0)
 
 Parse YAML cell options from `#| ` prefixed lines in source.
 """
-function extract_cell_options(source::AbstractString; file::AbstractString, line::Integer)
+function extract_cell_options(
+    source::AbstractString;
+    file::AbstractString = "",
+    line::Integer = 0,
+)
     prefix = "#| "
     yaml = IOBuffer()
     none = true
