@@ -104,7 +104,12 @@ mutable struct Worker
     state::ConnectionState
     manifest_file::String
 
-    function Worker(; exe = Base.julia_cmd()[1], env = String[], exeflags = [])
+    function Worker(;
+        exe = Base.julia_cmd()[1],
+        env = String[],
+        exeflags = [],
+        strict_manifest_versions = false,
+    )
         proc, port, manifest_error, manifest_file = mktempdir() do temp_dir
             errors_log_file = joinpath(temp_dir, "errors.log")
             touch(errors_log_file)
@@ -123,8 +128,11 @@ mutable struct Worker
             port_str = readline(proc)
             port = tryparse(UInt16, port_str)
 
-            manifest_file, manifest_error =
-                _validate_worker_process_manifest(metadata_toml_file, errors_log_file)
+            manifest_file, manifest_error = _validate_worker_process_manifest(
+                metadata_toml_file,
+                errors_log_file;
+                strict = strict_manifest_versions,
+            )
 
             if port === nothing
                 # Process may already be dead; ignore kill errors (esp. EACCES on Windows)
@@ -362,7 +370,8 @@ end
 
 function _validate_worker_process_manifest(
     metadata_toml_file::String,
-    error_logs_file::String,
+    error_logs_file::String;
+    strict::Bool = false,
 )
     metadata = TOML.parsefile(metadata_toml_file)
     manifest_toml_file = get(metadata, "manifest", "")
@@ -376,7 +385,7 @@ function _validate_worker_process_manifest(
 
     isempty(expected_julia_version) && return project_hash, nothing
 
-    if !_compare_versions(actual_julia_version, expected_julia_version)
+    if !_compare_versions(actual_julia_version, expected_julia_version; strict)
         message = """
         Julia version mismatch in notebook file.
 
@@ -397,11 +406,11 @@ function _validate_worker_process_manifest(
     return project_hash, nothing
 end
 
-_compare_versions(a::AbstractString, b::AbstractString) =
-    _compare_versions(tryparse(VersionNumber, a), tryparse(VersionNumber, b))
-_compare_versions(a::VersionNumber, b::VersionNumber) =
-    a.major == b.major && a.minor == b.minor && a.patch == b.patch
-_compare_versions(_, _) = false
+_compare_versions(a::AbstractString, b::AbstractString; strict = false) =
+    _compare_versions(tryparse(VersionNumber, a), tryparse(VersionNumber, b); strict)
+_compare_versions(a::VersionNumber, b::VersionNumber; strict = false) =
+    a.major == b.major && a.minor == b.minor && (strict ? a.patch == b.patch : true)
+_compare_versions(::Any, ::Any; strict = false) = false
 
 function _manifest_in_sync_check(w::Worker)
     msg = call(w, ManifestInSyncRequest())

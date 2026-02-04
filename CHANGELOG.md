@@ -18,6 +18,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Make strict manifest version checking opt-in via `julia: strict_manifest_versions: true` frontmatter; default now matches Pkg behavior (major.minor only) [#392]
 - Replace Malt+BSON with custom binary IPC protocol for worker communication [#388]
 - Evaluate notebook code synchronously instead of spawning tasks [#317]
 
@@ -492,3 +493,4 @@ caching is enabled. Delete this folder to clear the cache. [#259]
 [#387]: https://github.com/PumasAI/QuartoNotebookRunner.jl/issues/387
 [#388]: https://github.com/PumasAI/QuartoNotebookRunner.jl/issues/388
 [#390]: https://github.com/PumasAI/QuartoNotebookRunner.jl/issues/390
+[#392]: https://github.com/PumasAI/QuartoNotebookRunner.jl/issues/392

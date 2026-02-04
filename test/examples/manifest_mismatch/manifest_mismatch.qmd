@@ -1,6 +1,8 @@
 ---
 title: Manifest mismatch
 engine: julia
+julia:
+  strict_manifest_versions: true
 ---
 
 ```{julia}
