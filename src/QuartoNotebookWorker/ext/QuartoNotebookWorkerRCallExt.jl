@@ -84,4 +84,15 @@ function __init__()
     end
 end
 
+function QuartoNotebookWorker._r_expr(
+    ::Nothing,
+    code::AbstractString,
+    src::LineNumberNode,
+    nb_mod::Module,
+)
+    quote
+        $RCall.rcopy($RCall.reval($RCall.rparse($code)))
+    end
+end
+
 end

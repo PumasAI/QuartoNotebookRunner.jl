@@ -50,10 +50,9 @@ Wrap code for execution via RCall.
 """
 function wrap_with_r_boilerplate(code)
     """
-    @isdefined(RCall) && RCall isa Module && Base.PkgId(RCall).uuid == Base.UUID("6f49c342-dc21-5d91-9882-a32aef131414") || error("RCall must be imported to execute R code cells with QuartoNotebookRunner")
-    RCall.rcopy(RCall.R\"\"\"
+    Main.QuartoNotebookWorker.R\"\"\"
     $code
-    \"\"\")
+    \"\"\"
     """
 end
 
