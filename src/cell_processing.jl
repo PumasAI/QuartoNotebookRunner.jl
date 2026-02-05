@@ -18,8 +18,15 @@ json_reader(str) = JSON3.read(str, Any)
     process_cell_source(source, cell_options=Dict())
 
 Process cell source into lines, optionally prepending YAML cell options.
+When cell_options is non-empty, merges with any existing options in source
+(cell_options takes precedence) to avoid duplicate YAML keys.
 """
 function process_cell_source(source::AbstractString, cell_options::Dict = Dict())
+    if !isempty(cell_options)
+        existing = extract_cell_options(source)
+        cell_options = merge(existing, cell_options)
+        source = strip_cell_options(source)
+    end
     lines = source_lines(source; keep = true)
     if !isempty(lines)
         lines[end] = rstrip(lines[end])

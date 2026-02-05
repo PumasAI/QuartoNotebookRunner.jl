@@ -14,6 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Fix duplicate YAML keys when Python/R cells have cell options like `echo` [#394]
 - Wrap package hook invocations in try-catch to prevent worker hangs from hook errors [#390]
 
 ### Changed
@@ -494,3 +495,4 @@ caching is enabled. Delete this folder to clear the cache. [#259]
 [#388]: https://github.com/PumasAI/QuartoNotebookRunner.jl/issues/388
 [#390]: https://github.com/PumasAI/QuartoNotebookRunner.jl/issues/390
 [#392]: https://github.com/PumasAI/QuartoNotebookRunner.jl/issues/392
+[#394]: https://github.com/PumasAI/QuartoNotebookRunner.jl/issues/394

@@ -160,3 +160,108 @@ end
 
     @test !haskey(processed.data, "application/x-custom")
 end
+
+@testitem "process_cell_source without options" tags = [:unit] begin
+    import QuartoNotebookRunner as QNR
+
+    source = "x = 1\ny = 2"
+    result = QNR.process_cell_source(source)
+    @test result == ["x = 1\n", "y = 2"]
+end
+
+@testitem "process_cell_source with new options only" tags = [:unit] begin
+    import QuartoNotebookRunner as QNR
+
+    source = "x = 1"
+    result = QNR.process_cell_source(source, Dict("echo" => false))
+    @test result[1] == "#| echo: false\n"
+    @test result[2] == "x = 1"
+end
+
+@testitem "process_cell_source merges existing and new options" tags = [:unit] begin
+    import QuartoNotebookRunner as QNR
+
+    source = "#| label: foo\nx = 1"
+    result = QNR.process_cell_source(source, Dict("echo" => false))
+    # Should have both options, and source stripped of original options
+    @test any(contains("echo: false"), result)
+    @test any(contains("label: \"foo\""), result)  # YAML quotes strings
+    @test any(==("x = 1"), result)
+    # Original option line should not be duplicated
+    @test count(contains("label"), result) == 1
+end
+
+@testitem "process_cell_source new options override existing" tags = [:unit] begin
+    import QuartoNotebookRunner as QNR
+
+    source = "#| echo: fenced\nx = 1"
+    result = QNR.process_cell_source(source, Dict("echo" => false))
+    # New value should win
+    @test any(contains("echo: false"), result)
+    @test !any(contains("echo: fenced"), result)
+    # Only one echo key
+    @test count(contains("echo"), result) == 1
+end
+
+@testitem "_add_language_prefix_cell! standard fencing" tags = [:unit] begin
+    import QuartoNotebookRunner as QNR
+
+    cells = []
+    chunk = (; source = "x = 1", file = "test.qmd", line = 1)
+    QNR._add_language_prefix_cell!(cells, chunk, 1, 1, false, :python, false)
+
+    @test length(cells) == 1
+    source = join(cells[1].source)
+    @test contains(source, "```python")
+    @test contains(source, "x = 1")
+    @test !contains(source, "{{")
+end
+
+@testitem "_add_language_prefix_cell! fenced mode" tags = [:unit] begin
+    import QuartoNotebookRunner as QNR
+
+    cells = []
+    chunk = (; source = "x = 1", file = "test.qmd", line = 1)
+    QNR._add_language_prefix_cell!(cells, chunk, 1, 1, false, :python, true)
+
+    @test length(cells) == 1
+    source = join(cells[1].source)
+    @test contains(source, "```{{python}}")
+    @test contains(source, "x = 1")
+end
+
+@testitem "_add_language_prefix_cell! strips cell options" tags = [:unit] begin
+    import QuartoNotebookRunner as QNR
+
+    cells = []
+    chunk = (; source = "#| label: foo\nx = 1", file = "test.qmd", line = 1)
+    QNR._add_language_prefix_cell!(cells, chunk, 1, 1, false, :r, false)
+
+    @test length(cells) == 1
+    source = join(cells[1].source)
+    @test contains(source, "```r")
+    @test contains(source, "x = 1")
+    @test !contains(source, "label")
+end
+
+@testitem "_get_user_echo from cell_options" tags = [:unit] begin
+    import QuartoNotebookRunner as QNR
+
+    chunk = (; source = "x = 1", file = "test.qmd", line = 1)
+
+    # cell_options has echo
+    @test QNR._get_user_echo(Dict("echo" => false), chunk) == false
+    @test QNR._get_user_echo(Dict("echo" => "fenced"), chunk) == "fenced"
+end
+
+@testitem "_get_user_echo from source" tags = [:unit] begin
+    import QuartoNotebookRunner as QNR
+
+    # No cell_options, extract from source
+    chunk = (; source = "#| echo: fenced\nx = 1", file = "test.qmd", line = 1)
+    @test QNR._get_user_echo(Dict(), chunk) == "fenced"
+
+    # No echo in source, default to true
+    chunk = (; source = "x = 1", file = "test.qmd", line = 1)
+    @test QNR._get_user_echo(Dict(), chunk) == true
+end
