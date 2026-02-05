@@ -5,9 +5,16 @@ struct Server
     workers::Dict{String,File}
     lock::ReentrantLock # should be locked for mutation/lookup of the workers dict, not for evaling on the workers. use worker locks for that
     on_change::Base.RefValue{Function} # an optional callback function n_workers::Int -> nothing that gets called with the server.lock locked when workers are added or removed
+    sandbox_base::String # shared temp dir for worker sandboxes, cleaned on Server close
     function Server()
         workers = Dict{String,File}()
-        return new(workers, ReentrantLock(), Ref{Function}(identity))
+        sandbox_base = joinpath(
+            WorkerIPC._get_scratchspace_path(),
+            "sandboxes",
+            string(rand(UInt), base = 62),
+        )
+        mkpath(sandbox_base)
+        return new(workers, ReentrantLock(), Ref{Function}(identity), sandbox_base)
     end
 end
 
@@ -38,6 +45,7 @@ function refresh!(file::File, options::Dict)
                 exeflags = _exeflags,
                 env = vcat(env, quarto_env),
                 strict_manifest_versions = julia_config.strict_manifest_versions,
+                sandbox_base = file.sandbox_base,
             ),
             dirname(file.path),
         )
@@ -689,7 +697,9 @@ function borrow_file!(
             if optionally_create
                 # it's not ideal to create the `File` under server.lock but it takes a second or
                 # so on my machine to init it, so for practical purposes it should be ok
-                file = server.workers[apath] = File(apath, options)
+                file =
+                    server.workers[apath] =
+                        File(apath, options; sandbox_base = server.sandbox_base)
                 lock(file.lock) # don't let anything get to the fresh file before us
                 on_change(server)
                 return true, file
@@ -763,6 +773,7 @@ function close!(server::Server)
             close!(server, path)
         end
     end
+    rm(server.sandbox_base; force = true, recursive = true)
 end
 
 """

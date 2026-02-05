@@ -19,6 +19,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Cache worker package environments using Scratch.jl; skip Pkg.develop on subsequent startups for same Julia version [#395]
 - Make strict manifest version checking opt-in via `julia: strict_manifest_versions: true` frontmatter; default now matches Pkg behavior (major.minor only) [#392]
 - Replace Malt+BSON with custom binary IPC protocol for worker communication [#388]
 - Evaluate notebook code synchronously instead of spawning tasks [#317]
@@ -496,3 +497,4 @@ caching is enabled. Delete this folder to clear the cache. [#259]
 [#390]: https://github.com/PumasAI/QuartoNotebookRunner.jl/issues/390
 [#392]: https://github.com/PumasAI/QuartoNotebookRunner.jl/issues/392
 [#394]: https://github.com/PumasAI/QuartoNotebookRunner.jl/issues/394
+[#395]: https://github.com/PumasAI/QuartoNotebookRunner.jl/issues/395

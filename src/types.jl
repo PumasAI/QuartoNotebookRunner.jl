@@ -21,8 +21,9 @@ mutable struct File
     run_started::Union{Nothing,Dates.DateTime}   # Last run start time
     run_finished::Union{Nothing,Dates.DateTime}  # Last run completion time
     run_decision_channel::Channel{Symbol} # Communication channel for forceclose
+    sandbox_base::String                  # Shared sandbox base from Server
 
-    function File(path::String, options::Union{String,Dict{String,Any}})
+    function File(path::String, options::Union{String,Dict{String,Any}}; sandbox_base)
         if isfile(path)
             _, ext = splitext(path)
             if ext in (".jl", ".qmd")
@@ -42,6 +43,7 @@ mutable struct File
                         exeflags = _exeflags,
                         env = vcat(env, quarto_env),
                         strict_manifest_versions = julia_config.strict_manifest_versions,
+                        sandbox_base,
                     ),
                     dirname(path),
                 )
@@ -60,6 +62,7 @@ mutable struct File
                     nothing,
                     nothing,
                     Channel{Symbol}(32), # buffered to avoid blocking on put!
+                    sandbox_base,
                 )
                 init!(file, merged_options)
                 return file

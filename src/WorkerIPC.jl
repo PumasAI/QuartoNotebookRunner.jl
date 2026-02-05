@@ -2,7 +2,7 @@
 
 module WorkerIPC
 
-import ..QuartoNotebookRunner: UserError
+import ..QuartoNotebookRunner
 
 import IOCapture
 import Logging
@@ -11,8 +11,15 @@ import Sockets
 import TOML
 
 import RelocatableFolders
+import Scratch
 
 include("QuartoNotebookWorker/src/protocol.jl")
+
+# Scratchspace for worker environments
+function _get_scratchspace_path()
+    key = "worker-qnr$(QuartoNotebookRunner.QNR_VERSION)"
+    Scratch.@get_scratch!(key)
+end
 
 # Exceptions
 
@@ -109,7 +116,10 @@ mutable struct Worker
         env = String[],
         exeflags = [],
         strict_manifest_versions = false,
+        sandbox_base,
     )
+        scratchspace = _get_scratchspace_path()
+
         proc, port, manifest_error, manifest_file = mktempdir() do temp_dir
             errors_log_file = joinpath(temp_dir, "errors.log")
             touch(errors_log_file)
@@ -119,7 +129,7 @@ mutable struct Worker
 
             env = vcat("WORKERIPC_TEMP_DIR=$temp_dir", env)
 
-            cmd = _get_worker_cmd(; exe, env, exeflags)
+            cmd = _get_worker_cmd(; exe, env, exeflags, scratchspace, sandbox_base)
             proc = open(Cmd(cmd; detach = true, windows_hide = true), "w+")
 
             _get_running_procs()
@@ -147,7 +157,16 @@ mutable struct Worker
                 err_output = read(errors_log_file, String)
                 if isnothing(manifest_error)
                     empty_result = IOCapture.capture(; rethrow = InterruptException) do
-                        run(_get_worker_cmd(; exe, env, exeflags, file = String(empty_file)))
+                        run(
+                            _get_worker_cmd(;
+                                exe,
+                                env,
+                                exeflags,
+                                file = String(empty_file),
+                                scratchspace,
+                                sandbox_base,
+                            ),
+                        )
                     end
                     if empty_result.error
                         error("Failed to start worker process.\n\n$(empty_result.output)")
@@ -156,7 +175,7 @@ mutable struct Worker
                         "Failed to start worker process. Expected port, got \"$port_str\".\n\nERROR: $err_output",
                     )
                 else
-                    throw(UserError(manifest_error))
+                    throw(QuartoNotebookRunner.UserError(manifest_error))
                 end
             end
 
@@ -179,7 +198,7 @@ mutable struct Worker
 
         if !isnothing(manifest_error)
             stop(w)
-            throw(UserError(manifest_error))
+            throw(QuartoNotebookRunner.UserError(manifest_error))
         end
 
         _manifest_in_sync_check(w)
@@ -338,10 +357,19 @@ const startup_file = RelocatableFolders.@path joinpath(@__DIR__, "startup.jl")
 const empty_file = RelocatableFolders.@path joinpath(@__DIR__, "empty.jl")
 const worker_package = RelocatableFolders.@path joinpath(@__DIR__, "QuartoNotebookWorker")
 
-function _get_worker_cmd(; exe, env, exeflags, file = String(startup_file))
+function _get_worker_cmd(;
+    exe,
+    env,
+    exeflags,
+    file = String(startup_file),
+    scratchspace,
+    sandbox_base,
+)
     defaults = Dict(
         "OPENBLAS_NUM_THREADS" => "1",
         "QUARTONOTEBOOKWORKER_PACKAGE" => String(worker_package),
+        "QUARTONOTEBOOKWORKER_SCRATCHSPACE" => scratchspace,
+        "QUARTONOTEBOOKWORKER_SANDBOX_BASE" => sandbox_base,
     )
     env = vcat(Base.byteenv(defaults), Base.byteenv(env))
     return addenv(`$exe --startup-file=no $exeflags $file`, env)
@@ -361,7 +389,7 @@ function _validate_worker_cmd(exe, exeflags)
         exe_no_env = setenv(cmd, nothing)
         cmd_error = rstrip(String(take!(stderr_buf)))
         throw(
-            UserError(
+            QuartoNotebookRunner.UserError(
                 "Failed to run Julia worker with command:\n\n$exe_no_env\n\n$cmd_error",
             ),
         )
@@ -416,7 +444,7 @@ function _manifest_in_sync_check(w::Worker)
     msg = call(w, ManifestInSyncRequest())
     if !isnothing(msg)
         stop(w)
-        throw(UserError(msg))
+        throw(QuartoNotebookRunner.UserError(msg))
     end
 end
 
