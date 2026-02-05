@@ -45,40 +45,54 @@ pushfirst!(LOAD_PATH, "@stdlib")
 # and if a user was to perform `Pkg` operations they may affect that
 # environment. Instead we provide a temporary sandbox environment that gets
 # discarded when the notebook process exits.
-let temp = mktempdir()
-    sandbox = joinpath(temp, "QuartoSandbox")
+let
+    # Sandbox: unique per worker, created inside Server-owned sandbox_base
+    sandbox =
+        joinpath(ENV["QUARTONOTEBOOKWORKER_SANDBOX_BASE"], string(rand(UInt), base = 62))
     mkpath(sandbox)
     # The empty project file is key to making this the active environment if
-    # noting else is available if the rest of the `LOAD_PATH`.
+    # nothing else is available in the rest of the `LOAD_PATH`.
     touch(joinpath(sandbox, "Project.toml"))
     push!(LOAD_PATH, sandbox)
 
     # Step 2b:
     #
     # We also need to ensure that the `QuartoNotebookWorker` package is
-    # available on the `LOAD_PATH`. This is done by creating another
-    # environment alongside the sandbox environment. We `Pkg.develop` the
-    # "local" `QuartoNotebookWorker` package into this environment. `Pkg`
-    # operations are logged to the `pkg.log` file that the server process can
-    # read to provide feedback to the user if needed.
+    # available on the `LOAD_PATH`. We `Pkg.develop` the "local"
+    # `QuartoNotebookWorker` package into a VERSION-specific environment inside
+    # a scratchspace. This is cached across sessions - if the Project.toml
+    # already exists, skip Pkg.develop and just add to LOAD_PATH.
     #
-    # `Pkg` is loaded outside of this closure otherwise the methods required do
-    # not exist in a new enough world age to be callable.
-    Pkg = Base.require(Base.PkgId(Base.UUID("44cfe95a-1eb2-52ea-b672-e2afdf69b78f"), "Pkg"))
-    capture() do
-        worker = joinpath(temp, "QuartoNotebookWorker")
-        mkpath(worker)
+    # `Pkg` operations are logged to the `pkg.log` file that the server process
+    # can read to provide feedback to the user if needed.
+    #
+    # `Pkg` is loaded outside of the `capture` closure otherwise the methods
+    # required do not exist in a new enough world age to be callable.
+    worker = joinpath(ENV["QUARTONOTEBOOKWORKER_SCRATCHSPACE"], "julia-$(VERSION)")
+    project_file = joinpath(worker, "Project.toml")
+
+    if isfile(project_file)
+        # Already set up - just add to LOAD_PATH
         push!(LOAD_PATH, worker)
-        open(joinpath(ENV["WORKERIPC_TEMP_DIR"], "pkg.log"), "w") do io
-            ap = Base.active_project()
-            try
-                Pkg.activate(worker; io)
-                Pkg.develop(; path = ENV["QUARTONOTEBOOKWORKER_PACKAGE"], io)
-            finally
-                # Ensure that we switch the active project back afterwards.
-                Pkg.activate(ap; io)
+    else
+        # First time for this VERSION - do Pkg.develop
+        Pkg = Base.require(
+            Base.PkgId(Base.UUID("44cfe95a-1eb2-52ea-b672-e2afdf69b78f"), "Pkg"),
+        )
+        capture() do
+            mkpath(worker)
+            push!(LOAD_PATH, worker)
+            open(joinpath(ENV["WORKERIPC_TEMP_DIR"], "pkg.log"), "w") do io
+                ap = Base.active_project()
+                try
+                    Pkg.activate(worker; io)
+                    Pkg.develop(; path = ENV["QUARTONOTEBOOKWORKER_PACKAGE"], io)
+                finally
+                    # Ensure that we switch the active project back afterwards.
+                    Pkg.activate(ap; io)
+                end
+                flush(io)
             end
-            flush(io)
         end
     end
 end
@@ -119,8 +133,8 @@ end
 # should do a manual `import Revise` in their notebook if they need `Revise`
 # support.
 const QUARTO_ENABLE_REVISE = get(ENV, "QUARTO_ENABLE_REVISE", "false") == "true"
-capture() do
-    if QUARTO_ENABLE_REVISE
+if QUARTO_ENABLE_REVISE
+    capture() do
         pkgid = Base.PkgId(Base.UUID("295af30f-e4ad-537b-8983-00126c2a3abe"), "Revise")
         Base.require(pkgid)
     end
