@@ -231,28 +231,46 @@ should_eval(chunk, global_eval::Bool) =
     (chunk.evaluate === true || (chunk.evaluate === Unset() && global_eval))
 
 """
-    _add_language_prefix_cell!(cells, chunk, nth, mth, expand_cell, language)
+    _add_language_prefix_cell!(cells, chunk, nth, mth, expand_cell, language, fenced=false)
 
 Add a markdown cell containing a fenced code block for displaying R/Python source.
-Returns true and sets cell_options["echo"] = false to hide the actual code cell.
+When `fenced=true`, uses `{{language}}` syntax so fence markers are visible in output.
 """
-function _add_language_prefix_cell!(cells, chunk, nth, mth, expand_cell, language::Symbol)
+function _add_language_prefix_cell!(
+    cells,
+    chunk,
+    nth,
+    mth,
+    expand_cell,
+    language::Symbol,
+    fenced::Bool = false,
+)
+    lang_str = fenced ? "{{$(language)}}" : string(language)
+    code = chomp(strip_cell_options(chunk.source))
     push!(
         cells,
         (;
             id = string(expand_cell ? string(nth, "_", mth) : string(nth), "_code_prefix"),
             cell_type = :markdown,
             metadata = (;),
-            source = process_cell_source(
-                """
-```$(language)
-$(strip_cell_options(chunk.source))
-```
-""",
-                Dict(),
-            ),
+            source = process_cell_source("```$(lang_str)\n$(code)\n```\n", Dict()),
         ),
     )
+end
+
+"""
+    _get_user_echo(cell_options, chunk)
+
+Get user's echo option for foreign (Python/R) cells.
+Returns the echo value from cell_options if present, otherwise extracts from source.
+"""
+function _get_user_echo(cell_options, chunk)
+    if haskey(cell_options, "echo")
+        cell_options["echo"]
+    else
+        opts = extract_cell_options(chunk.source; file = chunk.file, line = chunk.line)
+        get(opts, "echo", true)
+    end
 end
 
 """
@@ -442,18 +460,19 @@ function evaluate_raw_cells!(
 
                     # Non-Julia code cells need a prefix cell with formatted source
                     # since the notebook language is julia. Hide the actual code cell.
-                    if chunk.language === :python
-                        _add_language_prefix_cell!(
-                            cells,
-                            chunk,
-                            nth,
-                            mth,
-                            expand_cell,
-                            :python,
-                        )
-                        cell_options["echo"] = false
-                    elseif chunk.language === :r
-                        _add_language_prefix_cell!(cells, chunk, nth, mth, expand_cell, :r)
+                    if chunk.language in (:python, :r)
+                        user_echo = _get_user_echo(cell_options, chunk)
+                        if user_echo != false
+                            _add_language_prefix_cell!(
+                                cells,
+                                chunk,
+                                nth,
+                                mth,
+                                expand_cell,
+                                chunk.language,
+                                user_echo == "fenced",
+                            )
+                        end
                         cell_options["echo"] = false
                     end
 

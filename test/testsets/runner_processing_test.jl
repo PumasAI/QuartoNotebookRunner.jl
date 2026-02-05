@@ -202,3 +202,66 @@ end
     # Only one echo key
     @test count(contains("echo"), result) == 1
 end
+
+@testitem "_add_language_prefix_cell! standard fencing" tags = [:unit] begin
+    import QuartoNotebookRunner as QNR
+
+    cells = []
+    chunk = (; source = "x = 1", file = "test.qmd", line = 1)
+    QNR._add_language_prefix_cell!(cells, chunk, 1, 1, false, :python, false)
+
+    @test length(cells) == 1
+    source = join(cells[1].source)
+    @test contains(source, "```python")
+    @test contains(source, "x = 1")
+    @test !contains(source, "{{")
+end
+
+@testitem "_add_language_prefix_cell! fenced mode" tags = [:unit] begin
+    import QuartoNotebookRunner as QNR
+
+    cells = []
+    chunk = (; source = "x = 1", file = "test.qmd", line = 1)
+    QNR._add_language_prefix_cell!(cells, chunk, 1, 1, false, :python, true)
+
+    @test length(cells) == 1
+    source = join(cells[1].source)
+    @test contains(source, "```{{python}}")
+    @test contains(source, "x = 1")
+end
+
+@testitem "_add_language_prefix_cell! strips cell options" tags = [:unit] begin
+    import QuartoNotebookRunner as QNR
+
+    cells = []
+    chunk = (; source = "#| label: foo\nx = 1", file = "test.qmd", line = 1)
+    QNR._add_language_prefix_cell!(cells, chunk, 1, 1, false, :r, false)
+
+    @test length(cells) == 1
+    source = join(cells[1].source)
+    @test contains(source, "```r")
+    @test contains(source, "x = 1")
+    @test !contains(source, "label")
+end
+
+@testitem "_get_user_echo from cell_options" tags = [:unit] begin
+    import QuartoNotebookRunner as QNR
+
+    chunk = (; source = "x = 1", file = "test.qmd", line = 1)
+
+    # cell_options has echo
+    @test QNR._get_user_echo(Dict("echo" => false), chunk) == false
+    @test QNR._get_user_echo(Dict("echo" => "fenced"), chunk) == "fenced"
+end
+
+@testitem "_get_user_echo from source" tags = [:unit] begin
+    import QuartoNotebookRunner as QNR
+
+    # No cell_options, extract from source
+    chunk = (; source = "#| echo: fenced\nx = 1", file = "test.qmd", line = 1)
+    @test QNR._get_user_echo(Dict(), chunk) == "fenced"
+
+    # No echo in source, default to true
+    chunk = (; source = "x = 1", file = "test.qmd", line = 1)
+    @test QNR._get_user_echo(Dict(), chunk) == true
+end
