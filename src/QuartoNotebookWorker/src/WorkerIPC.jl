@@ -43,6 +43,10 @@ function serve(server::Sockets.TCPServer)
     # Send handshake
     write_handshake(io)
 
+    # Local contexts dict for multi-notebook support
+    contexts = Dict{String,QuartoNotebookWorker.NotebookState.NotebookContext}()
+    contexts_lock = ReentrantLock()
+
     # Message loop - use countfrom as workaround for Julia issue #37154
     for _ in Iterators.countfrom(1)
         isopen(io.io) || break
@@ -71,7 +75,7 @@ function serve(server::Sockets.TCPServer)
 
         # Handle call
         if msg.type == MsgType.CALL
-            handle_call(io, msg)
+            handle_call(io, msg, contexts, contexts_lock)
         else
             Logging.@warn "WORKER: unknown message type" msg.type
         end
@@ -80,7 +84,12 @@ function serve(server::Sockets.TCPServer)
     Logging.@debug "WORKER: exiting"
 end
 
-function handle_call(io::LockableIO, msg::Message)
+function handle_call(
+    io::LockableIO,
+    msg::Message,
+    contexts::Dict{String,QuartoNotebookWorker.NotebookState.NotebookContext},
+    contexts_lock::ReentrantLock,
+)
     # Deserialize request
     request = try
         _ipc_deserialize(msg.payload)
@@ -90,7 +99,7 @@ function handle_call(io::LockableIO, msg::Message)
     end
 
     result, success = try
-        (QuartoNotebookWorker.dispatch(request), true)
+        (QuartoNotebookWorker.dispatch(request, contexts, contexts_lock), true)
     catch e
         (format_error(e, catch_backtrace()), false)
     end

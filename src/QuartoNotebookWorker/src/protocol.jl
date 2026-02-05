@@ -15,7 +15,7 @@ Base.lock(f, lio::LockableIO) =
 
 const MsgID = UInt64
 const MAGIC = UInt32(0x514E5257)  # "QNRW"
-const PROTOCOL_VERSION = UInt8(4)  # Typed request structs
+const PROTOCOL_VERSION = UInt8(5)  # Multi-notebook per worker
 
 module MsgType
 const CALL = 0x01       # expects response
@@ -99,9 +99,8 @@ const TAG_TYPED_DICT = 0x0E
 
 # Request type tags
 const TAG_MANIFEST_IN_SYNC_REQ = 0x20
-const TAG_WORKER_INIT_REQ = 0x21
-const TAG_WORKER_REFRESH_REQ = 0x22
-const TAG_SET_ENV_VARS_REQ = 0x23
+const TAG_NOTEBOOK_INIT_REQ = 0x26
+const TAG_NOTEBOOK_CLOSE_REQ = 0x27
 const TAG_RENDER_REQ = 0x24
 const TAG_EVALUATE_PARAMS_REQ = 0x25
 
@@ -134,17 +133,16 @@ abstract type IPCRequest end
 
 struct ManifestInSyncRequest <: IPCRequest end
 
-Base.@kwdef struct WorkerInitRequest <: IPCRequest
-    path::String
+Base.@kwdef struct NotebookInitRequest <: IPCRequest
+    file::String                    # Absolute notebook path (context key)
+    project::String
     options::Dict{String,Any}
+    cwd::String
+    env_vars::Vector{String}
 end
 
-Base.@kwdef struct WorkerRefreshRequest <: IPCRequest
-    options::Dict{String,Any}
-end
-
-Base.@kwdef struct SetEnvVarsRequest <: IPCRequest
-    vars::Vector{String}
+Base.@kwdef struct NotebookCloseRequest <: IPCRequest
+    file::String
 end
 
 Base.@kwdef struct RenderRequest <: IPCRequest
@@ -156,14 +154,14 @@ Base.@kwdef struct RenderRequest <: IPCRequest
 end
 
 Base.@kwdef struct EvaluateParamsRequest <: IPCRequest
+    file::String                    # Identifies notebook context
     params::Dict{String,Any}
 end
 
 # Response type mapping for type-stable returns
 response_type(::Type{ManifestInSyncRequest}) = Union{Nothing,String}
-response_type(::Type{WorkerInitRequest}) = Nothing
-response_type(::Type{WorkerRefreshRequest}) = Nothing
-response_type(::Type{SetEnvVarsRequest}) = Nothing
+response_type(::Type{NotebookInitRequest}) = Nothing
+response_type(::Type{NotebookCloseRequest}) = Nothing
 response_type(::Type{RenderRequest}) = RenderResponse
 response_type(::Type{EvaluateParamsRequest}) = Nothing
 
@@ -285,20 +283,18 @@ function _serialize(io::IO, ::ManifestInSyncRequest)
     write(io, TAG_MANIFEST_IN_SYNC_REQ)
 end
 
-function _serialize(io::IO, x::WorkerInitRequest)
-    write(io, TAG_WORKER_INIT_REQ)
-    _serialize(io, x.path)
+function _serialize(io::IO, x::NotebookInitRequest)
+    write(io, TAG_NOTEBOOK_INIT_REQ)
+    _serialize(io, x.file)
+    _serialize(io, x.project)
     _serialize(io, x.options)
+    _serialize(io, x.cwd)
+    _serialize(io, x.env_vars)
 end
 
-function _serialize(io::IO, x::WorkerRefreshRequest)
-    write(io, TAG_WORKER_REFRESH_REQ)
-    _serialize(io, x.options)
-end
-
-function _serialize(io::IO, x::SetEnvVarsRequest)
-    write(io, TAG_SET_ENV_VARS_REQ)
-    _serialize(io, x.vars)
+function _serialize(io::IO, x::NotebookCloseRequest)
+    write(io, TAG_NOTEBOOK_CLOSE_REQ)
+    _serialize(io, x.file)
 end
 
 function _serialize(io::IO, x::RenderRequest)
@@ -312,6 +308,7 @@ end
 
 function _serialize(io::IO, x::EvaluateParamsRequest)
     write(io, TAG_EVALUATE_PARAMS_REQ)
+    _serialize(io, x.file)
     _serialize(io, x.params)
 end
 
@@ -382,12 +379,16 @@ function _deserialize(io::IO)
         end
     elseif tag == TAG_MANIFEST_IN_SYNC_REQ
         ManifestInSyncRequest()
-    elseif tag == TAG_WORKER_INIT_REQ
-        WorkerInitRequest(_deserialize(io), _deserialize(io))
-    elseif tag == TAG_WORKER_REFRESH_REQ
-        WorkerRefreshRequest(_deserialize(io))
-    elseif tag == TAG_SET_ENV_VARS_REQ
-        SetEnvVarsRequest(_deserialize(io))
+    elseif tag == TAG_NOTEBOOK_INIT_REQ
+        NotebookInitRequest(
+            _deserialize(io),
+            _deserialize(io),
+            _deserialize(io),
+            _deserialize(io),
+            _deserialize(io),
+        )
+    elseif tag == TAG_NOTEBOOK_CLOSE_REQ
+        NotebookCloseRequest(_deserialize(io))
     elseif tag == TAG_RENDER_REQ
         RenderRequest(
             _deserialize(io),
@@ -397,7 +398,7 @@ function _deserialize(io::IO)
             _deserialize(io),
         )
     elseif tag == TAG_EVALUATE_PARAMS_REQ
-        EvaluateParamsRequest(_deserialize(io))
+        EvaluateParamsRequest(_deserialize(io), _deserialize(io))
     else
         error("Unknown serialization tag: $tag")
     end

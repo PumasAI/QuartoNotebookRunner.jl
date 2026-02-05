@@ -83,7 +83,7 @@ function include_str(
             cell_options = cell_options,
             rethrow = InterruptException,
             color = true,
-            io_context = _io_context(cell_options),
+            io_context = _io_context(mod, cell_options),
         ) do
             result = nothing
             line_and_ex = Expr(:toplevel, loc, nothing)

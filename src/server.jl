@@ -27,7 +27,18 @@ end
 
 function init!(file::File, options::Dict)
     worker = file.worker
-    WorkerIPC.call(worker, WorkerIPC.WorkerInitRequest(path = file.path, options = options))
+    _, _, quarto_env = _exeflags_and_env(options)
+    cwd = something(get(options, "cwd", nothing), dirname(file.path))
+    WorkerIPC.call(
+        worker,
+        WorkerIPC.NotebookInitRequest(
+            file = file.path,
+            project = Base.active_project(),
+            options = options,
+            cwd = cwd,
+            env_vars = quarto_env,
+        ),
+    )
 end
 
 function refresh!(file::File, options::Dict)
@@ -55,20 +66,9 @@ function refresh!(file::File, options::Dict)
         file.strict_manifest_versions = julia_config.strict_manifest_versions
         file.source_code_hash = hash(VERSION)
         file.output_chunks = []
-        init!(file, options)
     end
-    refresh_quarto_env_vars!(file, quarto_env)
-    WorkerIPC.call(file.worker, WorkerIPC.WorkerRefreshRequest(options = options))
-end
-
-# Environment variables provided by Quarto may change between `quarto render`
-# calls. To update them correctly in the worker process, we need to refresh
-# them before each run.
-function refresh_quarto_env_vars!(file::File, quarto_env)
-    if !isempty(quarto_env)
-        WorkerIPC.call(file.worker, WorkerIPC.SetEnvVarsRequest(vars = quarto_env))
-    end
-    return nothing
+    # Always send NotebookInitRequest to (re)initialize notebook context
+    init!(file, options)
 end
 
 # Cache functions defined in cache.jl
@@ -581,7 +581,10 @@ function evaluate_params!(f, params::Dict{String})
         )
     end
 
-    WorkerIPC.call(f.worker, WorkerIPC.EvaluateParamsRequest(params = params))
+    WorkerIPC.call(
+        f.worker,
+        WorkerIPC.EvaluateParamsRequest(file = f.path, params = params),
+    )
     return
 end
 

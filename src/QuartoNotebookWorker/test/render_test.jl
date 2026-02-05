@@ -1,21 +1,21 @@
 @testitem "render_mimetypes basic" begin
     import QuartoNotebookWorker as QNW
 
-    QNW.NotebookState.OPTIONS[] = Dict{String,Any}()
-    QNW.NotebookState.CELL_OPTIONS[] = Dict{String,Any}()
-    QNW.NotebookState.define_notebook_module!()
+    QNW.NotebookState.with_test_context() do
+        mod = QNW.NotebookState.notebook_module()
 
-    # String output - result values are MimeResult(mime, error, data)
-    result = QNW.render_mimetypes("hello", Dict{String,Any}())
-    @test haskey(result, "text/plain")
-    @test result["text/plain"].error == false
-    @test String(result["text/plain"].data) == "\"hello\""
+        # String output - result values are MimeResult(mime, error, data)
+        result = QNW.render_mimetypes("hello", mod, Dict{String,Any}())
+        @test haskey(result, "text/plain")
+        @test result["text/plain"].error == false
+        @test String(result["text/plain"].data) == "\"hello\""
 
-    # Number output
-    result = QNW.render_mimetypes(42, Dict{String,Any}())
-    @test haskey(result, "text/plain")
-    @test result["text/plain"].error == false
-    @test String(result["text/plain"].data) == "42"
+        # Number output
+        result = QNW.render_mimetypes(42, mod, Dict{String,Any}())
+        @test haskey(result, "text/plain")
+        @test result["text/plain"].error == false
+        @test String(result["text/plain"].data) == "42"
+    end
 end
 
 @testitem "_process_code help mode" begin
@@ -86,118 +86,117 @@ end
 @testitem "render with custom typst MIME" begin
     import QuartoNotebookWorker as QNW
 
-    QNW.NotebookState.OPTIONS[] =
-        Dict{String,Any}("format" => Dict("pandoc" => Dict("to" => "typst")))
-    QNW.NotebookState.CELL_OPTIONS[] = Dict{String,Any}()
-    QNW.NotebookState.define_notebook_module!()
+    options = Dict{String,Any}("format" => Dict("pandoc" => Dict("to" => "typst")))
+    QNW.NotebookState.with_test_context(; options) do
+        nb_mod = QNW.NotebookState.notebook_module()
+        Core.eval(
+            nb_mod,
+            quote
+                struct TypstTable end
+                Base.show(io::IO, ::MIME"QuartoNotebookRunner/typst", ::TypstTable) =
+                    print(io, "#table()")
+            end,
+        )
 
-    nb_mod = QNW.NotebookState.notebook_module()
-    Core.eval(
-        nb_mod,
-        quote
-            struct TypstTable end
-            Base.show(io::IO, ::MIME"QuartoNotebookRunner/typst", ::TypstTable) =
-                print(io, "#table()")
-        end,
-    )
+        response = QNW.render("TypstTable()", "test.jl", 1; mod = nb_mod)
 
-    response = QNW.render("TypstTable()", "test.jl", 1)
-
-    @test length(response.cells) == 1
-    @test haskey(response.cells[1].results, "text/markdown")
-    md = String(response.cells[1].results["text/markdown"].data)
-    @test contains(md, "```{=typst}")
-    @test contains(md, "#table()")
+        @test length(response.cells) == 1
+        @test haskey(response.cells[1].results, "text/markdown")
+        md = String(response.cells[1].results["text/markdown"].data)
+        @test contains(md, "```{=typst}")
+        @test contains(md, "#table()")
+    end
 end
 
 @testitem "soft scope" begin
     import QuartoNotebookWorker as QNW
 
-    QNW.NotebookState.OPTIONS[] = Dict{String,Any}()
-    QNW.NotebookState.CELL_OPTIONS[] = Dict{String,Any}()
-    QNW.NotebookState.define_notebook_module!()
+    QNW.NotebookState.with_test_context() do
+        mod = QNW.NotebookState.notebook_module()
 
-    code = """
-    s = 0
-    for i = 1:10
-        s += i
+        code = """
+        s = 0
+        for i = 1:10
+            s += i
+        end
+        s
+        """
+        response = QNW.render(code, "test.jl", 1; mod)
+        @test String(response.cells[1].results["text/plain"].data) == "55"
     end
-    s
-    """
-    response = QNW.render(code, "test.jl", 1)
-    @test String(response.cells[1].results["text/plain"].data) == "55"
 end
 
 @testitem "shell mode execution" begin
     import QuartoNotebookWorker as QNW
 
-    QNW.NotebookState.OPTIONS[] = Dict{String,Any}()
-    QNW.NotebookState.CELL_OPTIONS[] = Dict{String,Any}()
-    QNW.NotebookState.define_notebook_module!()
+    QNW.NotebookState.with_test_context() do
+        mod = QNW.NotebookState.notebook_module()
 
-    if !Sys.iswindows()
-        response = QNW.render(";echo OK", "test.jl", 1)
-        @test contains(response.cells[1].output, "OK")
-    else
-        response = QNW.render(";cmd /c echo OK", "test.jl", 1)
-        @test contains(response.cells[1].output, "OK")
+        if !Sys.iswindows()
+            response = QNW.render(";echo OK", "test.jl", 1; mod)
+            @test contains(response.cells[1].output, "OK")
+        else
+            response = QNW.render(";cmd /c echo OK", "test.jl", 1; mod)
+            @test contains(response.cells[1].output, "OK")
+        end
     end
 end
 
 @testitem "pkg mode execution" begin
     import QuartoNotebookWorker as QNW
 
-    QNW.NotebookState.OPTIONS[] = Dict{String,Any}()
-    QNW.NotebookState.CELL_OPTIONS[] = Dict{String,Any}()
-    QNW.NotebookState.define_notebook_module!()
+    QNW.NotebookState.with_test_context() do
+        mod = QNW.NotebookState.notebook_module()
 
-    response = QNW.render("]status", "test.jl", 1)
-    @test contains(response.cells[1].output, "Status") ||
-          contains(response.cells[1].output, "Project")
+        response = QNW.render("]status", "test.jl", 1; mod)
+        @test contains(response.cells[1].output, "Status") ||
+              contains(response.cells[1].output, "Project")
+    end
 end
 
 @testitem "help mode execution" begin
     import QuartoNotebookWorker as QNW
 
-    QNW.NotebookState.OPTIONS[] = Dict{String,Any}()
-    QNW.NotebookState.CELL_OPTIONS[] = Dict{String,Any}()
-    QNW.NotebookState.define_notebook_module!()
+    QNW.NotebookState.with_test_context() do
+        mod = QNW.NotebookState.notebook_module()
 
-    response = QNW.render("?Int64", "test.jl", 1)
-    @test haskey(response.cells[1].results, "text/plain")
-    @test contains(
-        String(response.cells[1].results["text/plain"].data),
-        "64-bit signed integer",
-    )
+        response = QNW.render("?Int64", "test.jl", 1; mod)
+        @test haskey(response.cells[1].results, "text/plain")
+        @test contains(
+            String(response.cells[1].results["text/plain"].data),
+            "64-bit signed integer",
+        )
+    end
 end
 
 @testitem "print custom struct" begin
     import QuartoNotebookWorker as QNW
 
-    QNW.NotebookState.OPTIONS[] = Dict{String,Any}()
-    QNW.NotebookState.CELL_OPTIONS[] = Dict{String,Any}()
-    QNW.NotebookState.define_notebook_module!()
+    QNW.NotebookState.with_test_context() do
+        mod = QNW.NotebookState.notebook_module()
 
-    code = """
-    struct M
-        a::Int
+        code = """
+        struct M
+            a::Int
+        end
+        x = M(22)
+        print(x)
+        """
+        response = QNW.render(code, "test.jl", 1; mod)
+        @test response.cells[1].output == "M(22)"
     end
-    x = M(22)
-    print(x)
-    """
-    response = QNW.render(code, "test.jl", 1)
-    @test response.cells[1].output == "M(22)"
 end
 
 @testitem "display with specific MIME" begin
     import QuartoNotebookWorker as QNW
 
-    QNW.NotebookState.OPTIONS[] = Dict{String,Any}()
-    QNW.NotebookState.CELL_OPTIONS[] = Dict{String,Any}()
-    QNW.NotebookState.define_notebook_module!()
+    QNW.NotebookState.with_test_context() do
+        mod = QNW.NotebookState.notebook_module()
 
-    response = QNW.render("display(MIME(\"text/html\"), HTML(\"<p></p>\"))", "test.jl", 1)
-    @test length(response.cells[1].display_results) == 1
-    @test haskey(response.cells[1].display_results[1], "text/html")
-    @test String(response.cells[1].display_results[1]["text/html"].data) == "<p></p>"
+        response =
+            QNW.render("display(MIME(\"text/html\"), HTML(\"<p></p>\"))", "test.jl", 1; mod)
+        @test length(response.cells[1].display_results) == 1
+        @test haskey(response.cells[1].display_results[1], "text/html")
+        @test String(response.cells[1].display_results[1]["text/html"].data) == "<p></p>"
+    end
 end

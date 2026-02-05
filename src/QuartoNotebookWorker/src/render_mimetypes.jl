@@ -15,6 +15,7 @@ Base.showable(mime::MIME, w::WrapperType) = Base.showable(mime, w.value)
 # what you'd get from `print` (Strings without quotes) and not from `show("text/plain", ...)`
 function render_mimetypes(
     value,
+    mod::Module,
     cell_options;
     inline::Bool = false,
     only::Union{String,Nothing} = nothing,
@@ -24,7 +25,8 @@ function render_mimetypes(
     # what the package defines itself.
     value = _mimetype_wrapper(value)
 
-    options = NotebookState.OPTIONS[]
+    ctx = NotebookState.current_context()
+    options = ctx === nothing ? Dict{String,Any}() : ctx.options
     to_format = rget(options, ("format", "pandoc", "to"), nothing)
 
     result = Dict{String,WorkerIPC.MimeResult}()
@@ -80,12 +82,12 @@ function render_mimetypes(
             try
                 if inline && mime == "text/plain"
                     Base.@invokelatest __print_barrier__(
-                        with_context(buffer, cell_options, inline),
+                        with_context(buffer, mod, cell_options, inline),
                         value,
                     )
                 else
                     Base.@invokelatest __show_barrier__(
-                        with_context(buffer, cell_options, inline),
+                        with_context(buffer, mod, cell_options, inline),
                         mime,
                         value,
                     )
@@ -99,6 +101,7 @@ function render_mimetypes(
                         true,
                         backtrace,
                         error,
+                        mod,
                         "Error showing value of type $(typeof(value))\n",
                         true,
                     ),
@@ -122,8 +125,20 @@ function render_mimetypes(
     end
     return result
 end
-render_mimetypes(value::Nothing, cell_options; inline::Bool = false, only = nothing) =
-    Dict{String,WorkerIPC.MimeResult}()
+render_mimetypes(
+    value::Nothing,
+    mod::Module,
+    cell_options;
+    inline::Bool = false,
+    only = nothing,
+) = Dict{String,WorkerIPC.MimeResult}()
+
+# Overload for InlineDisplay calls where mod comes from TLS
+function render_mimetypes(value, cell_options; inline::Bool = false, only = nothing)
+    mod = NotebookState.current_notebook_module()
+    mod === nothing && error("render_mimetypes called without notebook module in TLS")
+    render_mimetypes(value, mod, cell_options; inline, only)
+end
 
 _matching_mimetype(mime::String, only::Nothing) = true
 _matching_mimetype(mime::String, only::String) = mime == only

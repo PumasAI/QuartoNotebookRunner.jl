@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Multi-notebook contexts per worker via task-local storage, replacing global mutable state [#396]
 - Support for Quarto's `execute-dir: project` option to set working directory to project root [#387]
 - Unit tests for QuartoNotebookWorker using TestItemRunner, run in CI before main test suite [#385]
 
@@ -498,3 +499,4 @@ caching is enabled. Delete this folder to clear the cache. [#259]
 [#392]: https://github.com/PumasAI/QuartoNotebookRunner.jl/issues/392
 [#394]: https://github.com/PumasAI/QuartoNotebookRunner.jl/issues/394
 [#395]: https://github.com/PumasAI/QuartoNotebookRunner.jl/issues/395
+[#396]: https://github.com/PumasAI/QuartoNotebookRunner.jl/issues/396

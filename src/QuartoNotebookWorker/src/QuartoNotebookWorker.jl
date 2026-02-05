@@ -86,10 +86,13 @@ import Random
 
 # Includes.
 
+include("PrecompileToolsLite.jl")
+using .PrecompileToolsLite
+
+include("NotebookState.jl")
 include("WorkerIPC.jl")
 include("package_hooks.jl")
 include("InlineDisplay.jl")
-include("NotebookState.jl")
 include("NotebookInclude.jl")
 include("refresh.jl")
 include("cell_expansion.jl")
@@ -105,47 +108,129 @@ include("manifest_validation.jl")
 include("python.jl")
 include("r.jl")
 
-# Worker IPC dispatch - routes typed requests from host
-dispatch(::WorkerIPC.ManifestInSyncRequest) = _manifest_in_sync()
-dispatch(req::WorkerIPC.WorkerInitRequest) = worker_init(req.path, req.options)
-dispatch(req::WorkerIPC.WorkerRefreshRequest) = worker_refresh(req.options)
-dispatch(req::WorkerIPC.SetEnvVarsRequest) = set_env_vars(req.vars)
-dispatch(req::WorkerIPC.RenderRequest) =
-    render(req.code, req.file, req.line, req.cell_options; inline = req.inline)
-dispatch(req::WorkerIPC.EvaluateParamsRequest) = evaluate_params(req.params)
+# Type aliases for dispatch signatures
+const Contexts = Dict{String,NotebookState.NotebookContext}
 
-# Initialize worker for a notebook
-function worker_init(path::String, options::Dict)
-    NotebookState.PROJECT[] = Base.active_project()
-    NotebookState.PATH[] = path
-    NotebookState.OPTIONS[] = options
-    NotebookState.define_notebook_module!(Main)
-    return nothing
+# Worker IPC dispatch - routes typed requests from host
+
+function dispatch(::WorkerIPC.ManifestInSyncRequest, ::Contexts, ::ReentrantLock)
+    _manifest_in_sync()
 end
 
-# Refresh worker state
-function worker_refresh(options::Dict)
-    refresh!(NotebookState.PATH[], NotebookState.OPTIONS[], options)
+function dispatch(
+    req::WorkerIPC.NotebookInitRequest,
+    contexts::Contexts,
+    lock::ReentrantLock,
+)
+    Base.@lock lock begin
+        ctx = get(contexts, req.file, nothing)
+        if ctx === nothing
+            # Create new context
+            mod = NotebookState.define_notebook_module!()
+            ctx = NotebookState.NotebookContext(
+                req.file,
+                req.project,
+                req.options,
+                mod,
+                req.cwd,
+                copy(req.env_vars),
+            )
+            contexts[req.file] = ctx
+        else
+            # Update existing context
+            if ctx.options != req.options
+                run_package_loading_hooks()
+            end
+            ctx.project = req.project
+            ctx.options = req.options
+            ctx.cwd = req.cwd
+            ctx.env_vars = copy(req.env_vars)
+            # Clear and recreate notebook module for fresh state
+            NotebookState.clear_notebook_module!(ctx.mod)
+            ctx.mod = NotebookState.define_notebook_module!()
+        end
+    end
+    # Run package refresh hooks (every init)
+    run_package_refresh_hooks()
+    # Run Revise if enabled
     revise_hook()
     return nothing
 end
 
-# Set environment variables
-function set_env_vars(vars::Vector)
-    for each in vars
-        k, v = Base.splitenv(each)
-        ENV[k] = v
+function dispatch(
+    req::WorkerIPC.NotebookCloseRequest,
+    contexts::Contexts,
+    lock::ReentrantLock,
+)
+    Base.@lock lock begin
+        ctx = get(contexts, req.file, nothing)
+        if ctx !== nothing
+            NotebookState.clear_notebook_module!(ctx.mod)
+            delete!(contexts, req.file)
+        end
     end
     return nothing
 end
 
-# Evaluate parameter assignments as constants in Notebook module
-function evaluate_params(params::Dict)
-    mod = NotebookState.notebook_module()
-    for (key, value) in params
-        Core.eval(mod, :(const $(Symbol(key)) = $value))
+function dispatch(req::WorkerIPC.RenderRequest, contexts::Contexts, lock::ReentrantLock)
+    ctx = Base.@lock lock begin
+        get(contexts, req.file, nothing)
+    end
+    ctx === nothing && error("No context for notebook: $(req.file)")
+
+    # Activate project/cwd if drifted from what this notebook expects
+    Base.active_project() == ctx.project || Pkg.activate(ctx.project; io = devnull)
+    pwd() == ctx.cwd || cd(ctx.cwd)
+
+    # Set SOURCE_PATH for include resolution
+    task_local_storage()[:SOURCE_PATH] = ctx.file
+
+    result = NotebookState.with_env_vars(ctx.env_vars) do
+        NotebookState.with_context(ctx) do
+            NotebookState.with_cell_options(req.cell_options) do
+                render(
+                    req.code,
+                    req.file,
+                    req.line,
+                    req.cell_options;
+                    inline = req.inline,
+                    mod = ctx.mod,
+                )
+            end
+        end
+    end
+
+    # Track if user changed project/cwd during render
+    ctx.project = Base.active_project()
+    ctx.cwd = pwd()
+
+    return result
+end
+
+function dispatch(
+    req::WorkerIPC.EvaluateParamsRequest,
+    contexts::Contexts,
+    lock::ReentrantLock,
+)
+    ctx = Base.@lock lock begin
+        get(contexts, req.file, nothing)
+    end
+    ctx === nothing && error("No context for notebook: $(req.file)")
+
+    for (key, value) in req.params
+        Core.eval(ctx.mod, :(const $(Symbol(key)) = $value))
     end
     return nothing
+end
+
+@setup_workload begin
+    @compile_workload begin
+        NotebookState.with_test_context() do
+            mod = NotebookState.notebook_module()
+            render("1 + 2", "none", 0; mod)
+            render("1 + :foo", "none", 0; mod)
+        end
+    end
 end
 
 end

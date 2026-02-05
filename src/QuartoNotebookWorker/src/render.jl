@@ -6,6 +6,7 @@ function render(
     line::Integer,
     cell_options::AbstractDict = Dict{String,Any}();
     inline::Bool = false,
+    mod::Module,
 )
     # This records whether the outermost cell is an expandable cell, which we
     # then return to the server so that it can decide whether to treat the cell
@@ -14,19 +15,15 @@ function render(
     # output is `is_expandable` or not. Recursive calls to `_render_thunk` don't
     # matter to the server, it's just the outermost cell that matters.
     is_expansion_ref = Ref(false)
-    cells = Base.@invokelatest(
-        collect(
-            _render_thunk(code, cell_options, is_expansion_ref; inline) do
-                Base.@invokelatest include_str(
-                    NotebookState.notebook_module(),
-                    code;
-                    file,
-                    line,
-                    cell_options,
-                )
-            end,
+    cells = NotebookState.with_notebook_module(mod) do
+        Base.@invokelatest(
+            collect(
+                _render_thunk(code, mod, cell_options, is_expansion_ref; inline) do
+                    Base.@invokelatest include_str(mod, code; file, line, cell_options)
+                end,
+            )
         )
-    )
+    end
     return WorkerIPC.RenderResponse(cells, is_expansion_ref[])
 end
 
@@ -37,12 +34,14 @@ end
 function _render_thunk(
     thunk::Base.Callable,
     code::AbstractString,
+    mod::Module,
     cell_options::AbstractDict = Dict{String,Any}(),
     is_expansion_ref::Ref{Bool} = Ref(false);
     inline::Bool,
 )
-    NotebookState.CELL_OPTIONS[] = cell_options
-    captured, display_results = with_inline_display(thunk, cell_options)
+    captured, display_results = NotebookState.with_cell_options(cell_options) do
+        with_inline_display(thunk, cell_options)
+    end
 
     # Attempt to expand the cell. This requires the cell result to have a method
     # defined for the `QuartoNotebookWorker.expand` function. We only attempt to
@@ -64,7 +63,7 @@ function _render_thunk(
                     display_results,
                     captured.output,
                     string(typeof(error)),
-                    collect(eachline(IOBuffer(clean_bt_str(true, backtrace, error)))),
+                    collect(eachline(IOBuffer(clean_bt_str(true, backtrace, error, mod)))),
                 ),
             )
         end
@@ -90,6 +89,7 @@ function _render_thunk(
             return Base.@invokelatest _render_thunk(
                 wrapped,
                 cell.code,
+                mod,
                 cell.options;
                 inline,
             )
@@ -97,6 +97,7 @@ function _render_thunk(
     else
         results = Base.@invokelatest render_mimetypes(
             REPL.ends_with_semicolon(code) ? nothing : captured.value,
+            mod,
             cell_options;
             inline,
         )
@@ -117,6 +118,7 @@ function _render_thunk(
                                 captured.error,
                                 captured.backtrace,
                                 captured.value,
+                                mod,
                             ),
                         ),
                     ),

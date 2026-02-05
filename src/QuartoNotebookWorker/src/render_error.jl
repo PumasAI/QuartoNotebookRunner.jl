@@ -1,6 +1,6 @@
 # Error formatting and backtrace cleaning.
 
-function clean_bt_str(is_error::Bool, bt, err, prefix = "", mimetype = false)
+function clean_bt_str(is_error::Bool, bt, err, mod::Module, prefix = "", mimetype = false)
     is_error || return UInt8[]
 
     # Only include the first encountered `top-level scope` in the
@@ -16,7 +16,7 @@ function clean_bt_str(is_error::Bool, bt, err, prefix = "", mimetype = false)
     end
 
     buf = IOBuffer()
-    buf_context = with_context(buf)
+    buf_context = with_context(buf, mod)
     print(buf_context, prefix)
     _showerror(buf_context, err, bt)
 
@@ -31,6 +31,6 @@ function _showerror(io::IO, err, bt)
     Base.show_backtrace(io, bt)
 end
 
+# Marker to detect when we've hit our `show` barrier functions.
 _non_worker_stackframe_marker(frame) =
-    contains(String(frame.file), "render_mimetypes.jl") &&
-    frame.func in (:__print_barrier__, :__show_barrier__)
+    frame.func in (Symbol("__show_barrier__"), Symbol("__print_barrier__"))
