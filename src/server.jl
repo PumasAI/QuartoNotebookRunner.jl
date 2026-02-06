@@ -3,18 +3,26 @@
 
 struct Server
     workers::Dict{String,File}
+    shared_workers::Dict{WorkerKey,SharedWorkerEntry}
     lock::ReentrantLock # should be locked for mutation/lookup of the workers dict, not for evaling on the workers. use worker locks for that
     on_change::Base.RefValue{Function} # an optional callback function n_workers::Int -> nothing that gets called with the server.lock locked when workers are added or removed
     sandbox_base::String # shared temp dir for worker sandboxes, cleaned on Server close
     function Server()
         workers = Dict{String,File}()
+        shared_workers = Dict{WorkerKey,SharedWorkerEntry}()
         sandbox_base = joinpath(
             WorkerIPC._get_scratchspace_path(),
             "sandboxes",
             string(rand(UInt), base = 62),
         )
         mkpath(sandbox_base)
-        return new(workers, ReentrantLock(), Ref{Function}(identity), sandbox_base)
+        return new(
+            workers,
+            shared_workers,
+            ReentrantLock(),
+            Ref{Function}(identity),
+            sandbox_base,
+        )
     end
 end
 
@@ -76,10 +84,21 @@ _resolve_at_dot(dir) = something(Base.current_project(dir), dir)
 function refresh!(file::File, options::Dict)
     exeflags, env, quarto_env = _exeflags_and_env(options)
     julia_config = julia_worker_config(options)
-    if exeflags != file.exeflags ||
-       env != file.env ||
-       julia_config.strict_manifest_versions != file.strict_manifest_versions ||
-       !WorkerIPC.isrunning(file.worker) # the worker might have been killed on another task
+    config_changed =
+        exeflags != file.exeflags ||
+        env != file.env ||
+        julia_config.strict_manifest_versions != file.strict_manifest_versions
+    worker_dead = !WorkerIPC.isrunning(file.worker)
+
+    if file.worker_key !== nothing
+        # Shared worker: cannot restart — it's shared with other notebooks
+        if worker_dead
+            error("Shared worker process died unexpectedly")
+        end
+        if config_changed
+            @warn "Worker config changed for shared notebook $(file.path); ignoring (shared worker cannot be restarted)"
+        end
+    elseif config_changed || worker_dead
         WorkerIPC.stop(file.worker)
         exe, _exeflags = _julia_exe(exeflags)
         file.worker = cd(
@@ -708,6 +727,49 @@ function run!(
 end
 
 """
+    _create_file(server, path, options)
+
+Create a File for `path`. If `share_worker_process` is enabled in frontmatter,
+reuse or create a shared worker via `server.shared_workers`.
+"""
+function _create_file(server::Server, path::String, options)
+    parsed = _parsed_options(options)
+    _, _, file_frontmatter = raw_text_chunks(path)
+    merged_options = _extract_relevant_options(file_frontmatter, parsed)
+    julia_config = julia_worker_config(merged_options)
+
+    if julia_config.share_worker_process
+        exeflags, env, quarto_env = _exeflags_and_env(merged_options)
+        exe, _exeflags = _julia_exe(exeflags)
+        key = WorkerKey(exe, exeflags, env, julia_config.strict_manifest_versions)
+
+        entry = get!(server.shared_workers, key) do
+            w = cd(
+                () -> WorkerIPC.Worker(;
+                    exe,
+                    exeflags = _exeflags,
+                    env = vcat(env, quarto_env),
+                    strict_manifest_versions = julia_config.strict_manifest_versions,
+                    sandbox_base = server.sandbox_base,
+                ),
+                dirname(path),
+            )
+            SharedWorkerEntry(w, Set{String}())
+        end
+        push!(entry.users, path)
+        return File(
+            path,
+            options;
+            sandbox_base = server.sandbox_base,
+            worker = entry.worker,
+            worker_key = key,
+        )
+    else
+        return File(path, options; sandbox_base = server.sandbox_base)
+    end
+end
+
+"""
     borrow_file!(f, server, path; wait = false, optionally_create = false, options = Dict{String,Any}())
 
 Executes `f(file)` while the `file`'s `ReentrantLock` is locked.
@@ -734,9 +796,8 @@ function borrow_file!(
             if optionally_create
                 # it's not ideal to create the `File` under server.lock but it takes a second or
                 # so on my machine to init it, so for practical purposes it should be ok
-                file =
-                    server.workers[apath] =
-                        File(apath, options; sandbox_base = server.sandbox_base)
+                file = _create_file(server, apath, options)
+                server.workers[apath] = file
                 lock(file.lock) # don't let anything get to the fresh file before us
                 on_change(server)
                 return true, file
@@ -806,9 +867,15 @@ end
 
 function close!(server::Server)
     lock(server.lock) do
-        for path in keys(server.workers)
+        for path in collect(keys(server.workers))
             close!(server, path)
         end
+        # Stop any remaining shared workers (should already be empty if all
+        # files were closed, but clean up defensively)
+        for (key, entry) in server.shared_workers
+            WorkerIPC.stop(entry.worker)
+        end
+        empty!(server.shared_workers)
     end
     rm(server.sandbox_base; force = true, recursive = true)
 end
@@ -826,11 +893,37 @@ function close!(server::Server, path::String)
             if file.timeout_timer !== nothing
                 close(file.timeout_timer)
             end
-            WorkerIPC.stop(file.worker)
-            lock(server.lock) do
-                pop!(server.workers, file.path)
-                _gc_cache_files(joinpath(dirname(path), ".cache"))
-                on_change(server)
+            if file.worker_key !== nothing
+                # Shared worker: clean up this notebook's context, don't stop
+                # the worker unless this is the last user.
+                try
+                    WorkerIPC.call(
+                        file.worker,
+                        WorkerIPC.NotebookCloseRequest(file = file.path),
+                    )
+                catch err
+                    @debug "NotebookCloseRequest failed for $(file.path)" exception = err
+                end
+                lock(server.lock) do
+                    pop!(server.workers, file.path)
+                    entry = get(server.shared_workers, file.worker_key, nothing)
+                    if entry !== nothing
+                        delete!(entry.users, file.path)
+                        if isempty(entry.users)
+                            WorkerIPC.stop(entry.worker)
+                            delete!(server.shared_workers, file.worker_key)
+                        end
+                    end
+                    _gc_cache_files(joinpath(dirname(path), ".cache"))
+                    on_change(server)
+                end
+            else
+                WorkerIPC.stop(file.worker)
+                lock(server.lock) do
+                    pop!(server.workers, file.path)
+                    _gc_cache_files(joinpath(dirname(path), ".cache"))
+                    on_change(server)
+                end
             end
             GC.gc()
         end
@@ -871,6 +964,28 @@ function forceclose!(server::Server, path::String)
             # This avoids a race where run! might consume :evaluate_finished first.
             put!(file.run_decision_channel, :forceclose)
             WorkerIPC.stop(file.worker)
+            lock(server.lock) do
+                if file.worker_key !== nothing
+                    # Killing a shared worker affects all users. Clean up sibling
+                    # files that share this worker before removing the entry.
+                    entry = get(server.shared_workers, file.worker_key, nothing)
+                    if entry !== nothing
+                        for sibling_path in entry.users
+                            sibling_path == apath && continue
+                            sibling = get(server.workers, sibling_path, nothing)
+                            if sibling !== nothing
+                                if sibling.timeout_timer !== nothing
+                                    close(sibling.timeout_timer)
+                                end
+                                delete!(server.workers, sibling_path)
+                            end
+                        end
+                        delete!(server.shared_workers, file.worker_key)
+                    end
+                end
+                delete!(server.workers, apath)
+                on_change(server)
+            end
         end
     finally
         lock_attained && unlock(file.lock)
