@@ -15,15 +15,11 @@ function render(
     # output is `is_expandable` or not. Recursive calls to `_render_thunk` don't
     # matter to the server, it's just the outermost cell that matters.
     is_expansion_ref = Ref(false)
-    cells = NotebookState.with_notebook_module(mod) do
-        Base.@invokelatest(
-            collect(
-                _render_thunk(code, mod, cell_options, is_expansion_ref; inline) do
-                    Base.@invokelatest include_str(mod, code; file, line, cell_options)
-                end,
-            )
-        )
-    end
+    cells = Base.@invokelatest(
+        collect(_render_thunk(code, mod, cell_options, is_expansion_ref; inline) do
+                Base.@invokelatest include_str(mod, code; file, line, cell_options)
+            end)
+    )
     return WorkerIPC.RenderResponse(cells, is_expansion_ref[])
 end
 

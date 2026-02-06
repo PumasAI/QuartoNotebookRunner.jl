@@ -41,20 +41,6 @@ end
     @test NS.current_cell_options() == Dict{String,Any}()
 end
 
-@testitem "with_notebook_module sets and clears module" begin
-    import QuartoNotebookWorker as QNW
-    NS = QNW.NotebookState
-
-    @test NS.current_notebook_module() === nothing
-
-    mod = NS.define_notebook_module!()
-    NS.with_notebook_module(mod) do
-        @test NS.current_notebook_module() === mod
-    end
-
-    @test NS.current_notebook_module() === nothing
-end
-
 @testitem "notebook_module returns ctx.mod when in context" begin
     import QuartoNotebookWorker as QNW
     NS = QNW.NotebookState
@@ -63,18 +49,6 @@ end
     ctx = NS.NotebookContext("", "", Dict{String,Any}(), mod, pwd(), String[])
 
     NS.with_context(ctx) do
-        @test NS.notebook_module() === mod
-    end
-end
-
-@testitem "notebook_module falls back to TLS module" begin
-    import QuartoNotebookWorker as QNW
-    NS = QNW.NotebookState
-
-    mod = NS.define_notebook_module!()
-
-    # No context, but module in TLS
-    NS.with_notebook_module(mod) do
         @test NS.notebook_module() === mod
     end
 end
@@ -141,10 +115,10 @@ end
     @test !haskey(ENV, "QNW_TEST_VAR")
 end
 
-@testitem "render_mimetypes 2-arg errors without TLS module" begin
+@testitem "render_mimetypes 2-arg errors without context" begin
     import QuartoNotebookWorker as QNW
 
-    # Call 2-arg version without TLS context
+    # Call 2-arg version without notebook context
     @test_throws ErrorException QNW.render_mimetypes("value", Dict{String,Any}())
 end
 
@@ -175,7 +149,6 @@ end
 
     NS.with_test_context() do
         @test NS.current_context() !== nothing
-        @test NS.current_notebook_module() !== nothing
         @test NS.notebook_module() !== nothing
         @test NS.current_cell_options() == Dict{String,Any}()
     end

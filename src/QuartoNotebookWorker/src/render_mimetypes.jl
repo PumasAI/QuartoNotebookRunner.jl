@@ -133,11 +133,11 @@ render_mimetypes(
     only = nothing,
 ) = Dict{String,WorkerIPC.MimeResult}()
 
-# Overload for InlineDisplay calls where mod comes from TLS
+# Overload for InlineDisplay calls where mod comes from context
 function render_mimetypes(value, cell_options; inline::Bool = false, only = nothing)
-    mod = NotebookState.current_notebook_module()
-    mod === nothing && error("render_mimetypes called without notebook module in TLS")
-    render_mimetypes(value, mod, cell_options; inline, only)
+    ctx = NotebookState.current_context()
+    ctx === nothing && error("render_mimetypes called without notebook context")
+    render_mimetypes(value, ctx.mod, cell_options; inline, only)
 end
 
 _matching_mimetype(mime::String, only::Nothing) = true

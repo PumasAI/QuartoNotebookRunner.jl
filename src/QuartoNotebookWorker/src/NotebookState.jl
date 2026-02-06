@@ -17,7 +17,6 @@ end
 # Task-local storage keys
 const CONTEXT_KEY = :__quarto_notebook_context__
 const CELL_OPTIONS_KEY = :__quarto_cell_options__
-const NOTEBOOK_MODULE_KEY = :__quarto_notebook_module__
 
 is_precompiling() = ccall(:jl_generating_output, Cint, ()) == 1
 
@@ -103,24 +102,9 @@ function define_notebook_module!()
     return new_mod
 end
 
-# Task-local storage for module context (used by NotebookInclude)
-function with_notebook_module(f, mod::Module)
-    task_local_storage(NOTEBOOK_MODULE_KEY, mod) do
-        f()
-    end
-end
-
-function current_notebook_module()
-    get(task_local_storage(), NOTEBOOK_MODULE_KEY, nothing)
-end
-
-# Test helper: get notebook module from context or TLS
 function notebook_module()
     ctx = current_context()
-    if ctx !== nothing
-        return ctx.mod
-    end
-    return current_notebook_module()
+    ctx === nothing ? nothing : ctx.mod
 end
 
 # Test helper: run code with options/cell_options set in task-local storage
@@ -140,9 +124,7 @@ function with_test_context(
     )
     with_context(ctx) do
         with_cell_options(cell_options) do
-            with_notebook_module(mod) do
-                f()
-            end
+            f()
         end
     end
 end
