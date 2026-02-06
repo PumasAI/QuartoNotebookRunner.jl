@@ -221,4 +221,103 @@
             QNR.close!(s)
         end
     end
+
+    @testset "re-render after closing sibling" begin
+        mktempdir() do dir
+            a = write_qmd(dir, "a.qmd"; code = "1 + 1")
+            b = write_qmd(dir, "b.qmd"; code = "2 + 2")
+            s = QNR.Server()
+            QNR.run!(s, a)
+            QNR.run!(s, b)
+            pid = s.workers[abspath(a)].worker.proc_pid
+
+            QNR.close!(s, abspath(a))
+            @test !haskey(s.workers, abspath(a))
+
+            # B still works on the same worker
+            QNR.run!(s, b)
+            @test s.workers[abspath(b)].worker.proc_pid == pid
+            QNR.close!(s)
+        end
+    end
+
+    @testset "forceclose! gives mid-run sibling clean error" begin
+        mktempdir() do dir
+            a = write_qmd(dir, "a.qmd"; code = "sleep(30)")
+            b = write_qmd(dir, "b.qmd"; code = "sleep(30)")
+            s = QNR.Server()
+
+            # Spawn both in background
+            task_a = Threads.@spawn try
+                QNR.run!(s, a)
+            catch e
+                e
+            end
+            # Wait for A's lock
+            while true
+                file = lock(s.lock) do
+                    get(s.workers, abspath(a), nothing)
+                end
+                file !== nothing && islocked(file.lock) && break
+                sleep(0.01)
+            end
+
+            task_b = Threads.@spawn try
+                QNR.run!(s, b)
+            catch e
+                e
+            end
+            # Wait for B's lock
+            while true
+                file = lock(s.lock) do
+                    get(s.workers, abspath(b), nothing)
+                end
+                file !== nothing && islocked(file.lock) && break
+                sleep(0.01)
+            end
+
+            QNR.forceclose!(s, abspath(a))
+
+            result_a = fetch(task_a)
+            result_b = fetch(task_b)
+            @test result_a isa Exception
+            @test result_b isa Exception
+            @test contains(sprint(showerror, result_a), "force-closed")
+            @test contains(sprint(showerror, result_b), "force-closed")
+
+            @test isempty(s.workers)
+            @test isempty(s.shared_workers)
+            QNR.close!(s)
+        end
+    end
+
+    @testset "new file recovers from dead shared worker" begin
+        mktempdir() do dir
+            a = write_qmd(dir, "a.qmd")
+            b = write_qmd(dir, "b.qmd")
+            s = QNR.Server()
+            QNR.run!(s, a)
+            QNR.run!(s, b)
+            old_pid = s.workers[abspath(a)].worker.proc_pid
+
+            # Kill worker directly
+            file_a = s.workers[abspath(a)]
+            Base.kill(file_a.worker.proc, Base.SIGKILL)
+            while QNR.WorkerIPC.isrunning(file_a.worker)
+                sleep(0.01)
+            end
+
+            # Close stale files
+            QNR.close!(s, abspath(a))
+            QNR.close!(s, abspath(b))
+
+            # Create a new file — should recover with a fresh worker
+            c = write_qmd(dir, "c.qmd")
+            QNR.run!(s, c)
+            new_pid = s.workers[abspath(c)].worker.proc_pid
+            @test new_pid != old_pid
+            @test length(s.shared_workers) == 1
+            QNR.close!(s)
+        end
+    end
 end

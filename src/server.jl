@@ -756,6 +756,19 @@ function _create_file(server::Server, path::String, options)
             )
             SharedWorkerEntry(w, Set{String}())
         end
+        if !WorkerIPC.isrunning(entry.worker)
+            entry.worker = cd(
+                () -> WorkerIPC.Worker(;
+                    exe,
+                    exeflags = _exeflags,
+                    env = vcat(env, quarto_env),
+                    strict_manifest_versions = julia_config.strict_manifest_versions,
+                    sandbox_base = server.sandbox_base,
+                ),
+                dirname(path),
+            )
+            empty!(entry.users)
+        end
         push!(entry.users, path)
         return File(
             path,
@@ -960,14 +973,27 @@ function forceclose!(server::Server, path::String)
         if lock_attained
             close!(server, path)
         else
-            # Signal to run! that we're force-closing, then directly stop the worker.
-            # This avoids a race where run! might consume :evaluate_finished first.
+            # Signal to run! that we're force-closing.
             put!(file.run_decision_channel, :forceclose)
+            # Signal siblings before killing worker so mid-run siblings
+            # get a clean :forceclose instead of raw TerminatedWorkerException.
+            if file.worker_key !== nothing
+                lock(server.lock) do
+                    entry = get(server.shared_workers, file.worker_key, nothing)
+                    if entry !== nothing
+                        for sibling_path in entry.users
+                            sibling_path == apath && continue
+                            sibling = get(server.workers, sibling_path, nothing)
+                            if sibling !== nothing
+                                put!(sibling.run_decision_channel, :forceclose)
+                            end
+                        end
+                    end
+                end
+            end
             WorkerIPC.stop(file.worker)
             lock(server.lock) do
                 if file.worker_key !== nothing
-                    # Killing a shared worker affects all users. Clean up sibling
-                    # files that share this worker before removing the entry.
                     entry = get(server.shared_workers, file.worker_key, nothing)
                     if entry !== nothing
                         for sibling_path in entry.users
