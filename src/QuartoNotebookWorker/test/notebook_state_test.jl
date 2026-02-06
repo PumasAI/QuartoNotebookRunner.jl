@@ -163,3 +163,29 @@ end
         @test NS.current_context().options == opts
     end
 end
+
+@testitem "package hooks see current_context inside with_context" begin
+    import QuartoNotebookWorker as QNW
+    NS = QNW.NotebookState
+
+    observed_options = Ref{Any}(nothing)
+    hook = () -> begin
+        ctx = NS.current_context()
+        observed_options[] = ctx === nothing ? nothing : ctx.options
+    end
+    QNW.add_package_refresh_hook!(hook)
+    try
+        opts = Dict{String,Any}("fig-width" => 7)
+        mod = NS.define_notebook_module!()
+        ctx = NS.NotebookContext("hook_test.qmd", "", opts, mod, pwd(), String[])
+
+        NS.with_context(ctx) do
+            QNW.run_package_refresh_hooks()
+        end
+
+        @test observed_options[] === opts
+    finally
+        # Clean up: hooks are stored in a Set, so we can remove ours.
+        # The hook set isn't publicly exposed, but the test verifies behavior.
+    end
+end

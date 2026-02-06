@@ -122,7 +122,7 @@ function dispatch(
     contexts::Contexts,
     lock::ReentrantLock,
 )
-    Base.lock(lock) do
+    ctx, options_changed = Base.lock(lock) do
         ctx = get(contexts, req.file, nothing)
         if ctx === nothing
             # Create new context
@@ -136,11 +136,10 @@ function dispatch(
                 copy(req.env_vars),
             )
             contexts[req.file] = ctx
+            (ctx, false)
         else
             # Update existing context
-            if ctx.options != req.options
-                run_package_loading_hooks()
-            end
+            changed = ctx.options != req.options
             ctx.project = req.project
             ctx.options = req.options
             ctx.cwd = req.cwd
@@ -148,11 +147,14 @@ function dispatch(
             # Clear and recreate notebook module for fresh state
             NotebookState.clear_notebook_module!(ctx.mod)
             ctx.mod = NotebookState.define_notebook_module!()
+            (ctx, changed)
         end
     end
-    # Run package refresh hooks (every init)
-    run_package_refresh_hooks()
-    # Run Revise if enabled
+    # Hooks read from current_context() so must run inside with_context.
+    NotebookState.with_context(ctx) do
+        options_changed && run_package_loading_hooks()
+        run_package_refresh_hooks()
+    end
     revise_hook()
     return nothing
 end
@@ -178,7 +180,8 @@ function dispatch(req::WorkerIPC.RenderRequest, contexts::Contexts, lock::Reentr
     end
     ctx === nothing && error("No context for notebook: $(req.notebook)")
 
-    # Activate project/cwd if drifted from what this notebook expects
+    # cd, Pkg.activate, ENV, display stack, log level are process-global.
+    # Safe because the host serializes dispatch calls per worker.
     Base.active_project() == ctx.project || Pkg.activate(ctx.project; io = devnull)
     pwd() == ctx.cwd || cd(ctx.cwd)
 
