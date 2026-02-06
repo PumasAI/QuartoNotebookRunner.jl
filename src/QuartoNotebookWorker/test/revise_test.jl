@@ -2,10 +2,8 @@
     import QuartoNotebookWorker as QNW
     using Revise
 
-    QNW.NotebookState.OPTIONS[] = Dict{String,Any}()
-    QNW.NotebookState.CELL_OPTIONS[] = Dict{String,Any}()
-    QNW.NotebookState.define_notebook_module!()
-
-    # Extension should load without error
-    @test true
+    QNW.NotebookState.with_test_context() do
+        # Extension should load without error
+        @test true
+    end
 end

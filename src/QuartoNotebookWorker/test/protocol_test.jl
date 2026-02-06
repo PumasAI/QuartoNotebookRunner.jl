@@ -9,44 +9,38 @@
     @test result isa IPC.ManifestInSyncRequest
 end
 
-@testitem "WorkerInitRequest roundtrip" begin
+@testitem "NotebookInitRequest roundtrip" begin
     import QuartoNotebookWorker as QNW
     IPC = QNW.WorkerIPC
 
-    req = IPC.WorkerInitRequest(
-        path = "/path/to/notebook.qmd",
+    req = IPC.NotebookInitRequest(
+        file = "/path/to/notebook.qmd",
+        project = "/path/to/project",
         options = Dict{String,Any}("foo" => 1, "bar" => "baz"),
+        cwd = "/path/to",
+        env_vars = ["VAR1=value1", "VAR2=value2"],
     )
     bytes = IPC._ipc_serialize(req)
     result = IPC._ipc_deserialize(bytes)
 
-    @test result isa IPC.WorkerInitRequest
-    @test result.path == req.path
+    @test result isa IPC.NotebookInitRequest
+    @test result.file == req.file
+    @test result.project == req.project
     @test result.options == req.options
+    @test result.cwd == req.cwd
+    @test result.env_vars == req.env_vars
 end
 
-@testitem "WorkerRefreshRequest roundtrip" begin
+@testitem "NotebookCloseRequest roundtrip" begin
     import QuartoNotebookWorker as QNW
     IPC = QNW.WorkerIPC
 
-    req = IPC.WorkerRefreshRequest(options = Dict{String,Any}("key" => [1, 2, 3]))
+    req = IPC.NotebookCloseRequest(file = "/path/to/notebook.qmd")
     bytes = IPC._ipc_serialize(req)
     result = IPC._ipc_deserialize(bytes)
 
-    @test result isa IPC.WorkerRefreshRequest
-    @test result.options == req.options
-end
-
-@testitem "SetEnvVarsRequest roundtrip" begin
-    import QuartoNotebookWorker as QNW
-    IPC = QNW.WorkerIPC
-
-    req = IPC.SetEnvVarsRequest(vars = ["VAR1=value1", "VAR2=value2"])
-    bytes = IPC._ipc_serialize(req)
-    result = IPC._ipc_deserialize(bytes)
-
-    @test result isa IPC.SetEnvVarsRequest
-    @test result.vars == req.vars
+    @test result isa IPC.NotebookCloseRequest
+    @test result.file == req.file
 end
 
 @testitem "RenderRequest roundtrip" begin
@@ -56,6 +50,7 @@ end
     req = IPC.RenderRequest(
         code = "1 + 1",
         file = "test.qmd",
+        notebook = "/path/to/notebook.qmd",
         line = 42,
         cell_options = Dict{String,Any}("echo" => false),
         inline = true,
@@ -66,6 +61,7 @@ end
     @test result isa IPC.RenderRequest
     @test result.code == req.code
     @test result.file == req.file
+    @test result.notebook == req.notebook
     @test result.line == req.line
     @test result.cell_options == req.cell_options
     @test result.inline == req.inline
@@ -76,12 +72,14 @@ end
     IPC = QNW.WorkerIPC
 
     req = IPC.EvaluateParamsRequest(
+        file = "/path/to/notebook.qmd",
         params = Dict{String,Any}("x" => 1, "y" => "str", "z" => [1.0, 2.0]),
     )
     bytes = IPC._ipc_serialize(req)
     result = IPC._ipc_deserialize(bytes)
 
     @test result isa IPC.EvaluateParamsRequest
+    @test result.file == req.file
     @test result.params == req.params
 end
 

@@ -1,6 +1,37 @@
 # Core type definitions for QuartoNotebookRunner.
 
 """
+    WorkerKey
+
+Identifies a shared worker configuration. Notebooks with matching WorkerKeys
+can share the same worker process.
+"""
+struct WorkerKey
+    exe::Cmd
+    exeflags::Vector{String}
+    env::Vector{String}
+    strict_manifest_versions::Bool
+end
+
+Base.hash(k::WorkerKey, h::UInt) =
+    hash(k.strict_manifest_versions, hash(k.env, hash(k.exeflags, hash(k.exe, h))))
+Base.:(==)(a::WorkerKey, b::WorkerKey) =
+    a.exe == b.exe &&
+    a.exeflags == b.exeflags &&
+    a.env == b.env &&
+    a.strict_manifest_versions == b.strict_manifest_versions
+
+"""
+    SharedWorkerEntry
+
+Tracks a shared worker process and which notebooks are using it.
+"""
+mutable struct SharedWorkerEntry
+    worker::WorkerIPC.Worker
+    users::Set{String}  # notebook paths using this worker
+end
+
+"""
     File
 
 Represents a notebook file managed by a Server. Tracks the worker process,
@@ -22,8 +53,15 @@ mutable struct File
     run_finished::Union{Nothing,Dates.DateTime}  # Last run completion time
     run_decision_channel::Channel{Symbol} # Communication channel for forceclose
     sandbox_base::String                  # Shared sandbox base from Server
+    worker_key::Union{Nothing,WorkerKey}  # Non-nothing when using a shared worker
 
-    function File(path::String, options::Union{String,Dict{String,Any}}; sandbox_base)
+    function File(
+        path::String,
+        options::Union{String,Dict{String,Any}};
+        sandbox_base,
+        worker::Union{Nothing,WorkerIPC.Worker} = nothing,
+        worker_key::Union{Nothing,WorkerKey} = nothing,
+    )
         if isfile(path)
             _, ext = splitext(path)
             if ext in (".jl", ".qmd")
@@ -37,16 +75,18 @@ mutable struct File
                 julia_config = julia_worker_config(merged_options)
 
                 exe, _exeflags = _julia_exe(exeflags)
-                worker = cd(
-                    () -> WorkerIPC.Worker(;
-                        exe,
-                        exeflags = _exeflags,
-                        env = vcat(env, quarto_env),
-                        strict_manifest_versions = julia_config.strict_manifest_versions,
-                        sandbox_base,
-                    ),
-                    dirname(path),
-                )
+                if worker === nothing
+                    worker = cd(
+                        () -> WorkerIPC.Worker(;
+                            exe,
+                            exeflags = _exeflags,
+                            env = vcat(env, quarto_env),
+                            strict_manifest_versions = julia_config.strict_manifest_versions,
+                            sandbox_base,
+                        ),
+                        dirname(path),
+                    )
+                end
                 file = new(
                     worker,
                     path,
@@ -63,6 +103,7 @@ mutable struct File
                     nothing,
                     Channel{Symbol}(32), # buffered to avoid blocking on put!
                     sandbox_base,
+                    worker_key,
                 )
                 init!(file, merged_options)
                 return file

@@ -18,13 +18,21 @@ function io_capture(f; cell_options, kws...)
 end
 
 # passing our module removes Main.Notebook noise when printing types etc.
-function with_context(io::IO, cell_options = Dict{String,Any}(), inline = false)
-    return IOContext(io, _io_context(cell_options, inline)...)
+function with_context(
+    io::IO,
+    mod::Module,
+    cell_options = Dict{String,Any}(),
+    inline = false,
+)
+    return IOContext(io, _io_context(mod, cell_options, inline)...)
 end
 
-function _io_context(cell_options = Dict{String,Any}(), inline = false)
+function _io_context(mod::Module, cell_options = Dict{String,Any}(), inline = false)
+    ctx = NotebookState.current_context()
+    options = ctx === nothing ? Dict{String,Any}() : ctx.options
+
     return [
-        :module => NotebookState.notebook_module(),
+        :module => mod,
         :limit => true,
         :color => Base.have_color,
         # This allows a `show` method implementation to check for
@@ -36,7 +44,6 @@ function _io_context(cell_options = Dict{String,Any}(), inline = false)
         #
         # TODO: perhaps preprocess the metadata provided here rather
         # than just passing it through as-is.
-        :QuartoNotebookRunner =>
-            (; cell_options, options = NotebookState.OPTIONS[], inline),
+        :QuartoNotebookRunner => (; cell_options, options, inline),
     ]
 end

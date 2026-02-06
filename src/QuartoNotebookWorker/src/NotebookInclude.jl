@@ -7,12 +7,15 @@ import ..QuartoNotebookWorker
 # the REPL.
 function include(fname::Base.AbstractString)
     isa(fname, Base.String) || (fname = Base.convert(Base.String, fname)::Base.String)
-    Base._include(
-        Base.identity,
-        QuartoNotebookWorker.NotebookState.notebook_module(),
-        fname,
-    )
+    ctx = QuartoNotebookWorker.NotebookState.current_context()
+    ctx === Base.nothing && Base.error("No notebook context available")
+    Base._include(Base.identity, ctx.mod, fname)
 end
-eval(x) = Core.eval(QuartoNotebookWorker.NotebookState.notebook_module(), x)
+
+function eval(x)
+    ctx = QuartoNotebookWorker.NotebookState.current_context()
+    ctx === Base.nothing && Base.error("No notebook context available")
+    Core.eval(ctx.mod, x)
+end
 
 end

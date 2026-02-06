@@ -47,6 +47,7 @@ function julia_worker_config(options::Dict)
         exeflags = map(String, get(meta, "exeflags", String[])),
         env = map(String, get(meta, "env", String[])),
         strict_manifest_versions = get(meta, "strict_manifest_versions", false),
+        share_worker_process = get(meta, "share_worker_process", false),
     )
 end
 

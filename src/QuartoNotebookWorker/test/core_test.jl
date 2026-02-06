@@ -12,15 +12,16 @@ end
     import QuartoNotebookWorker as QNW
 
     # Empty options
-    QNW.NotebookState.OPTIONS[] = Dict{String,Any}()
-    fm = QNW._figure_metadata()
-    @test fm.fig_width_inch === nothing
-    @test fm.fig_height_inch === nothing
-    @test fm.fig_format === nothing
-    @test fm.fig_dpi === nothing
+    QNW.NotebookState.with_test_context() do
+        fm = QNW._figure_metadata()
+        @test fm.fig_width_inch === nothing
+        @test fm.fig_height_inch === nothing
+        @test fm.fig_format === nothing
+        @test fm.fig_dpi === nothing
+    end
 
     # With values
-    QNW.NotebookState.OPTIONS[] = Dict{String,Any}(
+    options = Dict{String,Any}(
         "format" => Dict(
             "execute" => Dict(
                 "fig-width" => 6,
@@ -30,11 +31,13 @@ end
             ),
         ),
     )
-    fm = QNW._figure_metadata()
-    @test fm.fig_width_inch == 6
-    @test fm.fig_height_inch == 4
-    @test fm.fig_dpi == 150
-    @test fm.fig_format == "png"
+    QNW.NotebookState.with_test_context(; options) do
+        fm = QNW._figure_metadata()
+        @test fm.fig_width_inch == 6
+        @test fm.fig_height_inch == 4
+        @test fm.fig_dpi == 150
+        @test fm.fig_format == "png"
+    end
 end
 
 @testitem "_getproperty" begin
