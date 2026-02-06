@@ -122,7 +122,7 @@ function dispatch(
     contexts::Contexts,
     lock::ReentrantLock,
 )
-    Base.@lock lock begin
+    Base.lock(lock) do
         ctx = get(contexts, req.file, nothing)
         if ctx === nothing
             # Create new context
@@ -162,7 +162,7 @@ function dispatch(
     contexts::Contexts,
     lock::ReentrantLock,
 )
-    Base.@lock lock begin
+    Base.lock(lock) do
         ctx = get(contexts, req.file, nothing)
         if ctx !== nothing
             NotebookState.clear_notebook_module!(ctx.mod)
@@ -173,10 +173,10 @@ function dispatch(
 end
 
 function dispatch(req::WorkerIPC.RenderRequest, contexts::Contexts, lock::ReentrantLock)
-    ctx = Base.@lock lock begin
-        get(contexts, req.file, nothing)
+    ctx = Base.lock(lock) do
+        get(contexts, req.notebook, nothing)
     end
-    ctx === nothing && error("No context for notebook: $(req.file)")
+    ctx === nothing && error("No context for notebook: $(req.notebook)")
 
     # Activate project/cwd if drifted from what this notebook expects
     Base.active_project() == ctx.project || Pkg.activate(ctx.project; io = devnull)
@@ -212,7 +212,7 @@ function dispatch(
     contexts::Contexts,
     lock::ReentrantLock,
 )
-    ctx = Base.@lock lock begin
+    ctx = Base.lock(lock) do
         get(contexts, req.file, nothing)
     end
     ctx === nothing && error("No context for notebook: $(req.file)")

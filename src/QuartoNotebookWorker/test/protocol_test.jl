@@ -50,6 +50,7 @@ end
     req = IPC.RenderRequest(
         code = "1 + 1",
         file = "test.qmd",
+        notebook = "/path/to/notebook.qmd",
         line = 42,
         cell_options = Dict{String,Any}("echo" => false),
         inline = true,
@@ -60,6 +61,7 @@ end
     @test result isa IPC.RenderRequest
     @test result.code == req.code
     @test result.file == req.file
+    @test result.notebook == req.notebook
     @test result.line == req.line
     @test result.cell_options == req.cell_options
     @test result.inline == req.inline

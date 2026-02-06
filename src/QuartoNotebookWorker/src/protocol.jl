@@ -15,7 +15,7 @@ Base.lock(f, lio::LockableIO) =
 
 const MsgID = UInt64
 const MAGIC = UInt32(0x514E5257)  # "QNRW"
-const PROTOCOL_VERSION = UInt8(5)  # Multi-notebook per worker
+const PROTOCOL_VERSION = UInt8(6)  # Separate notebook context key from source file
 
 module MsgType
 const CALL = 0x01       # expects response
@@ -148,6 +148,7 @@ end
 Base.@kwdef struct RenderRequest <: IPCRequest
     code::String
     file::String
+    notebook::String
     line::Int64
     cell_options::Dict{String,Any}
     inline::Bool = false
@@ -301,6 +302,7 @@ function _serialize(io::IO, x::RenderRequest)
     write(io, TAG_RENDER_REQ)
     _serialize(io, x.code)
     _serialize(io, x.file)
+    _serialize(io, x.notebook)
     _serialize(io, x.line)
     _serialize(io, x.cell_options)
     _serialize(io, x.inline)
@@ -391,6 +393,7 @@ function _deserialize(io::IO)
         NotebookCloseRequest(_deserialize(io))
     elseif tag == TAG_RENDER_REQ
         RenderRequest(
+            _deserialize(io),
             _deserialize(io),
             _deserialize(io),
             _deserialize(io),

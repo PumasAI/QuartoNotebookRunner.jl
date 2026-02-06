@@ -27,19 +27,51 @@ end
 
 function init!(file::File, options::Dict)
     worker = file.worker
-    _, _, quarto_env = _exeflags_and_env(options)
+    exeflags, env, quarto_env = _exeflags_and_env(options)
     cwd = something(get(options, "cwd", nothing), dirname(file.path))
+    project = _resolve_worker_project(exeflags, env, dirname(file.path))
     WorkerIPC.call(
         worker,
-        WorkerIPC.NotebookInitRequest(
+        WorkerIPC.NotebookInitRequest(;
             file = file.path,
-            project = Base.active_project(),
-            options = options,
-            cwd = cwd,
+            project,
+            options,
+            cwd,
             env_vars = quarto_env,
         ),
     )
 end
+
+"""
+    _resolve_worker_project(exeflags, env, notebook_dir)
+
+Determine the project the worker should activate based on its exeflags and env.
+Checks `--project` in exeflags first, then `JULIA_PROJECT` in env.
+Resolves `@.` by searching up from `notebook_dir`.
+"""
+function _resolve_worker_project(exeflags, env, notebook_dir)
+    # Use the last --project flag since Julia ignores earlier duplicates.
+    project = nothing
+    for flag in exeflags
+        if flag == "--project"
+            project = "@."
+        elseif startswith(flag, "--project=")
+            project = flag[length("--project=")+1:end]
+        end
+    end
+    if project !== nothing
+        return project == "@." ? _resolve_at_dot(notebook_dir) : project
+    end
+    for entry in env
+        if startswith(entry, "JULIA_PROJECT=")
+            val = entry[length("JULIA_PROJECT=")+1:end]
+            return val == "@." ? _resolve_at_dot(notebook_dir) : val
+        end
+    end
+    return _resolve_at_dot(notebook_dir)
+end
+
+_resolve_at_dot(dir) = something(Base.current_project(dir), dir)
 
 function refresh!(file::File, options::Dict)
     exeflags, env, quarto_env = _exeflags_and_env(options)
@@ -345,6 +377,7 @@ function evaluate_raw_cells!(
                     WorkerIPC.RenderRequest(
                         code = source,
                         file = chunk.file,
+                        notebook = f.path,
                         line = chunk.line + 1,
                         cell_options = chunk.cell_options,
                     ),
@@ -522,6 +555,7 @@ function evaluate_raw_cells!(
                                 WorkerIPC.RenderRequest(
                                     code = source_code,
                                     file = chunk.file,
+                                    notebook = f.path,
                                     line = chunk.line,
                                     cell_options = Dict{String,Any}(),
                                     inline = true,
