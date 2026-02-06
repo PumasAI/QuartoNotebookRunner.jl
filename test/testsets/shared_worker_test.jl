@@ -134,6 +134,77 @@
         end
     end
 
+    @testset "close! succeeds when worker is dead" begin
+        mktempdir() do dir
+            a = write_qmd(dir, "a.qmd")
+            b = write_qmd(dir, "b.qmd")
+            s = QNR.Server()
+            QNR.run!(s, a)
+            QNR.run!(s, b)
+
+            # Kill the shared worker process directly
+            file_a = s.workers[abspath(a)]
+            Base.kill(file_a.worker.proc, Base.SIGKILL)
+            while QNR.WorkerIPC.isrunning(file_a.worker)
+                sleep(0.01)
+            end
+
+            # close! should still complete host-side cleanup
+            @test QNR.close!(s, abspath(a)) == true
+            @test !haskey(s.workers, abspath(a))
+            @test length(s.shared_workers) == 1
+            entry = first(values(s.shared_workers))
+            @test entry.users == Set([abspath(b)])
+
+            # Close last user
+            @test QNR.close!(s, abspath(b)) == true
+            @test isempty(s.workers)
+            @test isempty(s.shared_workers)
+            QNR.close!(s)
+        end
+    end
+
+    @testset "forceclose! cleans up sibling files" begin
+        mktempdir() do dir
+            a = write_qmd(dir, "a.qmd"; code = "sleep(30)")
+            b = write_qmd(dir, "b.qmd")
+            s = QNR.Server()
+
+            # Run B first (completes, stays in workers due to daemon timeout)
+            QNR.run!(s, b)
+            @test haskey(s.workers, abspath(b))
+
+            # Spawn A in background (holds file lock during sleep)
+            run_task = Threads.@spawn try
+                QNR.run!(s, a)
+            catch e
+                e
+            end
+
+            # Wait for A's file lock to be held
+            while true
+                file = lock(s.lock) do
+                    get(s.workers, abspath(a), nothing)
+                end
+                file !== nothing && islocked(file.lock) && break
+                sleep(0.01)
+            end
+
+            # Force-close A — should also remove sibling B
+            QNR.forceclose!(s, abspath(a))
+
+            @test isempty(s.workers)
+            @test isempty(s.shared_workers)
+
+            # Background task should error with force-close message
+            result = fetch(run_task)
+            @test result isa Exception
+            @test contains(sprint(showerror, result), "force-closed")
+
+            QNR.close!(s)
+        end
+    end
+
     @testset "re-render shared notebook works" begin
         mktempdir() do dir
             a = write_qmd(dir, "a.qmd"; code = "x = 42")
