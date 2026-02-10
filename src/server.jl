@@ -3,18 +3,26 @@
 
 struct Server
     workers::Dict{String,File}
+    shared_workers::Dict{WorkerKey,SharedWorkerEntry}
     lock::ReentrantLock # should be locked for mutation/lookup of the workers dict, not for evaling on the workers. use worker locks for that
     on_change::Base.RefValue{Function} # an optional callback function n_workers::Int -> nothing that gets called with the server.lock locked when workers are added or removed
     sandbox_base::String # shared temp dir for worker sandboxes, cleaned on Server close
     function Server()
         workers = Dict{String,File}()
+        shared_workers = Dict{WorkerKey,SharedWorkerEntry}()
         sandbox_base = joinpath(
             WorkerIPC._get_scratchspace_path(),
             "sandboxes",
             string(rand(UInt), base = 62),
         )
         mkpath(sandbox_base)
-        return new(workers, ReentrantLock(), Ref{Function}(identity), sandbox_base)
+        return new(
+            workers,
+            shared_workers,
+            ReentrantLock(),
+            Ref{Function}(identity),
+            sandbox_base,
+        )
     end
 end
 
@@ -27,16 +35,70 @@ end
 
 function init!(file::File, options::Dict)
     worker = file.worker
-    WorkerIPC.call(worker, WorkerIPC.WorkerInitRequest(path = file.path, options = options))
+    exeflags, env, quarto_env = _exeflags_and_env(options)
+    cwd = something(get(options, "cwd", nothing), dirname(file.path))
+    project = _resolve_worker_project(exeflags, env, dirname(file.path))
+    WorkerIPC.call(
+        worker,
+        WorkerIPC.NotebookInitRequest(;
+            file = file.path,
+            project,
+            options,
+            cwd,
+            env_vars = quarto_env,
+        ),
+    )
 end
+
+"""
+    _resolve_worker_project(exeflags, env, notebook_dir)
+
+Determine the project the worker should activate based on its exeflags and env.
+Checks `--project` in exeflags first, then `JULIA_PROJECT` in env.
+Resolves `@.` by searching up from `notebook_dir`.
+"""
+function _resolve_worker_project(exeflags, env, notebook_dir)
+    # Use the last --project flag since Julia ignores earlier duplicates.
+    project = nothing
+    for flag in exeflags
+        if flag == "--project"
+            project = "@."
+        elseif startswith(flag, "--project=")
+            project = flag[length("--project=")+1:end]
+        end
+    end
+    if project !== nothing
+        return project == "@." ? _resolve_at_dot(notebook_dir) : project
+    end
+    for entry in env
+        if startswith(entry, "JULIA_PROJECT=")
+            val = entry[length("JULIA_PROJECT=")+1:end]
+            return val == "@." ? _resolve_at_dot(notebook_dir) : val
+        end
+    end
+    return _resolve_at_dot(notebook_dir)
+end
+
+_resolve_at_dot(dir) = something(Base.current_project(dir), dir)
 
 function refresh!(file::File, options::Dict)
     exeflags, env, quarto_env = _exeflags_and_env(options)
     julia_config = julia_worker_config(options)
-    if exeflags != file.exeflags ||
-       env != file.env ||
-       julia_config.strict_manifest_versions != file.strict_manifest_versions ||
-       !WorkerIPC.isrunning(file.worker) # the worker might have been killed on another task
+    config_changed =
+        exeflags != file.exeflags ||
+        env != file.env ||
+        julia_config.strict_manifest_versions != file.strict_manifest_versions
+    worker_dead = !WorkerIPC.isrunning(file.worker)
+
+    if file.worker_key !== nothing
+        # Shared worker: cannot restart — it's shared with other notebooks
+        if worker_dead
+            error("Shared worker process died unexpectedly")
+        end
+        if config_changed
+            @warn "Worker config changed for shared notebook $(file.path); ignoring (shared worker cannot be restarted)"
+        end
+    elseif config_changed || worker_dead
         WorkerIPC.stop(file.worker)
         exe, _exeflags = _julia_exe(exeflags)
         file.worker = cd(
@@ -55,20 +117,9 @@ function refresh!(file::File, options::Dict)
         file.strict_manifest_versions = julia_config.strict_manifest_versions
         file.source_code_hash = hash(VERSION)
         file.output_chunks = []
-        init!(file, options)
     end
-    refresh_quarto_env_vars!(file, quarto_env)
-    WorkerIPC.call(file.worker, WorkerIPC.WorkerRefreshRequest(options = options))
-end
-
-# Environment variables provided by Quarto may change between `quarto render`
-# calls. To update them correctly in the worker process, we need to refresh
-# them before each run.
-function refresh_quarto_env_vars!(file::File, quarto_env)
-    if !isempty(quarto_env)
-        WorkerIPC.call(file.worker, WorkerIPC.SetEnvVarsRequest(vars = quarto_env))
-    end
-    return nothing
+    # Always send NotebookInitRequest to (re)initialize notebook context
+    init!(file, options)
 end
 
 # Cache functions defined in cache.jl
@@ -345,6 +396,7 @@ function evaluate_raw_cells!(
                     WorkerIPC.RenderRequest(
                         code = source,
                         file = chunk.file,
+                        notebook = f.path,
                         line = chunk.line + 1,
                         cell_options = chunk.cell_options,
                     ),
@@ -522,6 +574,7 @@ function evaluate_raw_cells!(
                                 WorkerIPC.RenderRequest(
                                     code = source_code,
                                     file = chunk.file,
+                                    notebook = f.path,
                                     line = chunk.line,
                                     cell_options = Dict{String,Any}(),
                                     inline = true,
@@ -581,7 +634,10 @@ function evaluate_params!(f, params::Dict{String})
         )
     end
 
-    WorkerIPC.call(f.worker, WorkerIPC.EvaluateParamsRequest(params = params))
+    WorkerIPC.call(
+        f.worker,
+        WorkerIPC.EvaluateParamsRequest(file = f.path, params = params),
+    )
     return
 end
 
@@ -671,6 +727,62 @@ function run!(
 end
 
 """
+    _create_file(server, path, options)
+
+Create a File for `path`. If `share_worker_process` is enabled in frontmatter,
+reuse or create a shared worker via `server.shared_workers`.
+"""
+function _create_file(server::Server, path::String, options)
+    parsed = _parsed_options(options)
+    _, _, file_frontmatter = raw_text_chunks(path)
+    merged_options = _extract_relevant_options(file_frontmatter, parsed)
+    julia_config = julia_worker_config(merged_options)
+
+    if julia_config.share_worker_process
+        exeflags, env, quarto_env = _exeflags_and_env(merged_options)
+        exe, _exeflags = _julia_exe(exeflags)
+        key = WorkerKey(exe, exeflags, env, julia_config.strict_manifest_versions)
+
+        entry = get!(server.shared_workers, key) do
+            w = cd(
+                () -> WorkerIPC.Worker(;
+                    exe,
+                    exeflags = _exeflags,
+                    env = vcat(env, quarto_env),
+                    strict_manifest_versions = julia_config.strict_manifest_versions,
+                    sandbox_base = server.sandbox_base,
+                ),
+                dirname(path),
+            )
+            SharedWorkerEntry(w, Set{String}())
+        end
+        if !WorkerIPC.isrunning(entry.worker)
+            entry.worker = cd(
+                () -> WorkerIPC.Worker(;
+                    exe,
+                    exeflags = _exeflags,
+                    env = vcat(env, quarto_env),
+                    strict_manifest_versions = julia_config.strict_manifest_versions,
+                    sandbox_base = server.sandbox_base,
+                ),
+                dirname(path),
+            )
+            empty!(entry.users)
+        end
+        push!(entry.users, path)
+        return File(
+            path,
+            options;
+            sandbox_base = server.sandbox_base,
+            worker = entry.worker,
+            worker_key = key,
+        )
+    else
+        return File(path, options; sandbox_base = server.sandbox_base)
+    end
+end
+
+"""
     borrow_file!(f, server, path; wait = false, optionally_create = false, options = Dict{String,Any}())
 
 Executes `f(file)` while the `file`'s `ReentrantLock` is locked.
@@ -697,9 +809,8 @@ function borrow_file!(
             if optionally_create
                 # it's not ideal to create the `File` under server.lock but it takes a second or
                 # so on my machine to init it, so for practical purposes it should be ok
-                file =
-                    server.workers[apath] =
-                        File(apath, options; sandbox_base = server.sandbox_base)
+                file = _create_file(server, apath, options)
+                server.workers[apath] = file
                 lock(file.lock) # don't let anything get to the fresh file before us
                 on_change(server)
                 return true, file
@@ -769,9 +880,15 @@ end
 
 function close!(server::Server)
     lock(server.lock) do
-        for path in keys(server.workers)
+        for path in collect(keys(server.workers))
             close!(server, path)
         end
+        # Stop any remaining shared workers (should already be empty if all
+        # files were closed, but clean up defensively)
+        for (key, entry) in server.shared_workers
+            WorkerIPC.stop(entry.worker)
+        end
+        empty!(server.shared_workers)
     end
     rm(server.sandbox_base; force = true, recursive = true)
 end
@@ -789,11 +906,37 @@ function close!(server::Server, path::String)
             if file.timeout_timer !== nothing
                 close(file.timeout_timer)
             end
-            WorkerIPC.stop(file.worker)
-            lock(server.lock) do
-                pop!(server.workers, file.path)
-                _gc_cache_files(joinpath(dirname(path), ".cache"))
-                on_change(server)
+            if file.worker_key !== nothing
+                # Shared worker: clean up this notebook's context, don't stop
+                # the worker unless this is the last user.
+                try
+                    WorkerIPC.call(
+                        file.worker,
+                        WorkerIPC.NotebookCloseRequest(file = file.path),
+                    )
+                catch err
+                    @debug "NotebookCloseRequest failed for $(file.path)" exception = err
+                end
+                lock(server.lock) do
+                    delete!(server.workers, file.path)
+                    entry = get(server.shared_workers, file.worker_key, nothing)
+                    if entry !== nothing
+                        delete!(entry.users, file.path)
+                        if isempty(entry.users)
+                            WorkerIPC.stop(entry.worker)
+                            delete!(server.shared_workers, file.worker_key)
+                        end
+                    end
+                    _gc_cache_files(joinpath(dirname(path), ".cache"))
+                    on_change(server)
+                end
+            else
+                WorkerIPC.stop(file.worker)
+                lock(server.lock) do
+                    pop!(server.workers, file.path)
+                    _gc_cache_files(joinpath(dirname(path), ".cache"))
+                    on_change(server)
+                end
             end
             GC.gc()
         end
@@ -830,10 +973,46 @@ function forceclose!(server::Server, path::String)
         if lock_attained
             close!(server, path)
         else
-            # Signal to run! that we're force-closing, then directly stop the worker.
-            # This avoids a race where run! might consume :evaluate_finished first.
+            # Signal to run! that we're force-closing.
             put!(file.run_decision_channel, :forceclose)
+            # Signal siblings before killing worker so mid-run siblings
+            # get a clean :forceclose instead of raw TerminatedWorkerException.
+            if file.worker_key !== nothing
+                lock(server.lock) do
+                    entry = get(server.shared_workers, file.worker_key, nothing)
+                    if entry !== nothing
+                        for sibling_path in entry.users
+                            sibling_path == apath && continue
+                            sibling = get(server.workers, sibling_path, nothing)
+                            if sibling !== nothing
+                                put!(sibling.run_decision_channel, :forceclose)
+                            end
+                        end
+                    end
+                end
+            end
             WorkerIPC.stop(file.worker)
+            lock(server.lock) do
+                if file.worker_key !== nothing
+                    entry = get(server.shared_workers, file.worker_key, nothing)
+                    if entry !== nothing
+                        for sibling_path in entry.users
+                            sibling_path == apath && continue
+                            sibling = get(server.workers, sibling_path, nothing)
+                            if sibling !== nothing
+                                if sibling.timeout_timer !== nothing
+                                    close(sibling.timeout_timer)
+                                end
+                                delete!(server.workers, sibling_path)
+                                _gc_cache_files(joinpath(dirname(sibling_path), ".cache"))
+                            end
+                        end
+                        delete!(server.shared_workers, file.worker_key)
+                    end
+                end
+                delete!(server.workers, apath)
+                on_change(server)
+            end
         end
     finally
         lock_attained && unlock(file.lock)

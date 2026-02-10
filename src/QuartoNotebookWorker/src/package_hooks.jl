@@ -17,6 +17,9 @@ let hooks = Set{Function}()
     global function add_package_loading_hook!(f::Function)
         push!(hooks, f)
     end
+    global function delete_package_loading_hook!(f::Function)
+        delete!(hooks, f)
+    end
 end
 
 let hooks = Set{Function}()
@@ -25,6 +28,9 @@ let hooks = Set{Function}()
     end
     global function add_package_refresh_hook!(f::Function)
         push!(hooks, f)
+    end
+    global function delete_package_refresh_hook!(f::Function)
+        delete!(hooks, f)
     end
 end
 
@@ -38,6 +44,9 @@ let hooks = Set{Function}()
     global function add_post_eval_hook!(f::Function)
         push!(hooks, f)
     end
+    global function delete_post_eval_hook!(f::Function)
+        delete!(hooks, f)
+    end
 end
 
 let hooks = Set{Function}()
@@ -46,5 +55,8 @@ let hooks = Set{Function}()
     end
     global function add_post_error_hook!(f::Function)
         push!(hooks, f)
+    end
+    global function delete_post_error_hook!(f::Function)
+        delete!(hooks, f)
     end
 end

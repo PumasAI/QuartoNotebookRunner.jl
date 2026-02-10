@@ -147,6 +147,18 @@ function server_status(socketserver::SocketServer)
             println(io, "      exe: $(file.exe)")
             println(io, "      exeflags: $(file.exeflags)")
             println(io, "      env: $(file.env)")
+            if file.worker_key !== nothing
+                println(io, "      shared: true")
+            end
+        end
+
+        if !isempty(server.shared_workers)
+            println(io, "  shared worker processes: $(length(server.shared_workers))")
+            for (index, (key, entry)) in enumerate(server.shared_workers)
+                println(io, "    shared process $(index):")
+                println(io, "      pid: $(entry.worker.proc_pid)")
+                println(io, "      users: $(join(sort(collect(entry.users)), ", "))")
+            end
         end
 
         return String(take!(io))
