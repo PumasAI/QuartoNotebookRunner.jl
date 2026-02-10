@@ -151,6 +151,7 @@ function dispatch(
         end
     end
     # Hooks read from current_context() so must run inside with_context.
+    # _run_hooks catches all errors, so hooks can't leave the context in a partial state.
     NotebookState.with_context(ctx) do
         options_changed && run_package_loading_hooks()
         run_package_refresh_hooks()

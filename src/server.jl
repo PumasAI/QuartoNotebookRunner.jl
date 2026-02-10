@@ -918,7 +918,7 @@ function close!(server::Server, path::String)
                     @debug "NotebookCloseRequest failed for $(file.path)" exception = err
                 end
                 lock(server.lock) do
-                    pop!(server.workers, file.path)
+                    delete!(server.workers, file.path)
                     entry = get(server.shared_workers, file.worker_key, nothing)
                     if entry !== nothing
                         delete!(entry.users, file.path)
@@ -1004,6 +1004,7 @@ function forceclose!(server::Server, path::String)
                                     close(sibling.timeout_timer)
                                 end
                                 delete!(server.workers, sibling_path)
+                                _gc_cache_files(joinpath(dirname(sibling_path), ".cache"))
                             end
                         end
                         delete!(server.shared_workers, file.worker_key)

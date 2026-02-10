@@ -185,7 +185,6 @@ end
 
         @test observed_options[] === opts
     finally
-        # Clean up: hooks are stored in a Set, so we can remove ours.
-        # The hook set isn't publicly exposed, but the test verifies behavior.
+        QNW.delete_package_refresh_hook!(hook)
     end
 end
