@@ -9,8 +9,10 @@
 # Exception: borrow_file! acquires file.lock outside server.lock for pre-existing
 # files, then re-validates under server.lock (staleness check + recursion).
 #
-# forceclose! intentionally bypasses file.lock by signaling via
-# file.run_decision_channel, then killing the worker process directly.
+# forceclose! intentionally bypasses file.lock by setting force_close_requested
+# (atomic) and killing the worker process directly. run! detects forceclose
+# when WorkerIPC.call throws TerminatedWorkerException and the flag is set.
+# All FileState transitions happen under file.lock.
 
 function run!(
     server::Server,
@@ -24,6 +26,8 @@ function run!(
 )
     try
         borrow_file!(server, path; options, optionally_create = true) do file
+            transition!(file, FileState.Ready, FileState.Running)
+            file.force_close_requested[] = false
             if file.timeout_timer !== nothing
                 close(file.timeout_timer)
                 file.timeout_timer = nothing
@@ -31,56 +35,47 @@ function run!(
             file.run_started = Dates.now()
             file.run_finished = nothing
 
-            # Run evaluate! in a task so we can detect force-close requests.
-            # The forceclose! function will directly stop the worker if needed.
-            result_task = Threads.@spawn begin
-                try
-                    evaluate!(
-                        file,
-                        output;
-                        showprogress,
-                        options,
-                        markdown,
-                        chunk_callback,
-                        source_ranges,
-                    )
-                finally
-                    put!(file.run_decision_channel, :evaluate_finished)
-                end
-            end
+            try
+                result = evaluate!(
+                    file,
+                    output;
+                    showprogress,
+                    options,
+                    markdown,
+                    chunk_callback,
+                    source_ranges,
+                )
 
-            # block until a decision is reached
-            decision = take!(file.run_decision_channel)
-
-            if decision === :forceclose
-                # Worker already stopped by forceclose!, just error out
-                error("File was force-closed during run")
-            elseif decision === :evaluate_finished
-                result = try
-                    fetch(result_task)
-                catch err
-                    # throw the original exception, not the wrapping TaskFailedException
-                    rethrow(err.task.exception)
-                end
-                # Only check isrunning after successful fetch - if task threw, we already rethrew.
-                # This handles the race where forceclose! killed the worker during evaluation.
-                if !WorkerIPC.isrunning(file.worker)
+                # Eval succeeded but worker may have been killed after last IPC call.
+                if file.force_close_requested[]
+                    transition!(file, FileState.Running, FileState.Closing)
                     error("File was force-closed during run")
                 end
-            else
-                error("Invalid decision $decision")
-            end
 
-            file.run_finished = Dates.now()
-            if file.timeout > 0
-                file.timeout_timer = Timer(file.timeout) do _
+                file.run_finished = Dates.now()
+                transition!(file, FileState.Running, FileState.Ready)
+                if file.timeout > 0
+                    file.timeout_timer = Timer(file.timeout) do _
+                        close!(server, file.path)
+                        @debug "File at $(file.path) timed out after $(file.timeout) seconds of inactivity."
+                    end
+                else
                     close!(server, file.path)
-                    @debug "File at $(file.path) timed out after $(file.timeout) seconds of inactivity."
                 end
-            else
-                close!(server, file.path)
+                return result
+            catch err
+                # Reset to Ready so file is reusable after eval errors.
+                # Skip if forceclose already transitioned to Closing.
+                if file.state === FileState.Running
+                    if file.force_close_requested[]
+                        transition!(file, FileState.Running, FileState.Closing)
+                        error("File was force-closed during run")
+                    else
+                        transition!(file, FileState.Running, FileState.Ready)
+                    end
+                end
+                rethrow(err)
             end
-            return result
         end
     catch err
         if err isa FileBusyError
@@ -220,8 +215,8 @@ end
     _forceclose_signal_siblings!(server, file, apath)
 
 Signal all sibling files sharing the same worker to forceclose.
-Must be called before killing the shared worker so siblings get a clean
-:forceclose instead of a raw TerminatedWorkerException.
+Must be called before killing the shared worker so siblings detect
+forceclose via the atomic flag rather than a raw TerminatedWorkerException.
 """
 function _forceclose_signal_siblings!(server, file, apath)
     lock(server.lock) do
@@ -231,7 +226,7 @@ function _forceclose_signal_siblings!(server, file, apath)
                 sibling_path == apath && continue
                 sibling = get(server.workers, sibling_path, nothing)
                 if sibling !== nothing
-                    put!(sibling.run_decision_channel, :forceclose)
+                    sibling.force_close_requested[] = true
                 end
             end
         end
@@ -289,6 +284,7 @@ can happen if it was closed by a timeout, for example.
 function close!(server::Server, path::String)
     try
         borrow_file!(server, path) do file
+            transition!(file, FileState.Ready, FileState.Closing)
             if file.timeout_timer !== nothing
                 close(file.timeout_timer)
             end
@@ -334,15 +330,13 @@ function forceclose!(server::Server, path::String)
             throw(NoFileEntryError(apath))
         end
     end
-    # if the worker is not actually running we need to fall back to normal closing,
-    # for that we try to get the file lock now
+    # If the worker is idle we can close normally.
     lock_attained = trylock(file.lock)
     try
-        # if we've attained the lock, we can close normally
         if lock_attained
             close!(server, path)
         else
-            put!(file.run_decision_channel, :forceclose)
+            file.force_close_requested[] = true
             if file.worker_key !== nothing
                 _forceclose_signal_siblings!(server, file, apath)
             end

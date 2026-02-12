@@ -32,6 +32,19 @@ mutable struct SharedWorkerEntry
 end
 
 """
+    FileState
+
+File lifecycle states. All transitions happen under `file.lock`.
+"""
+module FileState
+@enum T begin
+    Ready
+    Running
+    Closing
+end
+end
+
+"""
     File
 
 Represents a notebook file managed by a Server. Tracks the worker process,
@@ -51,9 +64,10 @@ mutable struct File
     timeout_timer::Union{Nothing,Timer}   # Active timeout timer
     run_started::Union{Nothing,Dates.DateTime}   # Last run start time
     run_finished::Union{Nothing,Dates.DateTime}  # Last run completion time
-    run_decision_channel::Channel{Symbol} # Communication channel for forceclose
+    force_close_requested::Threads.Atomic{Bool} # Set by forceclose!, checked by run!
     sandbox_base::String                  # Shared sandbox base from Server
     worker_key::Union{Nothing,WorkerKey}  # Non-nothing when using a shared worker
+    state::FileState.T                    # Lifecycle state (Ready, Running, Closing)
 
     function File(
         path::String,
@@ -101,9 +115,10 @@ mutable struct File
                     nothing,
                     nothing,
                     nothing,
-                    Channel{Symbol}(32), # buffered to avoid blocking on put!
+                    Threads.Atomic{Bool}(false),
                     sandbox_base,
                     worker_key,
+                    FileState.Ready,
                 )
                 init!(file, merged_options)
                 return file
@@ -118,6 +133,30 @@ mutable struct File
             throw(ArgumentError("file does not exist: $path"))
         end
     end
+end
+
+# Valid state transitions for File lifecycle.
+const VALID_TRANSITIONS = Set{Tuple{FileState.T,FileState.T}}([
+    (FileState.Ready, FileState.Running),
+    (FileState.Running, FileState.Ready),
+    (FileState.Running, FileState.Closing),
+    (FileState.Ready, FileState.Closing),
+])
+
+"""
+    transition!(file, from, to)
+
+Transition a File's lifecycle state. Validates that the current state matches
+`from` and that `from → to` is a valid transition. All calls must be made
+under `file.lock`.
+"""
+function transition!(file::File, from::FileState.T, to::FileState.T)
+    file.state === from || error("Expected $(file.path) in state $from, got $(file.state)")
+    (from, to) in VALID_TRANSITIONS ||
+        error("Invalid state transition $from → $to for $(file.path)")
+    file.state = to
+    @debug "$(basename(file.path)): $from → $to"
+    return nothing
 end
 
 struct Server
