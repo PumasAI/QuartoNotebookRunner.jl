@@ -15,11 +15,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Fix sandbox temp directory leak in `render()` [#399]
 - Fix duplicate YAML keys when Python/R cells have cell options like `echo` [#394]
 - Wrap package hook invocations in try-catch to prevent worker hangs from hook errors [#390]
 
 ### Changed
 
+- Refactor server internals: explicit FileState state machine, atomic forceclose flag, deduplicated worker creation, resilient server shutdown [#399]
 - Cache worker package environments using Scratch.jl; skip Pkg.develop on subsequent startups for same Julia version [#395]
 - Make strict manifest version checking opt-in via `julia: strict_manifest_versions: true` frontmatter; default now matches Pkg behavior (major.minor only) [#392]
 - Replace Malt+BSON with custom binary IPC protocol for worker communication [#388]
@@ -500,3 +502,4 @@ caching is enabled. Delete this folder to clear the cache. [#259]
 [#394]: https://github.com/PumasAI/QuartoNotebookRunner.jl/issues/394
 [#395]: https://github.com/PumasAI/QuartoNotebookRunner.jl/issues/395
 [#396]: https://github.com/PumasAI/QuartoNotebookRunner.jl/issues/396
+[#399]: https://github.com/PumasAI/QuartoNotebookRunner.jl/issues/399

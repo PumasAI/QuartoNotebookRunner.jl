@@ -39,6 +39,8 @@ jobs:
       contents: read
     runs-on: ${{ matrix.os }}
     timeout-minutes: 90
+    env:
+      JULIA_NUM_PRECOMPILE_TASKS: 2
     strategy:
       fail-fast: false
       matrix:

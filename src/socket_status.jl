@@ -140,6 +140,7 @@ function server_status(socketserver::SocketServer)
 
             println(io, "    worker $(index):")
             println(io, "      path: $(file.path)")
+            println(io, "      state: $(file.state)")
             println(io, "      run started: $(run_started_str)$(run_started_ago)")
             println(io, "      run finished: $(run_finished_str)$(run_duration_str)")
             println(io, "      timeout: $(timeout_str)$(time_until_timeout_str)")

@@ -32,6 +32,19 @@ mutable struct SharedWorkerEntry
 end
 
 """
+    FileState
+
+File lifecycle states. All transitions happen under `file.lock`.
+"""
+module FileState
+@enum T begin
+    Ready
+    Running
+    Closing
+end
+end
+
+"""
     File
 
 Represents a notebook file managed by a Server. Tracks the worker process,
@@ -51,9 +64,10 @@ mutable struct File
     timeout_timer::Union{Nothing,Timer}   # Active timeout timer
     run_started::Union{Nothing,Dates.DateTime}   # Last run start time
     run_finished::Union{Nothing,Dates.DateTime}  # Last run completion time
-    run_decision_channel::Channel{Symbol} # Communication channel for forceclose
+    force_close_requested::Threads.Atomic{Bool} # Set by forceclose!, checked by run!
     sandbox_base::String                  # Shared sandbox base from Server
     worker_key::Union{Nothing,WorkerKey}  # Non-nothing when using a shared worker
+    state::FileState.T                    # Lifecycle state (Ready, Running, Closing)
 
     function File(
         path::String,
@@ -76,15 +90,13 @@ mutable struct File
 
                 exe, _exeflags = _julia_exe(exeflags)
                 if worker === nothing
-                    worker = cd(
-                        () -> WorkerIPC.Worker(;
-                            exe,
-                            exeflags = _exeflags,
-                            env = vcat(env, quarto_env),
-                            strict_manifest_versions = julia_config.strict_manifest_versions,
-                            sandbox_base,
-                        ),
-                        dirname(path),
+                    worker = _start_worker(;
+                        exe,
+                        exeflags = _exeflags,
+                        env = vcat(env, quarto_env),
+                        strict_manifest_versions = julia_config.strict_manifest_versions,
+                        sandbox_base,
+                        notebook_dir = dirname(path),
                     )
                 end
                 file = new(
@@ -101,9 +113,10 @@ mutable struct File
                     nothing,
                     nothing,
                     nothing,
-                    Channel{Symbol}(32), # buffered to avoid blocking on put!
+                    Threads.Atomic{Bool}(false),
                     sandbox_base,
                     worker_key,
+                    FileState.Ready,
                 )
                 init!(file, merged_options)
                 return file
@@ -118,6 +131,60 @@ mutable struct File
             throw(ArgumentError("file does not exist: $path"))
         end
     end
+end
+
+# Valid state transitions for File lifecycle.
+const VALID_TRANSITIONS = Set{Tuple{FileState.T,FileState.T}}([
+    (FileState.Ready, FileState.Running),
+    (FileState.Running, FileState.Ready),
+    (FileState.Running, FileState.Closing),
+    (FileState.Ready, FileState.Closing),
+])
+
+"""
+    transition!(file, from, to)
+
+Transition a File's lifecycle state. Validates that the current state matches
+`from` and that `from → to` is a valid transition. All calls must be made
+under `file.lock`.
+"""
+function transition!(file::File, from::FileState.T, to::FileState.T)
+    file.state === from || error("Expected $(file.path) in state $from, got $(file.state)")
+    (from, to) in VALID_TRANSITIONS ||
+        error("Invalid state transition $from → $to for $(file.path)")
+    file.state = to
+    @debug "$(basename(file.path)): $from → $to"
+    return nothing
+end
+
+struct Server
+    workers::Dict{String,File}
+    shared_workers::Dict{WorkerKey,SharedWorkerEntry}
+    lock::ReentrantLock # should be locked for mutation/lookup of the workers dict, not for evaling on the workers. use worker locks for that
+    on_change::Base.RefValue{Function} # an optional callback function n_workers::Int -> nothing that gets called with the server.lock locked when workers are added or removed
+    sandbox_base::String # shared temp dir for worker sandboxes, cleaned on Server close
+    function Server()
+        workers = Dict{String,File}()
+        shared_workers = Dict{WorkerKey,SharedWorkerEntry}()
+        sandbox_base = joinpath(
+            WorkerIPC._get_scratchspace_path(),
+            "sandboxes",
+            string(rand(UInt), base = 62),
+        )
+        mkpath(sandbox_base)
+        return new(
+            workers,
+            shared_workers,
+            ReentrantLock(),
+            Ref{Function}(identity),
+            sandbox_base,
+        )
+    end
+end
+
+function on_change(s::Server)
+    s.on_change[](length(s.workers))
+    return
 end
 
 """
