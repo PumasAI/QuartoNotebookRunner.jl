@@ -1,647 +1,16 @@
-# Types defined in types.jl
-# Worker setup functions defined in worker_setup.jl
-
-struct Server
-    workers::Dict{String,File}
-    shared_workers::Dict{WorkerKey,SharedWorkerEntry}
-    lock::ReentrantLock # should be locked for mutation/lookup of the workers dict, not for evaling on the workers. use worker locks for that
-    on_change::Base.RefValue{Function} # an optional callback function n_workers::Int -> nothing that gets called with the server.lock locked when workers are added or removed
-    sandbox_base::String # shared temp dir for worker sandboxes, cleaned on Server close
-    function Server()
-        workers = Dict{String,File}()
-        shared_workers = Dict{WorkerKey,SharedWorkerEntry}()
-        sandbox_base = joinpath(
-            WorkerIPC._get_scratchspace_path(),
-            "sandboxes",
-            string(rand(UInt), base = 62),
-        )
-        mkpath(sandbox_base)
-        return new(
-            workers,
-            shared_workers,
-            ReentrantLock(),
-            Ref{Function}(identity),
-            sandbox_base,
-        )
-    end
-end
-
-function on_change(s::Server)
-    s.on_change[](length(s.workers))
-    return
-end
-
-# Implementation.
-
-function init!(file::File, options::Dict)
-    worker = file.worker
-    exeflags, env, quarto_env = _exeflags_and_env(options)
-    cwd = something(get(options, "cwd", nothing), dirname(file.path))
-    project = _resolve_worker_project(exeflags, env, dirname(file.path))
-    WorkerIPC.call(
-        worker,
-        WorkerIPC.NotebookInitRequest(;
-            file = file.path,
-            project,
-            options,
-            cwd,
-            env_vars = quarto_env,
-        ),
-    )
-end
-
-"""
-    _resolve_worker_project(exeflags, env, notebook_dir)
-
-Determine the project the worker should activate based on its exeflags and env.
-Checks `--project` in exeflags first, then `JULIA_PROJECT` in env.
-Resolves `@.` by searching up from `notebook_dir`.
-"""
-function _resolve_worker_project(exeflags, env, notebook_dir)
-    # Use the last --project flag since Julia ignores earlier duplicates.
-    project = nothing
-    for flag in exeflags
-        if flag == "--project"
-            project = "@."
-        elseif startswith(flag, "--project=")
-            project = flag[length("--project=")+1:end]
-        end
-    end
-    if project !== nothing
-        return project == "@." ? _resolve_at_dot(notebook_dir) : project
-    end
-    for entry in env
-        if startswith(entry, "JULIA_PROJECT=")
-            val = entry[length("JULIA_PROJECT=")+1:end]
-            return val == "@." ? _resolve_at_dot(notebook_dir) : val
-        end
-    end
-    return _resolve_at_dot(notebook_dir)
-end
-
-_resolve_at_dot(dir) = something(Base.current_project(dir), dir)
-
-function refresh!(file::File, options::Dict)
-    exeflags, env, quarto_env = _exeflags_and_env(options)
-    julia_config = julia_worker_config(options)
-    config_changed =
-        exeflags != file.exeflags ||
-        env != file.env ||
-        julia_config.strict_manifest_versions != file.strict_manifest_versions
-    worker_dead = !WorkerIPC.isrunning(file.worker)
-
-    if file.worker_key !== nothing
-        # Shared worker: cannot restart — it's shared with other notebooks
-        if worker_dead
-            error("Shared worker process died unexpectedly")
-        end
-        if config_changed
-            @warn "Worker config changed for shared notebook $(file.path); ignoring (shared worker cannot be restarted)"
-        end
-    elseif config_changed || worker_dead
-        WorkerIPC.stop(file.worker)
-        exe, _exeflags = _julia_exe(exeflags)
-        file.worker = cd(
-            () -> WorkerIPC.Worker(;
-                exe,
-                exeflags = _exeflags,
-                env = vcat(env, quarto_env),
-                strict_manifest_versions = julia_config.strict_manifest_versions,
-                sandbox_base = file.sandbox_base,
-            ),
-            dirname(file.path),
-        )
-        file.exe = exe
-        file.exeflags = exeflags
-        file.env = env
-        file.strict_manifest_versions = julia_config.strict_manifest_versions
-        file.source_code_hash = hash(VERSION)
-        file.output_chunks = []
-    end
-    # Always send NotebookInitRequest to (re)initialize notebook context
-    init!(file, options)
-end
-
-# Cache functions defined in cache.jl
-
-"""
-    evaluate!(f::File, [output])
-
-Evaluate the code and markdown in `f` and return a vector of cells with the
-results in all available mimetypes.
-
-`output` can be a file path, or an IO stream.
-`markdown` can be used to pass an override for the file content, which is used
-    to pass the modified markdown that quarto creates after resolving shortcodes
-"""
-function evaluate!(
-    f::File,
-    output::Union{AbstractString,IO,Nothing} = nothing;
-    showprogress = true,
-    options::Union{String,Dict{String,Any}} = Dict{String,Any}(),
-    chunk_callback = (i, n, c) -> nothing,
-    markdown::Union{String,Nothing} = nothing,
-    source_ranges::Union{Nothing,Vector} = nothing,
-)
-    _check_output_dst(output)
-
-    options = _parsed_options(options)
-    path = abspath(f.path)
-    if isfile(path)
-        source_code_hash, raw_chunks, file_frontmatter =
-            raw_text_chunks(f, markdown; source_ranges)
-        merged_options = _extract_relevant_options(file_frontmatter, options)
-
-        # A change of parameter values must invalidate the source code hash.
-        source_code_hash = hash(merged_options["params"], source_code_hash)
-
-        refresh!(f, merged_options)
-
-        enabled_cache = merged_options["format"]["execute"]["cache"] == true
-        enabled_cache && load_from_file!(f, source_code_hash)
-
-        # This is the results caching logic. When only the markdown has
-        # changed, e.g. the hash of all executable code blocks is the same as
-        # the previous run then we can reuse the previous cell outputs.
-        # Additionally, if the currently cached chunks is empty then we have a
-        # fresh session that has not yet populated the `output_chunks`.
-        if enabled_cache &&
-           source_code_hash == f.source_code_hash &&
-           !isempty(f.output_chunks)
-            @debug "reusing previous cell outputs"
-            # All the executable code cells are the same as the previous
-            # render, so all we need to do is iterate over the markdown code
-            # (that doesn't contain inline executable code) and update the
-            # markdown cells with the new content.
-            lookup = Dict(string(nth) => chunk for (nth, chunk) in enumerate(raw_chunks))
-            for output_chunk in f.output_chunks
-                if haskey(lookup, output_chunk.id)
-                    new_raw_chunk = lookup[output_chunk.id]
-                    # Skip any markdown chunk if it contains potential inline
-                    # executable code otherwise they would be replaced with
-                    # their unexpanded raw chunk.
-                    if !contains(new_raw_chunk.source, INLINE_CODE_PATTERN)
-                        # Swap out any markdown chunks with their updated content.
-                        new_source = process_cell_source(new_raw_chunk.source)
-                        empty!(output_chunk.source)
-                        append!(output_chunk.source, new_source)
-                    end
-                end
-            end
-            cells = f.output_chunks
-        else
-            @debug "evaluating new cell outputs"
-            # When there has been any kind of change to any executable code
-            # blocks then we perform a complete rerun of the notebook. Further
-            # optimisations can be made to perform source code analysis in the
-            # worker process to determine if which cells need to be
-            # reevaluated.
-            cells = evaluate_raw_cells!(
-                f,
-                raw_chunks,
-                merged_options;
-                showprogress,
-                chunk_callback,
-            )
-            # Update the hash to the latest computed.
-            f.source_code_hash = source_code_hash
-            f.output_chunks = cells
-
-            enabled_cache && save_to_file!(f)
-        end
-
-        version = _get_julia_version(f)
-        data = (
-            metadata = (
-                kernelspec = (
-                    display_name = "Julia $(version)",
-                    language = "julia",
-                    name = "julia-$(version)",
-                ),
-                kernel_info = (name = "julia",),
-                language_info = (
-                    name = "julia",
-                    version = version,
-                    codemirror_mode = "julia",
-                ),
-            ),
-            nbformat = 4,
-            nbformat_minor = 5,
-            cells,
-        )
-        write_json(output, data)
-    else
-        throw(ArgumentError("file does not exist: $(path)"))
-    end
-end
-
-# The version of `julia` for a particular notebook file might not be the same
-# as the runner process, so query the worker for this value.
-function _get_julia_version(f::File)
-    cmd = `$(f.exe) --version`
-    return last(split(readchomp(cmd)))
-end
-
-# Options functions defined in options.jl
-
-function _check_output_dst(s::AbstractString)
-    s = abspath(s)
-    dir = dirname(s)
-    isdir(dir) || throw(ArgumentError("directory does not exist: $(dir)"))
-    return nothing
-end
-_check_output_dst(::Any) = nothing
-
-function write_json(s::AbstractString, data)
-    open(s, "w") do io
-        write_json(io, data)
-    end
-end
-write_json(io::IO, data) = JSON3.pretty(io, data)
-write_json(::Nothing, data) = data
-
-# Parsing functions defined in parsing.jl
-
-# Convenience macro that outputs
-# ```julia
-# if showprogress
-#     ProgressLogging.@progress exprs...
-# else
-#     exprs[end]
-# end
-# ```
-# TODO: Upstream to ProgressLogging?
-macro maybe_progress(showprogress, exprs...)
-    if isempty(exprs)
-        throw(ArgumentError("at least one expression required"))
-    end
-    expr = quote
-        if $(showprogress)
-            $ProgressLogging.@progress $(exprs...)
-        else
-            $(exprs[end])
-        end
-    end
-    return esc(expr)
-end
-
-should_eval(chunk, global_eval::Bool) =
-    chunk.type === :code &&
-    (chunk.evaluate === true || (chunk.evaluate === Unset() && global_eval))
-
-"""
-    _add_language_prefix_cell!(cells, chunk, nth, mth, expand_cell, language, fenced=false)
-
-Add a markdown cell containing a fenced code block for displaying R/Python source.
-When `fenced=true`, uses `{{language}}` syntax so fence markers are visible in output.
-"""
-function _add_language_prefix_cell!(
-    cells,
-    chunk,
-    nth,
-    mth,
-    expand_cell,
-    language::Symbol,
-    fenced::Bool = false,
-)
-    lang_str = fenced ? "{{$(language)}}" : string(language)
-    code = chomp(strip_cell_options(chunk.source))
-    push!(
-        cells,
-        (;
-            id = string(expand_cell ? string(nth, "_", mth) : string(nth), "_code_prefix"),
-            cell_type = :markdown,
-            metadata = (;),
-            source = process_cell_source("```$(lang_str)\n$(code)\n```\n", Dict()),
-        ),
-    )
-end
-
-"""
-    _get_user_echo(cell_options, chunk)
-
-Get user's echo option for foreign (Python/R) cells.
-Returns the echo value from cell_options if present, otherwise extracts from source.
-"""
-function _get_user_echo(cell_options, chunk)
-    if haskey(cell_options, "echo")
-        cell_options["echo"]
-    else
-        opts = extract_cell_options(chunk.source; file = chunk.file, line = chunk.line)
-        get(opts, "echo", true)
-    end
-end
-
-"""
-    evaluate_raw_cells!(f::File, chunks::Vector)
-
-Evaluate the raw cells in `chunks` and return a vector of cells with the results
-in all available mimetypes.
-
-The optional `chunk_callback` is called with `(i::Int, n::Int, chunk)` before a chunk is processed and is
-intended for a progress update mechanism via the socket interface.
-"""
-function evaluate_raw_cells!(
-    f::File,
-    chunks::Vector,
-    options::Dict;
-    showprogress = true,
-    chunk_callback = (i, n, c) -> nothing,
-)
-    evaluate_params!(f, options["params"])
-
-    cells = []
-
-    error_metadata = NamedTuple{(:kind, :file, :traceback),Tuple{Symbol,String,String}}[]
-    _record_error!(kind, file, traceback) = push!(error_metadata, (; kind, file, traceback))
-    allow_error_global = options["format"]["execute"]["error"]
-    global_eval::Bool = options["format"]["execute"]["eval"]
-
-    wd = try
-        pwd()
-    catch
-        ""
-    end
-    header = "Running $(relpath(f.path, wd))"
-
-    chunks_to_evaluate = sum(c -> should_eval(c, global_eval), chunks)
-    ith_chunk_to_evaluate = 1
-
-    @maybe_progress showprogress "$header" for (nth, chunk) in enumerate(chunks)
-        if chunk.type === :code
-            if !should_eval(chunk, global_eval)
-                # Cells that are not evaluated are not executed, but they are
-                # still included in the notebook.
-                push!(
-                    cells,
-                    (;
-                        id = string(nth),
-                        cell_type = chunk.type,
-                        metadata = (;),
-                        source = process_cell_source(chunk.source),
-                        outputs = [],
-                        execution_count = 0,
-                    ),
-                )
-            else
-                chunk_callback(ith_chunk_to_evaluate, chunks_to_evaluate, chunk)
-                ith_chunk_to_evaluate += 1
-
-                source = transform_source(chunk)
-
-                # Offset the line number by 1 to account for the triple backticks
-                # that are part of the markdown syntax for code blocks.
-                render_response = WorkerIPC.call(
-                    f.worker,
-                    WorkerIPC.RenderRequest(
-                        code = source,
-                        file = chunk.file,
-                        notebook = f.path,
-                        line = chunk.line + 1,
-                        cell_options = chunk.cell_options,
-                    ),
-                )
-                worker_results = render_response.cells
-                expand_cell = render_response.is_expansion
-
-                # When the result of the cell evaluation is a cell expansion
-                # then we insert the original cell contents before the expanded
-                # cells as a mock cell similar to if it has `eval: false` set.
-                if expand_cell
-                    push!(
-                        cells,
-                        (;
-                            id = string(nth),
-                            cell_type = chunk.type,
-                            metadata = (;),
-                            source = process_cell_source(chunk.source),
-                            outputs = [],
-                            execution_count = 1,
-                        ),
-                    )
-                end
-
-                for (mth, remote) in enumerate(worker_results)
-                    outputs = []
-                    processed = process_results(remote.results)
-
-                    # Should this notebook cell be allowed to throw an error? When
-                    # not allowed, we log all errors don't generate an output.
-                    allow_error_cell = get(remote.cell_options, "error", allow_error_global)
-
-                    if isnothing(remote.error)
-                        for display_result in remote.display_results
-                            processed_display = process_results(display_result)
-                            if !isempty(processed_display.data)
-                                push!(
-                                    outputs,
-                                    (;
-                                        output_type = "display_data",
-                                        processed_display.data,
-                                        processed_display.metadata,
-                                    ),
-                                )
-                            end
-                            if !isempty(processed_display.errors)
-                                append!(outputs, processed_display.errors)
-                                if !allow_error_cell
-                                    for each_error in processed_display.errors
-                                        _record_error!(
-                                            :show,
-                                            "$(chunk.file):$(chunk.line)",
-                                            join(each_error.traceback, "\n"),
-                                        )
-                                    end
-                                end
-                            end
-                        end
-                        if !isempty(processed.data)
-                            push!(
-                                outputs,
-                                (;
-                                    output_type = "execute_result",
-                                    execution_count = 1,
-                                    processed.data,
-                                    processed.metadata,
-                                ),
-                            )
-                        end
-                    else
-                        # These are errors arising from evaluation of the contents
-                        # of a code cell, not from the `show` output of the values,
-                        # which is handled separately below.
-                        push!(
-                            outputs,
-                            (;
-                                output_type = "error",
-                                ename = remote.error,
-                                evalue = get(processed.data, "text/plain", ""),
-                                traceback = remote.backtrace,
-                            ),
-                        )
-                        if !allow_error_cell
-                            _record_error!(
-                                :cell,
-                                "$(chunk.file):$(chunk.line)",
-                                join(remote.backtrace, "\n"),
-                            )
-                        end
-                    end
-
-                    if !isempty(remote.output)
-                        pushfirst!(
-                            outputs,
-                            (;
-                                output_type = "stream",
-                                name = "stdout",
-                                text = remote.output,
-                            ),
-                        )
-                    end
-
-                    # These are errors arising from the `show` output of the values
-                    # generated by cells, not from the cell evaluation itself. So if
-                    # something throws an error here then the user's `show` method
-                    # has a bug.
-                    if !isempty(processed.errors)
-                        append!(outputs, processed.errors)
-                        if !allow_error_cell
-                            for each_error in processed.errors
-                                _record_error!(
-                                    :show,
-                                    "$(chunk.file):$(chunk.line)",
-                                    join(each_error.traceback, "\n"),
-                                )
-                            end
-                        end
-                    end
-
-                    cell_options = expand_cell ? remote.cell_options : Dict()
-
-                    # Non-Julia code cells need a prefix cell with formatted source
-                    # since the notebook language is julia. Hide the actual code cell.
-                    if chunk.language in (:python, :r)
-                        user_echo = _get_user_echo(cell_options, chunk)
-                        if user_echo != false
-                            _add_language_prefix_cell!(
-                                cells,
-                                chunk,
-                                nth,
-                                mth,
-                                expand_cell,
-                                chunk.language,
-                                user_echo == "fenced",
-                            )
-                        end
-                        cell_options["echo"] = false
-                    end
-
-                    source = expand_cell ? remote.code : chunk.source
-
-                    push!(
-                        cells,
-                        (;
-                            id = expand_cell ? string(nth, "_", mth) : string(nth),
-                            cell_type = chunk.type,
-                            metadata = (;),
-                            source = process_cell_source(source, cell_options),
-                            outputs,
-                            execution_count = 1,
-                        ),
-                    )
-                end
-            end
-        elseif chunk.type === :markdown
-            marker = r"{(?:julia|python|r)} "
-            source = chunk.source
-            if contains(chunk.source, INLINE_CODE_PATTERN)
-                parser = Parser()
-                for (node, enter) in parser(chunk.source)
-                    if enter && node.t isa CommonMark.Code
-                        if startswith(node.literal, marker)
-                            source_code = replace(node.literal, marker => "")
-                            if startswith(node.literal, "{r}")
-                                source_code = wrap_with_r_boilerplate(source_code)
-                            end
-                            if startswith(node.literal, "{python}")
-                                source_code = wrap_with_python_boilerplate(source_code)
-                            end
-                            # There should only ever be a single result from an
-                            # inline evaluation since you can't pass cell
-                            # options and so `expand` will always be `false`.
-                            render_response = WorkerIPC.call(
-                                f.worker,
-                                WorkerIPC.RenderRequest(
-                                    code = source_code,
-                                    file = chunk.file,
-                                    notebook = f.path,
-                                    line = chunk.line,
-                                    cell_options = Dict{String,Any}(),
-                                    inline = true,
-                                ),
-                            )
-                            render_response.is_expansion &&
-                                error("inline code cells cannot be expanded")
-                            remote = only(render_response.cells)
-                            if !isnothing(remote.error)
-                                # file location is not straightforward to determine with inline literals, but just printing the (presumably short)
-                                # code back instead of a location should be quite helpful
-                                _record_error!(
-                                    :inline,
-                                    "inline: `$(node.literal)`",
-                                    join(remote.backtrace, "\n"),
-                                )
-                            else
-                                processed = process_inline_results(remote.results)
-                                source = replace(
-                                    source,
-                                    "`$(node.literal)`" => "$processed";
-                                    count = 1,
-                                )
-                            end
-                        end
-                    end
-                end
-            end
-            push!(
-                cells,
-                (;
-                    id = string(nth),
-                    cell_type = chunk.type,
-                    metadata = (;),
-                    source = process_cell_source(source),
-                ),
-            )
-        else
-            throw(ArgumentError("unknown chunk type: $(chunk.type)"))
-        end
-    end
-    if !isempty(error_metadata)
-        throw(EvaluationError(error_metadata))
-    end
-
-    return cells
-end
-
-function evaluate_params!(f, params::Dict{String})
-    invalid_param_keys = filter(!Base.isidentifier, keys(params))
-    if !isempty(invalid_param_keys)
-        plu = length(invalid_param_keys) > 1
-        throw(
-            ArgumentError(
-                "Found parameter key$(plu ? "s that are not " : " that is not a ") valid Julia identifier$(plu ? "s" : ""): $(join((repr(k) for k in invalid_param_keys), ", ", " and ")).",
-            ),
-        )
-    end
-
-    WorkerIPC.call(
-        f.worker,
-        WorkerIPC.EvaluateParamsRequest(file = f.path, params = params),
-    )
-    return
-end
-
-# Cell processing functions defined in cell_processing.jl
+# Server lifecycle: run!, borrow_file!, close!, forceclose!, render.
+#
+# Locking protocol:
+#
+# server.lock guards mutation/lookup of server.workers and server.shared_workers.
+# file.lock guards mutation of a File's state and ensures exclusive evaluation.
+#
+# Ordering: always acquire server.lock BEFORE file.lock.
+# Exception: borrow_file! acquires file.lock outside server.lock for pre-existing
+# files, then re-validates under server.lock (staleness check + recursion).
+#
+# forceclose! intentionally bypasses file.lock by signaling via
+# file.run_decision_channel, then killing the worker process directly.
 
 function run!(
     server::Server,
@@ -723,62 +92,6 @@ function run!(
         else
             rethrow(err)
         end
-    end
-end
-
-"""
-    _create_file(server, path, options)
-
-Create a File for `path`. If `share_worker_process` is enabled in frontmatter,
-reuse or create a shared worker via `server.shared_workers`.
-"""
-function _create_file(server::Server, path::String, options)
-    parsed = _parsed_options(options)
-    _, _, file_frontmatter = raw_text_chunks(path)
-    merged_options = _extract_relevant_options(file_frontmatter, parsed)
-    julia_config = julia_worker_config(merged_options)
-
-    if julia_config.share_worker_process
-        exeflags, env, quarto_env = _exeflags_and_env(merged_options)
-        exe, _exeflags = _julia_exe(exeflags)
-        key = WorkerKey(exe, exeflags, env, julia_config.strict_manifest_versions)
-
-        entry = get!(server.shared_workers, key) do
-            w = cd(
-                () -> WorkerIPC.Worker(;
-                    exe,
-                    exeflags = _exeflags,
-                    env = vcat(env, quarto_env),
-                    strict_manifest_versions = julia_config.strict_manifest_versions,
-                    sandbox_base = server.sandbox_base,
-                ),
-                dirname(path),
-            )
-            SharedWorkerEntry(w, Set{String}())
-        end
-        if !WorkerIPC.isrunning(entry.worker)
-            entry.worker = cd(
-                () -> WorkerIPC.Worker(;
-                    exe,
-                    exeflags = _exeflags,
-                    env = vcat(env, quarto_env),
-                    strict_manifest_versions = julia_config.strict_manifest_versions,
-                    sandbox_base = server.sandbox_base,
-                ),
-                dirname(path),
-            )
-            empty!(entry.users)
-        end
-        push!(entry.users, path)
-        return File(
-            path,
-            options;
-            sandbox_base = server.sandbox_base,
-            worker = entry.worker,
-            worker_key = key,
-        )
-    else
-        return File(path, options; sandbox_base = server.sandbox_base)
     end
 end
 
@@ -878,6 +191,79 @@ function render(
     close!(server, file)
 end
 
+# Shared worker cleanup helpers.
+
+"""
+    _unregister_file!(server, file)
+
+Remove a file from the server registry. For shared workers, decrements the
+ref count and stops the worker if this was the last user.
+Must be called under server.lock.
+"""
+function _unregister_file!(server, file)
+    delete!(server.workers, file.path)
+    if file.worker_key !== nothing
+        entry = get(server.shared_workers, file.worker_key, nothing)
+        if entry !== nothing
+            delete!(entry.users, file.path)
+            if isempty(entry.users)
+                WorkerIPC.stop(entry.worker)
+                delete!(server.shared_workers, file.worker_key)
+            end
+        end
+    end
+    _gc_cache_files(joinpath(dirname(file.path), ".cache"))
+    on_change(server)
+end
+
+"""
+    _forceclose_signal_siblings!(server, file, apath)
+
+Signal all sibling files sharing the same worker to forceclose.
+Must be called before killing the shared worker so siblings get a clean
+:forceclose instead of a raw TerminatedWorkerException.
+"""
+function _forceclose_signal_siblings!(server, file, apath)
+    lock(server.lock) do
+        entry = get(server.shared_workers, file.worker_key, nothing)
+        if entry !== nothing
+            for sibling_path in entry.users
+                sibling_path == apath && continue
+                sibling = get(server.workers, sibling_path, nothing)
+                if sibling !== nothing
+                    put!(sibling.run_decision_channel, :forceclose)
+                end
+            end
+        end
+    end
+end
+
+"""
+    _forceclose_cleanup_shared!(server, file, apath)
+
+Clean up sibling file entries and the shared worker entry after force-killing
+a shared worker. Must be called under server.lock.
+"""
+function _forceclose_cleanup_shared!(server, file, apath)
+    entry = get(server.shared_workers, file.worker_key, nothing)
+    if entry !== nothing
+        for sibling_path in entry.users
+            sibling_path == apath && continue
+            sibling = get(server.workers, sibling_path, nothing)
+            if sibling !== nothing
+                if sibling.timeout_timer !== nothing
+                    close(sibling.timeout_timer)
+                end
+                delete!(server.workers, sibling_path)
+                _gc_cache_files(joinpath(dirname(sibling_path), ".cache"))
+            end
+        end
+        delete!(server.shared_workers, file.worker_key)
+    end
+end
+
+# Close and forceclose.
+
 function close!(server::Server)
     lock(server.lock) do
         for path in collect(keys(server.workers))
@@ -907,8 +293,6 @@ function close!(server::Server, path::String)
                 close(file.timeout_timer)
             end
             if file.worker_key !== nothing
-                # Shared worker: clean up this notebook's context, don't stop
-                # the worker unless this is the last user.
                 try
                     WorkerIPC.call(
                         file.worker,
@@ -917,26 +301,11 @@ function close!(server::Server, path::String)
                 catch err
                     @debug "NotebookCloseRequest failed for $(file.path)" exception = err
                 end
-                lock(server.lock) do
-                    delete!(server.workers, file.path)
-                    entry = get(server.shared_workers, file.worker_key, nothing)
-                    if entry !== nothing
-                        delete!(entry.users, file.path)
-                        if isempty(entry.users)
-                            WorkerIPC.stop(entry.worker)
-                            delete!(server.shared_workers, file.worker_key)
-                        end
-                    end
-                    _gc_cache_files(joinpath(dirname(path), ".cache"))
-                    on_change(server)
-                end
             else
                 WorkerIPC.stop(file.worker)
-                lock(server.lock) do
-                    pop!(server.workers, file.path)
-                    _gc_cache_files(joinpath(dirname(path), ".cache"))
-                    on_change(server)
-                end
+            end
+            lock(server.lock) do
+                _unregister_file!(server, file)
             end
             GC.gc()
         end
@@ -973,42 +342,14 @@ function forceclose!(server::Server, path::String)
         if lock_attained
             close!(server, path)
         else
-            # Signal to run! that we're force-closing.
             put!(file.run_decision_channel, :forceclose)
-            # Signal siblings before killing worker so mid-run siblings
-            # get a clean :forceclose instead of raw TerminatedWorkerException.
             if file.worker_key !== nothing
-                lock(server.lock) do
-                    entry = get(server.shared_workers, file.worker_key, nothing)
-                    if entry !== nothing
-                        for sibling_path in entry.users
-                            sibling_path == apath && continue
-                            sibling = get(server.workers, sibling_path, nothing)
-                            if sibling !== nothing
-                                put!(sibling.run_decision_channel, :forceclose)
-                            end
-                        end
-                    end
-                end
+                _forceclose_signal_siblings!(server, file, apath)
             end
             WorkerIPC.stop(file.worker)
             lock(server.lock) do
                 if file.worker_key !== nothing
-                    entry = get(server.shared_workers, file.worker_key, nothing)
-                    if entry !== nothing
-                        for sibling_path in entry.users
-                            sibling_path == apath && continue
-                            sibling = get(server.workers, sibling_path, nothing)
-                            if sibling !== nothing
-                                if sibling.timeout_timer !== nothing
-                                    close(sibling.timeout_timer)
-                                end
-                                delete!(server.workers, sibling_path)
-                                _gc_cache_files(joinpath(dirname(sibling_path), ".cache"))
-                            end
-                        end
-                        delete!(server.shared_workers, file.worker_key)
-                    end
+                    _forceclose_cleanup_shared!(server, file, apath)
                 end
                 delete!(server.workers, apath)
                 on_change(server)

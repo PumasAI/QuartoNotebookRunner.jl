@@ -120,6 +120,36 @@ mutable struct File
     end
 end
 
+struct Server
+    workers::Dict{String,File}
+    shared_workers::Dict{WorkerKey,SharedWorkerEntry}
+    lock::ReentrantLock # should be locked for mutation/lookup of the workers dict, not for evaling on the workers. use worker locks for that
+    on_change::Base.RefValue{Function} # an optional callback function n_workers::Int -> nothing that gets called with the server.lock locked when workers are added or removed
+    sandbox_base::String # shared temp dir for worker sandboxes, cleaned on Server close
+    function Server()
+        workers = Dict{String,File}()
+        shared_workers = Dict{WorkerKey,SharedWorkerEntry}()
+        sandbox_base = joinpath(
+            WorkerIPC._get_scratchspace_path(),
+            "sandboxes",
+            string(rand(UInt), base = 62),
+        )
+        mkpath(sandbox_base)
+        return new(
+            workers,
+            shared_workers,
+            ReentrantLock(),
+            Ref{Function}(identity),
+            sandbox_base,
+        )
+    end
+end
+
+function on_change(s::Server)
+    s.on_change[](length(s.workers))
+    return
+end
+
 """
     SourceRange
 
