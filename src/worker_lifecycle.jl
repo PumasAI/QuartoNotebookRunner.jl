@@ -1,5 +1,20 @@
 # Worker initialization, refresh, and file creation.
 
+function _start_worker(;
+    exe,
+    exeflags,
+    env,
+    strict_manifest_versions,
+    sandbox_base,
+    notebook_dir,
+)
+    cd(
+        () ->
+            WorkerIPC.Worker(; exe, exeflags, env, strict_manifest_versions, sandbox_base),
+        notebook_dir,
+    )
+end
+
 function init!(file::File, options::Dict)
     worker = file.worker
     exeflags, env, quarto_env = _exeflags_and_env(options)
@@ -68,15 +83,15 @@ function refresh!(file::File, options::Dict)
     elseif config_changed || worker_dead
         WorkerIPC.stop(file.worker)
         exe, _exeflags = _julia_exe(exeflags)
-        file.worker = cd(
-            () -> WorkerIPC.Worker(;
-                exe,
-                exeflags = _exeflags,
-                env = vcat(env, quarto_env),
-                strict_manifest_versions = julia_config.strict_manifest_versions,
-                sandbox_base = file.sandbox_base,
-            ),
-            dirname(file.path),
+        # If _start_worker throws, file.worker retains the stopped worker.
+        # Next refresh! detects worker_dead and retries.
+        file.worker = _start_worker(;
+            exe,
+            exeflags = _exeflags,
+            env = vcat(env, quarto_env),
+            strict_manifest_versions = julia_config.strict_manifest_versions,
+            sandbox_base = file.sandbox_base,
+            notebook_dir = dirname(file.path),
         )
         file.exe = exe
         file.exeflags = exeflags
@@ -107,28 +122,24 @@ function _create_file(server::Server, path::String, options)
         key = WorkerKey(exe, exeflags, env, julia_config.strict_manifest_versions)
 
         entry = get!(server.shared_workers, key) do
-            w = cd(
-                () -> WorkerIPC.Worker(;
-                    exe,
-                    exeflags = _exeflags,
-                    env = vcat(env, quarto_env),
-                    strict_manifest_versions = julia_config.strict_manifest_versions,
-                    sandbox_base = server.sandbox_base,
-                ),
-                dirname(path),
+            w = _start_worker(;
+                exe,
+                exeflags = _exeflags,
+                env = vcat(env, quarto_env),
+                strict_manifest_versions = julia_config.strict_manifest_versions,
+                sandbox_base = server.sandbox_base,
+                notebook_dir = dirname(path),
             )
             SharedWorkerEntry(w, Set{String}())
         end
         if !WorkerIPC.isrunning(entry.worker)
-            entry.worker = cd(
-                () -> WorkerIPC.Worker(;
-                    exe,
-                    exeflags = _exeflags,
-                    env = vcat(env, quarto_env),
-                    strict_manifest_versions = julia_config.strict_manifest_versions,
-                    sandbox_base = server.sandbox_base,
-                ),
-                dirname(path),
+            entry.worker = _start_worker(;
+                exe,
+                exeflags = _exeflags,
+                env = vcat(env, quarto_env),
+                strict_manifest_versions = julia_config.strict_manifest_versions,
+                sandbox_base = server.sandbox_base,
+                notebook_dir = dirname(path),
             )
             empty!(entry.users)
         end

@@ -90,15 +90,13 @@ mutable struct File
 
                 exe, _exeflags = _julia_exe(exeflags)
                 if worker === nothing
-                    worker = cd(
-                        () -> WorkerIPC.Worker(;
-                            exe,
-                            exeflags = _exeflags,
-                            env = vcat(env, quarto_env),
-                            strict_manifest_versions = julia_config.strict_manifest_versions,
-                            sandbox_base,
-                        ),
-                        dirname(path),
+                    worker = _start_worker(;
+                        exe,
+                        exeflags = _exeflags,
+                        env = vcat(env, quarto_env),
+                        strict_manifest_versions = julia_config.strict_manifest_versions,
+                        sandbox_base,
+                        notebook_dir = dirname(path),
                     )
                 end
                 file = new(

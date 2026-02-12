@@ -182,8 +182,11 @@ function render(
     showprogress::Bool = true,
 )
     server = Server()
-    run!(server, file; output, showprogress)
-    close!(server, file)
+    try
+        run!(server, file; output, showprogress)
+    finally
+        close!(server)
+    end
 end
 
 # Shared worker cleanup helpers.
@@ -260,18 +263,30 @@ end
 # Close and forceclose.
 
 function close!(server::Server)
+    errors = Exception[]
     lock(server.lock) do
         for path in collect(keys(server.workers))
-            close!(server, path)
+            try
+                close!(server, path)
+            catch err
+                push!(errors, err)
+            end
         end
         # Stop any remaining shared workers (should already be empty if all
         # files were closed, but clean up defensively)
         for (key, entry) in server.shared_workers
-            WorkerIPC.stop(entry.worker)
+            try
+                WorkerIPC.stop(entry.worker)
+            catch err
+                push!(errors, err)
+            end
         end
         empty!(server.shared_workers)
     end
     rm(server.sandbox_base; force = true, recursive = true)
+    if !isempty(errors)
+        @warn "Errors during server shutdown" errors
+    end
 end
 
 """
