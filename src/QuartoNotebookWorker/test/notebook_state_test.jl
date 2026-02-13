@@ -1,5 +1,6 @@
 @testitem "with_context sets and clears context" begin
     import QuartoNotebookWorker as QNW
+    import Random
     NS = QNW.NotebookState
 
     # Outside context returns nothing
@@ -13,6 +14,7 @@
         mod,
         "/cwd",
         String[],
+        copy(Random.default_rng()),
     )
 
     NS.with_context(ctx) do
@@ -43,10 +45,19 @@ end
 
 @testitem "notebook_module returns ctx.mod when in context" begin
     import QuartoNotebookWorker as QNW
+    import Random
     NS = QNW.NotebookState
 
     mod = NS.define_notebook_module!()
-    ctx = NS.NotebookContext("", "", Dict{String,Any}(), mod, pwd(), String[])
+    ctx = NS.NotebookContext(
+        "",
+        "",
+        Dict{String,Any}(),
+        mod,
+        pwd(),
+        String[],
+        copy(Random.default_rng()),
+    )
 
     NS.with_context(ctx) do
         @test NS.notebook_module() === mod
@@ -124,12 +135,29 @@ end
 
 @testitem "nested contexts are independent" begin
     import QuartoNotebookWorker as QNW
+    import Random
     NS = QNW.NotebookState
 
     mod1 = NS.define_notebook_module!()
     mod2 = NS.define_notebook_module!()
-    ctx1 = NS.NotebookContext("file1.qmd", "", Dict{String,Any}(), mod1, pwd(), String[])
-    ctx2 = NS.NotebookContext("file2.qmd", "", Dict{String,Any}(), mod2, pwd(), String[])
+    ctx1 = NS.NotebookContext(
+        "file1.qmd",
+        "",
+        Dict{String,Any}(),
+        mod1,
+        pwd(),
+        String[],
+        copy(Random.default_rng()),
+    )
+    ctx2 = NS.NotebookContext(
+        "file2.qmd",
+        "",
+        Dict{String,Any}(),
+        mod2,
+        pwd(),
+        String[],
+        copy(Random.default_rng()),
+    )
 
     NS.with_context(ctx1) do
         @test NS.current_context().file == "file1.qmd"
@@ -166,6 +194,7 @@ end
 
 @testitem "package hooks see current_context inside with_context" begin
     import QuartoNotebookWorker as QNW
+    import Random
     NS = QNW.NotebookState
 
     observed_options = Ref{Any}(nothing)
@@ -177,7 +206,15 @@ end
     try
         opts = Dict{String,Any}("fig-width" => 7)
         mod = NS.define_notebook_module!()
-        ctx = NS.NotebookContext("hook_test.qmd", "", opts, mod, pwd(), String[])
+        ctx = NS.NotebookContext(
+            "hook_test.qmd",
+            "",
+            opts,
+            mod,
+            pwd(),
+            String[],
+            copy(Random.default_rng()),
+        )
 
         NS.with_context(ctx) do
             QNW.run_package_refresh_hooks()
@@ -187,4 +224,93 @@ end
     finally
         QNW.delete_package_refresh_hook!(hook)
     end
+end
+
+@testitem "with_rng isolates RNG state between contexts" begin
+    import QuartoNotebookWorker as QNW
+    import Random
+    NS = QNW.NotebookState
+
+    # Both contexts start with identical RNG snapshots
+    rng = copy(Random.default_rng())
+    mod1 = NS.define_notebook_module!()
+    mod2 = NS.define_notebook_module!()
+    ctx1 = NS.NotebookContext(
+        "a.qmd",
+        "",
+        Dict{String,Any}(),
+        mod1,
+        pwd(),
+        String[],
+        copy(rng),
+    )
+    ctx2 = NS.NotebookContext(
+        "b.qmd",
+        "",
+        Dict{String,Any}(),
+        mod2,
+        pwd(),
+        String[],
+        copy(rng),
+    )
+
+    # Same initial state → same first value
+    val1 = NS.with_rng(ctx1) do
+        rand()
+    end
+    val2 = NS.with_rng(ctx2) do
+        rand()
+    end
+    @test val1 == val2
+
+    # ctx1 advancing doesn't affect ctx2's next value
+    NS.with_rng(ctx1) do
+        rand(1000)
+    end
+
+    val2_again = NS.with_rng(ctx2) do
+        rand()
+    end
+    # ctx2 continues from its own saved state (after first rand()), not ctx1's
+    @test val2_again != val1
+    @test val2_again != NS.with_rng(ctx1) do
+        rand()
+    end
+end
+
+@testitem "with_rng persists state across calls to same context" begin
+    import QuartoNotebookWorker as QNW
+    import Random
+    NS = QNW.NotebookState
+
+    mod = NS.define_notebook_module!()
+    ctx = NS.NotebookContext(
+        "a.qmd",
+        "",
+        Dict{String,Any}(),
+        mod,
+        pwd(),
+        String[],
+        copy(Random.default_rng()),
+    )
+
+    # Seed in first call
+    NS.with_rng(ctx) do
+        Random.seed!(42)
+    end
+
+    # Second call continues from seeded state
+    vals1 = NS.with_rng(ctx) do
+        rand(5)
+    end
+
+    # Reset and replay — should get same sequence
+    NS.with_rng(ctx) do
+        Random.seed!(42)
+    end
+    vals2 = NS.with_rng(ctx) do
+        rand(5)
+    end
+
+    @test vals1 == vals2
 end

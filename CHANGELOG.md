@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Per-notebook RNG isolation for shared workers; each notebook gets independent random number state [#400]
 - Shared worker processes via `share_worker_process` frontmatter option; multiple notebooks can share a single worker process with isolated contexts [#396]
 - Support for Quarto's `execute-dir: project` option to set working directory to project root [#387]
 - Unit tests for QuartoNotebookWorker using TestItemRunner, run in CI before main test suite [#385]
@@ -503,3 +504,4 @@ caching is enabled. Delete this folder to clear the cache. [#259]
 [#395]: https://github.com/PumasAI/QuartoNotebookRunner.jl/issues/395
 [#396]: https://github.com/PumasAI/QuartoNotebookRunner.jl/issues/396
 [#399]: https://github.com/PumasAI/QuartoNotebookRunner.jl/issues/399
+[#400]: https://github.com/PumasAI/QuartoNotebookRunner.jl/issues/400
