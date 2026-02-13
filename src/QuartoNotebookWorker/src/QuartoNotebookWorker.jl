@@ -134,6 +134,7 @@ function dispatch(
                 mod,
                 req.cwd,
                 copy(req.env_vars),
+                copy(Random.default_rng()),
             )
             contexts[req.file] = ctx
             (ctx, false)
@@ -147,6 +148,7 @@ function dispatch(
             # Clear and recreate notebook module for fresh state
             NotebookState.clear_notebook_module!(ctx.mod)
             ctx.mod = NotebookState.define_notebook_module!()
+            ctx.rng_state = copy(Random.default_rng())
             (ctx, changed)
         end
     end
@@ -189,17 +191,19 @@ function dispatch(req::WorkerIPC.RenderRequest, contexts::Contexts, lock::Reentr
     # Set SOURCE_PATH for include resolution
     task_local_storage()[:SOURCE_PATH] = ctx.file
 
-    result = NotebookState.with_env_vars(ctx.env_vars) do
-        NotebookState.with_context(ctx) do
-            NotebookState.with_cell_options(req.cell_options) do
-                render(
-                    req.code,
-                    req.file,
-                    req.line,
-                    req.cell_options;
-                    inline = req.inline,
-                    mod = ctx.mod,
-                )
+    result = NotebookState.with_rng(ctx) do
+        NotebookState.with_env_vars(ctx.env_vars) do
+            NotebookState.with_context(ctx) do
+                NotebookState.with_cell_options(req.cell_options) do
+                    render(
+                        req.code,
+                        req.file,
+                        req.line,
+                        req.cell_options;
+                        inline = req.inline,
+                        mod = ctx.mod,
+                    )
+                end
             end
         end
     end

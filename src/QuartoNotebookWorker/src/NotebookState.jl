@@ -1,8 +1,12 @@
 module NotebookState
 
 import Pkg
+import Random
 
 import ..QuartoNotebookWorker
+
+const DefaultRNG =
+    @static(VERSION >= v"1.7.0-DEV.1226" ? Random.Xoshiro : Random.MersenneTwister)
 
 # NotebookContext holds per-notebook state for multi-notebook workers
 mutable struct NotebookContext
@@ -12,6 +16,7 @@ mutable struct NotebookContext
     mod::Module                     # Isolated notebook module
     cwd::String                     # Working directory
     env_vars::Vector{String}        # Environment variables for this notebook
+    rng_state::DefaultRNG
 end
 
 # Task-local storage keys
@@ -38,6 +43,16 @@ end
 
 function current_cell_options()
     get(task_local_storage(), CELL_OPTIONS_KEY, Dict{String,Any}())
+end
+
+# Restore per-notebook RNG before f(), save it back after
+function with_rng(f, ctx::NotebookContext)
+    copy!(Random.default_rng(), ctx.rng_state)
+    try
+        return f()
+    finally
+        copy!(ctx.rng_state, Random.default_rng())
+    end
 end
 
 # Snapshot/restore ENV around render
@@ -121,6 +136,7 @@ function with_test_context(
         mod,
         pwd(),                    # cwd
         String[],                 # env_vars
+        copy(Random.default_rng()),
     )
     with_context(ctx) do
         with_cell_options(cell_options) do
