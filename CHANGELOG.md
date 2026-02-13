@@ -22,6 +22,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Expand precompile workloads for worker and host to reduce TTFX [#401]
 - Refactor server internals: explicit FileState state machine, atomic forceclose flag, deduplicated worker creation, resilient server shutdown [#399]
 - Cache worker package environments using Scratch.jl; skip Pkg.develop on subsequent startups for same Julia version [#395]
 - Make strict manifest version checking opt-in via `julia: strict_manifest_versions: true` frontmatter; default now matches Pkg behavior (major.minor only) [#392]
@@ -505,3 +506,4 @@ caching is enabled. Delete this folder to clear the cache. [#259]
 [#396]: https://github.com/PumasAI/QuartoNotebookRunner.jl/issues/396
 [#399]: https://github.com/PumasAI/QuartoNotebookRunner.jl/issues/399
 [#400]: https://github.com/PumasAI/QuartoNotebookRunner.jl/issues/400
+[#401]: https://github.com/PumasAI/QuartoNotebookRunner.jl/issues/401

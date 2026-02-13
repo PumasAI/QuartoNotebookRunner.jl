@@ -34,7 +34,7 @@ function _io_context(mod::Module, cell_options = Dict{String,Any}(), inline = fa
     return [
         :module => mod,
         :limit => true,
-        :color => Base.have_color,
+        :color => something(Base.have_color, false),
         # This allows a `show` method implementation to check for
         # metadata that may be of relevance to it's rendering. For
         # example, if a `typst` table is rendered with a caption
