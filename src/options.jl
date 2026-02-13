@@ -70,6 +70,7 @@ function _options_template(;
     cache,
     env,
     cwd,
+    project_dir,
 )
     D = Dict{String,Any}
     return D(
@@ -90,6 +91,7 @@ function _options_template(;
         "params" => D(params),
         "env" => env,
         "cwd" => cwd,
+        "projectDir" => project_dir,
     )
 end
 
@@ -133,6 +135,7 @@ function _extract_relevant_options(file_frontmatter::Dict, options::Dict)
             cache = cache_default,
             env = Dict{String,Any}(),
             cwd = nothing,
+            project_dir = nothing,
         )
     else
         format = get(D, options, "format")
@@ -163,6 +166,7 @@ function _extract_relevant_options(file_frontmatter::Dict, options::Dict)
         params_merged = _recursive_merge(params_default, params, cli_params)
 
         cwd = get(options, "cwd", nothing)
+        project_dir = get(options, "projectDir", nothing)
 
         return _options_template(;
             fig_width,
@@ -178,6 +182,7 @@ function _extract_relevant_options(file_frontmatter::Dict, options::Dict)
             cache,
             env,
             cwd,
+            project_dir,
         )
     end
 end

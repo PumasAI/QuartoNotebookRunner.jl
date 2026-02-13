@@ -122,6 +122,13 @@ function _exeflags_and_env(options)
     # that the user has not set themselves to show up there.
     quarto_env = Base.byteenv(options["env"])
 
+    # Set QUARTO_PROJECT_ROOT when Quarto provides a projectDir so that
+    # the variable is refreshed for each project in multi-project renders.
+    project_dir = get(options, "projectDir", nothing)
+    if !isnothing(project_dir)
+        push!(quarto_env, "QUARTO_PROJECT_ROOT=$project_dir")
+    end
+
     # Ensure that coverage settings are passed to the worker so that worker
     # code is tracked correctly during tests.
     # Based on https://github.com/JuliaLang/julia/blob/eed18bdf706b7aab15b12f3ba0588e8fafcd4930/base/util.jl#L216-L229.

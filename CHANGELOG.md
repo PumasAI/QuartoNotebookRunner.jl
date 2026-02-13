@@ -16,6 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Refresh `QUARTO_PROJECT_ROOT` env var when rendering different projects through the same server [#336]
 - Fix sandbox temp directory leak in `render()` [#399]
 - Fix duplicate YAML keys when Python/R cells have cell options like `echo` [#394]
 - Wrap package hook invocations in try-catch to prevent worker hangs from hook errors [#390]
@@ -495,6 +496,7 @@ caching is enabled. Delete this folder to clear the cache. [#259]
 [#306]: https://github.com/PumasAI/QuartoNotebookRunner.jl/issues/306
 [#317]: https://github.com/PumasAI/QuartoNotebookRunner.jl/issues/317
 [#335]: https://github.com/PumasAI/QuartoNotebookRunner.jl/issues/335
+[#336]: https://github.com/PumasAI/QuartoNotebookRunner.jl/issues/336
 [#339]: https://github.com/PumasAI/QuartoNotebookRunner.jl/issues/339
 [#385]: https://github.com/PumasAI/QuartoNotebookRunner.jl/issues/385
 [#387]: https://github.com/PumasAI/QuartoNotebookRunner.jl/issues/387
