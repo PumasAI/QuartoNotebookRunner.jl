@@ -231,12 +231,20 @@ function dispatch(
     return nothing
 end
 
+# Precompile hints for methods not reachable via the workload below.
+precompile(WorkerIPC.main, ())
+precompile(include_str, (Module, String))
+
 @setup_workload begin
     @compile_workload begin
         NotebookState.with_test_context() do
             mod = NotebookState.notebook_module()
-            render("1 + 2", "none", 0; mod)
-            render("1 + :foo", "none", 0; mod)
+            for code in ["1 + 2", "1 + :foo", "println(\"x\")", "@info \"x\"", "[1, 2, 3]"]
+                result = render(code, "none", 0; mod)
+                # Exercise the serialization round-trip.
+                bytes = WorkerIPC._ipc_serialize(result)
+                WorkerIPC._ipc_deserialize(bytes)
+            end
         end
     end
 end
