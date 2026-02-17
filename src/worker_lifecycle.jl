@@ -81,6 +81,7 @@ function refresh!(file::File, options::Dict)
             @warn "Worker config changed for shared notebook $(file.path); ignoring (shared worker cannot be restarted)"
         end
     elseif config_changed || worker_dead
+        Logging.@debug "Restarting worker" path = file.path config_changed worker_dead
         WorkerIPC.stop(file.worker)
         exe, _exeflags = _julia_exe(exeflags)
         # If _start_worker throws, file.worker retains the stopped worker.
@@ -117,6 +118,7 @@ function _create_file(server::Server, path::String, options)
     julia_config = julia_worker_config(merged_options)
 
     if julia_config.share_worker_process
+        Logging.@debug "Creating shared worker file" path
         exeflags, env, quarto_env = _exeflags_and_env(merged_options)
         exe, _exeflags = _julia_exe(exeflags)
         key = WorkerKey(exe, exeflags, env, julia_config.strict_manifest_versions)
@@ -152,6 +154,7 @@ function _create_file(server::Server, path::String, options)
             worker_key = key,
         )
     else
+        Logging.@debug "Creating dedicated worker file" path
         return File(path, options; sandbox_base = server.sandbox_base)
     end
 end

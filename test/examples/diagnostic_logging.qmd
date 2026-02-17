@@ -1,0 +1,9 @@
+---
+title: "Diagnostic Logging Test"
+engine: julia
+---
+
+```{julia}
+@info "hello from notebook cell"
+1 + 1
+```

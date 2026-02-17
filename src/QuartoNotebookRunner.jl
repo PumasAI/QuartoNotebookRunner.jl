@@ -47,6 +47,7 @@ const QNR_VERSION =
     VersionNumber(TOML.parsefile(joinpath(@__DIR__, "..", "Project.toml"))["version"])
 include_dependency(joinpath(@__DIR__, "..", "Project.toml"))
 
+include("QuartoNotebookWorker/src/diagnostic_logger.jl")
 include("UserError.jl")
 include("WorkerIPC.jl")
 include("WorkerSetup.jl")
