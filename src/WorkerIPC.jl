@@ -15,9 +15,12 @@ import Scratch
 
 include("QuartoNotebookWorker/src/protocol.jl")
 
-# Scratchspace for worker environments
+# Scratchspace for worker environments, keyed on Project.toml content hash
+# so dependency changes invalidate the cached env.
 function _get_scratchspace_path()
-    key = "worker-qnr$(QuartoNotebookRunner.QNR_VERSION)"
+    worker_project = joinpath(String(worker_package), "Project.toml")
+    project_hash = string(hash(read(worker_project)); base = 62)
+    key = "worker-qnr$(QuartoNotebookRunner.QNR_VERSION)-$(project_hash)"
     Scratch.@get_scratch!(key)
 end
 
