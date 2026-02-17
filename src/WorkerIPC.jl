@@ -194,6 +194,7 @@ mutable struct Worker
             w -> Threads.@spawn(stop(w)),
             new(port, proc, getpid(proc), socket, ConnectionState(), manifest_file),
         )
+        Logging.@debug "Worker started" pid = w.proc_pid port = w.port
         atexit(() -> stop(w))
 
         _exit_loop(w)
@@ -215,6 +216,7 @@ Base.summary(w::Worker) = "Worker on port $(w.port) with PID $(w.proc_pid)"
 # Public API
 
 function call(worker::Worker, request::T)::response_type(T) where {T<:IPCRequest}
+    Logging.@debug "IPC call" request_type = nameof(T) worker_pid = worker.proc_pid
     R = response_type(T)
     state = worker.state
     ch = Channel{CallResult{R}}(1)
@@ -250,6 +252,7 @@ isrunning(w::Worker)::Bool = Base.process_running(w.proc)
 
 function stop(w::Worker; exit_timeout::Real = 15.0, term_timeout::Real = 15.0)
     isrunning(w) || return false
+    Logging.@debug "Stopping worker" pid = w.proc_pid port = w.port
 
     try
         payload = _ipc_serialize(nothing)
@@ -298,15 +301,14 @@ function _receive_loop(worker::Worker)
                 end
 
                 if pending_call === nothing
-                    Logging.@error "HOST: response for unknown msg_id, treating as protocol corruption" msg.id
+                    Logging.@error "Response for unknown msg_id, treating as protocol corruption" msg.id
                     break
                 end
 
                 data = try
                     _ipc_deserialize(msg.payload)
                 catch e
-                    Logging.@error "HOST: deserialize error" exception =
-                        (e, catch_backtrace())
+                    Logging.@error "Deserialize error" exception = (e, catch_backtrace())
                     deliver_failure!(pending_call)
                     continue
                 end
@@ -318,8 +320,7 @@ function _receive_loop(worker::Worker)
                 elseif e isa EOFError || e isa Base.IOError
                     break
                 else
-                    Logging.@error "HOST: receive loop error" exception =
-                        (e, catch_backtrace())
+                    Logging.@error "Receive loop error" exception = (e, catch_backtrace())
                     break
                 end
             end
@@ -339,7 +340,7 @@ function _exit_loop(worker::Worker)
                 end
                 sleep(1)
             catch e
-                Logging.@error "HOST: exit loop error" exception = (e, catch_backtrace())
+                Logging.@error "Exit loop error" exception = (e, catch_backtrace())
             end
         end
     end
@@ -374,6 +375,10 @@ function _get_worker_cmd(;
         "QUARTONOTEBOOKWORKER_SCRATCHSPACE" => scratchspace,
         "QUARTONOTEBOOKWORKER_SANDBOX_BASE" => sandbox_base,
     )
+    logdir = get(ENV, "QUARTONOTEBOOKRUNNER_LOG", nothing)
+    if logdir !== nothing
+        defaults["QUARTONOTEBOOKRUNNER_LOG"] = logdir
+    end
     env = vcat(Base.byteenv(defaults), Base.byteenv(env))
     return addenv(`$exe --startup-file=no $exeflags $file`, env)
 end

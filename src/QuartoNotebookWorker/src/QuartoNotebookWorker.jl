@@ -78,6 +78,7 @@ end
 
 # Imports.
 
+import Dates
 import InteractiveUtils
 import Logging
 import Pkg
@@ -107,6 +108,7 @@ include("notebook_metadata.jl")
 include("manifest_validation.jl")
 include("python.jl")
 include("r.jl")
+include("diagnostic_logger.jl")
 
 # Type aliases for dispatch signatures
 const Contexts = Dict{String,NotebookState.NotebookContext}
@@ -122,6 +124,7 @@ function dispatch(
     contexts::Contexts,
     lock::ReentrantLock,
 )
+    Logging.@debug "NotebookInit" file = req.file project = req.project
     ctx, options_changed = Base.lock(lock) do
         ctx = get(contexts, req.file, nothing)
         if ctx === nothing
@@ -167,6 +170,7 @@ function dispatch(
     contexts::Contexts,
     lock::ReentrantLock,
 )
+    Logging.@debug "NotebookClose" file = req.file
     Base.lock(lock) do
         ctx = get(contexts, req.file, nothing)
         if ctx !== nothing
@@ -178,6 +182,7 @@ function dispatch(
 end
 
 function dispatch(req::WorkerIPC.RenderRequest, contexts::Contexts, lock::ReentrantLock)
+    Logging.@debug "Render" notebook = req.notebook line = req.line
     ctx = Base.lock(lock) do
         get(contexts, req.notebook, nothing)
     end

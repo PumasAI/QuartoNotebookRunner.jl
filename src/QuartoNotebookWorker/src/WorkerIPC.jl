@@ -16,23 +16,25 @@ function __init__()
 end
 
 function main()
-    port_hint = 9000 + (Sockets.getpid() % 1000)
-    port, server = Sockets.listenany(port_hint)
+    QuartoNotebookWorker.with_diagnostic_logger(; prefix = "worker") do
+        port_hint = 9000 + (Sockets.getpid() % 1000)
+        port, server = Sockets.listenany(port_hint)
 
-    Logging.@debug "WORKER: listening on port $port"
-    println(stdout, port)
-    flush(stdout)
+        Logging.@debug "Listening on port $port"
+        println(stdout, port)
+        flush(stdout)
 
-    Sockets.nagle(server, false)
-    Sockets.quickack(server, true)
+        Sockets.nagle(server, false)
+        Sockets.quickack(server, true)
 
-    serve(server)
+        serve(server)
+    end
 end
 
 function serve(server::Sockets.TCPServer)
-    Logging.@debug "WORKER: waiting for connection"
+    Logging.@debug "Waiting for connection"
     socket = Sockets.accept(server)
-    Logging.@debug "WORKER: connected"
+    Logging.@debug "Connected"
 
     Sockets.nagle(socket, false)
     Sockets.quickack(socket, true)
@@ -56,20 +58,20 @@ function serve(server::Sockets.TCPServer)
             read_message(io)
         catch e
             if e isa InterruptException
-                Logging.@debug "WORKER: interrupted while reading, continuing"
+                Logging.@debug "Interrupted while reading, continuing"
                 continue
             elseif e isa EOFError || e isa Base.IOError
-                Logging.@debug "WORKER: connection closed"
+                Logging.@debug "Connection closed"
                 break
             else
-                Logging.@error "WORKER: read error" exception = (e, catch_backtrace())
+                Logging.@error "Read error" exception = (e, catch_backtrace())
                 break
             end
         end
 
         # Handle shutdown
         if msg.type == MsgType.SHUTDOWN
-            Logging.@debug "WORKER: received shutdown"
+            Logging.@debug "Received shutdown"
             break
         end
 
@@ -77,11 +79,11 @@ function serve(server::Sockets.TCPServer)
         if msg.type == MsgType.CALL
             handle_call(io, msg, contexts, contexts_lock)
         else
-            Logging.@warn "WORKER: unknown message type" msg.type
+            Logging.@warn "Unknown message type" msg.type
         end
     end
 
-    Logging.@debug "WORKER: exiting"
+    Logging.@debug "Exiting"
 end
 
 function handle_call(
@@ -97,6 +99,8 @@ function handle_call(
         send_error(io, msg.id, e)
         return
     end
+
+    Logging.@debug "Handling request" request_type = nameof(typeof(request))
 
     result, success = try
         (QuartoNotebookWorker.dispatch(request, contexts, contexts_lock), true)
@@ -120,7 +124,7 @@ function handle_call(
     try
         write_message(io, Message(msg_type, msg.id, payload))
     catch e
-        Logging.@error "WORKER: failed to send response" exception = (e, catch_backtrace())
+        Logging.@error "Failed to send response" exception = (e, catch_backtrace())
     end
 end
 

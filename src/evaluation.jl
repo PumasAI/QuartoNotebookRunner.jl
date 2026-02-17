@@ -81,6 +81,7 @@ function evaluate!(
         # A change of parameter values must invalidate the source code hash.
         source_code_hash = hash(merged_options["params"], source_code_hash)
 
+        Logging.@debug "evaluate!" path chunks = length(raw_chunks)
         refresh!(f, merged_options)
 
         enabled_cache = merged_options["format"]["execute"]["cache"] == true
@@ -94,7 +95,7 @@ function evaluate!(
         if enabled_cache &&
            source_code_hash == f.source_code_hash &&
            !isempty(f.output_chunks)
-            @debug "reusing previous cell outputs"
+            Logging.@debug "Cache hit, reusing cell outputs" path
             # All the executable code cells are the same as the previous
             # render, so all we need to do is iterate over the markdown code
             # (that doesn't contain inline executable code) and update the
@@ -116,7 +117,7 @@ function evaluate!(
             end
             cells = f.output_chunks
         else
-            @debug "evaluating new cell outputs"
+            Logging.@debug "Evaluating cells" path
             # When there has been any kind of change to any executable code
             # blocks then we perform a complete rerun of the notebook. Further
             # optimisations can be made to perform source code analysis in the
@@ -304,6 +305,7 @@ end
 Evaluate a single code cell: send to worker, handle expansion, format outputs.
 """
 function _evaluate_code_cell!(cells, f, chunk, nth, allow_error_global, record_error!)
+    Logging.@debug "Evaluating cell" file = chunk.file line = chunk.line
     source = transform_source(chunk)
 
     # Offset the line number by 1 to account for the triple backticks

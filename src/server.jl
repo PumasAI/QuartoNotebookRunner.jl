@@ -24,6 +24,7 @@ function run!(
     chunk_callback = (i, n, c) -> nothing,
     source_ranges::Union{Nothing,Vector} = nothing,
 )
+    Logging.@debug "run!" path
     try
         borrow_file!(server, path; options, optionally_create = true) do file
             transition!(file, FileState.Ready, FileState.Running)
@@ -297,6 +298,7 @@ file was closed and `false` if it did not exist, which
 can happen if it was closed by a timeout, for example.
 """
 function close!(server::Server, path::String)
+    Logging.@debug "close!" path
     try
         borrow_file!(server, path) do file
             transition!(file, FileState.Ready, FileState.Closing)
@@ -337,6 +339,7 @@ function close!(server::Server, path::String)
 end
 
 function forceclose!(server::Server, path::String)
+    Logging.@debug "forceclose!" path
     apath = abspath(path)
     file = lock(server.lock) do
         if haskey(server.workers, apath)

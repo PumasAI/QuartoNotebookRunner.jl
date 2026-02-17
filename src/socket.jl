@@ -1,5 +1,8 @@
 # TCP socket server for running Quarto notebooks from external processes.
 
+_with_logger(f, ::Nothing) = f()
+_with_logger(f, logger::DiagnosticLogger) = Logging.with_logger(f, logger)
+
 struct SocketServer
     tcpserver::Sockets.TCPServer
     notebookserver::Server
@@ -92,6 +95,19 @@ function serve(;
     showprogress::Bool = true,
     timeout::Union{Nothing,Real} = nothing,
 )
+    logdir = get(ENV, "QUARTONOTEBOOKRUNNER_LOG", nothing)
+    logger = logdir === nothing ? nothing : DiagnosticLogger(logdir, "host")
+    return _with_logger(logger) do
+        _serve(; port, showprogress, timeout, logger)
+    end
+end
+
+function _serve(;
+    port = nothing,
+    showprogress::Bool = true,
+    timeout::Union{Nothing,Real} = nothing,
+    logger = nothing,
+)
     getport(port::Integer) = port
     getport(port::AbstractString) = getport(tryparse(Int, port))
     getport(port::Nothing) = port
@@ -127,18 +143,20 @@ function serve(;
     function set_timer!()
         @debug "Timer set up"
         timer[] = Timer(timeout) do _
-            @debug "Server timed out after $timeout seconds of inactivity."
-            # close(socket_server) will cause an exception on the
-            # Sockets.accept line so we use this flag to swallow the
-            # error if that happened on purpose
-            lock(notebook_server.lock) do
-                if !isempty(notebook_server.workers)
-                    @debug "Timeout fired but workers were not empty at attaining server lock, not shutting down server."
-                    return
+            _with_logger(logger) do
+                @debug "Server timed out after $timeout seconds of inactivity."
+                # close(socket_server) will cause an exception on the
+                # Sockets.accept line so we use this flag to swallow the
+                # error if that happened on purpose
+                lock(notebook_server.lock) do
+                    if !isempty(notebook_server.workers)
+                        @debug "Timeout fired but workers were not empty at attaining server lock, not shutting down server."
+                        return
+                    end
+                    closed_deliberately[] = true
+                    close!(notebook_server)
+                    close(socket_server)
                 end
-                closed_deliberately[] = true
-                close!(notebook_server)
-                close(socket_server)
             end
         end
         timeout_started_at[] = Dates.now()
@@ -169,7 +187,7 @@ function serve(;
 
     timeout !== nothing && set_timer!()
 
-    task = Threads.@spawn begin
+    task = Threads.@spawn _with_logger(logger) do
         while isopen(socket_server)
             socket = nothing
             try
@@ -181,44 +199,51 @@ function serve(;
                 break
             end
             if !isnothing(socket)
-                subtask = Threads.@spawn while isopen(socket)
-                    @debug "Waiting for request"
-                    data = readline(socket; keep = true)
-                    if isempty(data)
-                        @debug "Connection closed."
-                        break
-                    else
-                        json = try
-                            _read_json(key, data)
-                        catch error
-                            msg = if error isa HMACMismatchError
-                                "Incorrect HMAC digest"
-                            else
-                                "Failed to parse json message."
-                            end
-                            @error msg error
-                            _write_json(socket, (; error = msg))
-                            # close connection with clients sending wrong hmacs or invalid json
-                            # (could be other processes mistakingly targeting our port)
-                            close(socket)
+                subtask = Threads.@spawn _with_logger(logger) do
+                    while isopen(socket)
+                        @debug "Waiting for request"
+                        data = readline(socket; keep = true)
+                        if isempty(data)
+                            @debug "Connection closed."
                             break
-                        end
-                        @debug "Received request" json
-
-                        if json.type == "stop"
-                            @debug "Closing connection."
-                            close!(notebook_server)
-                            _write_json(socket, (; message = "Server stopped."))
-                            close(socket)
-                            # close(socket_server) will cause an exception on the
-                            # Sockets.accept line so we use this flag to swallow the
-                            # error if that happened on purpose
-                            closed_deliberately[] = true
-                            close(socket_server)
-                        elseif json.type == "isready"
-                            _write_json(socket, true)
                         else
-                            _handle_response(socket, socket_server_ref[], json, showprogress)
+                            json = try
+                                _read_json(key, data)
+                            catch error
+                                msg = if error isa HMACMismatchError
+                                    "Incorrect HMAC digest"
+                                else
+                                    "Failed to parse json message."
+                                end
+                                @error msg error
+                                _write_json(socket, (; error = msg))
+                                # close connection with clients sending wrong hmacs or invalid json
+                                # (could be other processes mistakingly targeting our port)
+                                close(socket)
+                                break
+                            end
+                            @debug "Received request" type = json.type
+
+                            if json.type == "stop"
+                                @debug "Closing connection."
+                                close!(notebook_server)
+                                _write_json(socket, (; message = "Server stopped."))
+                                close(socket)
+                                # close(socket_server) will cause an exception on the
+                                # Sockets.accept line so we use this flag to swallow the
+                                # error if that happened on purpose
+                                closed_deliberately[] = true
+                                close(socket_server)
+                            elseif json.type == "isready"
+                                _write_json(socket, true)
+                            else
+                                _handle_response(
+                                    socket,
+                                    socket_server_ref[],
+                                    json,
+                                    showprogress,
+                                )
+                            end
                         end
                     end
                 end
@@ -292,8 +317,8 @@ function _handle_response_internal(
 )
     socketserver === nothing && error("Got request before SocketServer object was created.")
     notebooks = socketserver.notebookserver
-    @debug "debugging" request notebooks = collect(keys(notebooks.workers))
     type = request.type
+    Logging.@debug "Socket request" type
 
     type in ("close", "forceclose", "run", "isopen", "status") ||
         return _write_json(socket, _log_error("Unknown request type: $type"))
