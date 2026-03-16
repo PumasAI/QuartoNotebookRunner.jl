@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+## [v0.18.0] - 2026-03-16
+
 ### Added
 
 - Diagnostic file logging via `QUARTONOTEBOOKRUNNER_LOG` env var; writes timestamped debug logs from host and worker processes [#403]
@@ -17,6 +19,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Key worker scratchspace on `Project.toml` content hash to avoid stale caches [#404]
 - Refresh `QUARTO_PROJECT_ROOT` env var when rendering different projects through the same server [#336]
 - Fix sandbox temp directory leak in `render()` [#399]
 - Fix duplicate YAML keys when Python/R cells have cell options like `echo` [#394]
@@ -417,6 +420,7 @@ caching is enabled. Delete this folder to clear the cache. [#259]
 [v0.17.2]: https://github.com/PumasAI/QuartoNotebookRunner.jl/releases/tag/v0.17.2
 [v0.17.3]: https://github.com/PumasAI/QuartoNotebookRunner.jl/releases/tag/v0.17.3
 [v0.17.4]: https://github.com/PumasAI/QuartoNotebookRunner.jl/releases/tag/v0.17.4
+[v0.18.0]: https://github.com/PumasAI/QuartoNotebookRunner.jl/releases/tag/v0.18.0
 [#9]: https://github.com/PumasAI/QuartoNotebookRunner.jl/issues/9
 [#11]: https://github.com/PumasAI/QuartoNotebookRunner.jl/issues/11
 [#14]: https://github.com/PumasAI/QuartoNotebookRunner.jl/issues/14
@@ -511,3 +515,4 @@ caching is enabled. Delete this folder to clear the cache. [#259]
 [#400]: https://github.com/PumasAI/QuartoNotebookRunner.jl/issues/400
 [#401]: https://github.com/PumasAI/QuartoNotebookRunner.jl/issues/401
 [#403]: https://github.com/PumasAI/QuartoNotebookRunner.jl/issues/403
+[#404]: https://github.com/PumasAI/QuartoNotebookRunner.jl/issues/404
