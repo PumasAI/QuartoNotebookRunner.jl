@@ -522,3 +522,4 @@ caching is enabled. Delete this folder to clear the cache. [#259]
 [#403]: https://github.com/PumasAI/QuartoNotebookRunner.jl/issues/403
 [#404]: https://github.com/PumasAI/QuartoNotebookRunner.jl/issues/404
 [#407]: https://github.com/PumasAI/QuartoNotebookRunner.jl/issues/407
+[#408]: https://github.com/PumasAI/QuartoNotebookRunner.jl/issues/408
