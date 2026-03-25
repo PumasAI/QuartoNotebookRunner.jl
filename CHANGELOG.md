@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+## [v0.18.1] - 2026-03-25
+
 ### Fixed
 
 - Handle `fig-format: retina` by normalizing it to `png` with doubled `fig-dpi`, matching the behavior of Quarto's Jupyter and knitr backends. This fixes blurry plots with the default HTML settings where `retina` is the default format [#408].
@@ -426,6 +428,7 @@ caching is enabled. Delete this folder to clear the cache. [#259]
 [v0.17.3]: https://github.com/PumasAI/QuartoNotebookRunner.jl/releases/tag/v0.17.3
 [v0.17.4]: https://github.com/PumasAI/QuartoNotebookRunner.jl/releases/tag/v0.17.4
 [v0.18.0]: https://github.com/PumasAI/QuartoNotebookRunner.jl/releases/tag/v0.18.0
+[v0.18.1]: https://github.com/PumasAI/QuartoNotebookRunner.jl/releases/tag/v0.18.1
 [#9]: https://github.com/PumasAI/QuartoNotebookRunner.jl/issues/9
 [#11]: https://github.com/PumasAI/QuartoNotebookRunner.jl/issues/11
 [#14]: https://github.com/PumasAI/QuartoNotebookRunner.jl/issues/14
