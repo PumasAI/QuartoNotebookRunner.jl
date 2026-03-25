@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Handle `fig-format: retina` by normalizing it to `png` with doubled `fig-dpi`, matching the behavior of Quarto's Jupyter and knitr backends. This fixes blurry plots with the default HTML settings where `retina` is the default format [#408].
 - Cache key now hashes full Manifest.toml content via SHA-224 instead of only `project_hash`, so dependency version changes invalidate the cache [#407]
 
 ## [v0.18.0] - 2026-03-16
@@ -521,3 +522,4 @@ caching is enabled. Delete this folder to clear the cache. [#259]
 [#403]: https://github.com/PumasAI/QuartoNotebookRunner.jl/issues/403
 [#404]: https://github.com/PumasAI/QuartoNotebookRunner.jl/issues/404
 [#407]: https://github.com/PumasAI/QuartoNotebookRunner.jl/issues/407
+[#408]: https://github.com/PumasAI/QuartoNotebookRunner.jl/issues/408
