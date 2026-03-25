@@ -24,5 +24,16 @@ function _figure_metadata()
     fig_format = rget(options, ("format", "execute", "fig-format"), nothing)
     fig_dpi = rget(options, ("format", "execute", "fig-dpi"), nothing)
 
+    # Quarto's "retina" is not a real image format, it means "png at 2x DPI"
+    # so that images look sharp on high-DPI screens. Normalize it here so all
+    # downstream consumers (CairoMakie, Plots, RCall, ...) just see "png" with
+    # the appropriate DPI value.
+    if fig_format == "retina"
+        fig_format = "png"
+        if fig_dpi !== nothing
+            fig_dpi = fig_dpi * 2
+        end
+    end
+
     return (; fig_width_inch, fig_height_inch, fig_format, fig_dpi)
 end

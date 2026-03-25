@@ -16,7 +16,7 @@ function configure()
     kwargs[:type] = if fm.fig_format in ("pdf", "svg")
         "svg" # enables both pdf and svg, simpler for backends like typst and latex which prefer one
     else
-        "png" # all other fig formats are bitmaps, "retina" is handled via dpi settings
+        "png"
     end
     CairoMakie.activate!(; kwargs...)
 

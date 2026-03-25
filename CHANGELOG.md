@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+### Fixed
+
+- Handle `fig-format: retina` by normalizing it to `png` with doubled `fig-dpi`, matching the behavior of Quarto's Jupyter and knitr backends. This fixes blurry plots with the default HTML settings where `retina` is the default format [#408].
+
 ## [v0.18.0] - 2026-03-16
 
 ### Added

@@ -38,6 +38,25 @@ end
         @test fm.fig_dpi == 150
         @test fm.fig_format == "png"
     end
+
+    # Retina normalizes to png with doubled DPI
+    options = Dict{String,Any}(
+        "format" => Dict("execute" => Dict("fig-dpi" => 96, "fig-format" => "retina")),
+    )
+    QNW.NotebookState.with_test_context(; options) do
+        fm = QNW._figure_metadata()
+        @test fm.fig_format == "png"
+        @test fm.fig_dpi == 192
+    end
+
+    # Retina without explicit DPI
+    options =
+        Dict{String,Any}("format" => Dict("execute" => Dict("fig-format" => "retina")))
+    QNW.NotebookState.with_test_context(; options) do
+        fm = QNW._figure_metadata()
+        @test fm.fig_format == "png"
+        @test fm.fig_dpi === nothing
+    end
 end
 
 @testitem "_getproperty" begin
