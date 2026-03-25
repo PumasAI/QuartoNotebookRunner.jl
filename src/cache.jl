@@ -10,7 +10,7 @@ Compute the cache file path for a notebook based on its manifest and source hash
 """
 function _cache_file(f::File, source_code_hash)
     path = joinpath(dirname(f.path), ".cache")
-    hs = string(hash(f.worker.manifest_file, source_code_hash); base = 62)
+    hs = string(hash(f.worker.manifest_hash, source_code_hash); base = 62)
     return joinpath(path, "$(basename(f.path)).$hs.json")
 end
 

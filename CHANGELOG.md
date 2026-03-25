@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+### Fixed
+
+- Cache key now hashes full Manifest.toml content via SHA-224 instead of only `project_hash`, so dependency version changes invalidate the cache [#407]
+
 ## [v0.18.0] - 2026-03-16
 
 ### Added
@@ -516,3 +520,4 @@ caching is enabled. Delete this folder to clear the cache. [#259]
 [#401]: https://github.com/PumasAI/QuartoNotebookRunner.jl/issues/401
 [#403]: https://github.com/PumasAI/QuartoNotebookRunner.jl/issues/403
 [#404]: https://github.com/PumasAI/QuartoNotebookRunner.jl/issues/404
+[#407]: https://github.com/PumasAI/QuartoNotebookRunner.jl/issues/407

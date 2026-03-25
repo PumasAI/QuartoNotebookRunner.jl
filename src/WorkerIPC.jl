@@ -8,6 +8,7 @@ import IOCapture
 import Logging
 import Pkg
 import Sockets
+import SHA
 import TOML
 
 import RelocatableFolders
@@ -112,7 +113,7 @@ mutable struct Worker
     proc_pid::Int32
     socket::LockableIO{Sockets.TCPSocket}
     state::ConnectionState
-    manifest_file::String
+    manifest_hash::String
 
     function Worker(;
         exe = Base.julia_cmd()[1],
@@ -123,7 +124,7 @@ mutable struct Worker
     )
         scratchspace = _get_scratchspace_path()
 
-        proc, port, manifest_error, manifest_file = mktempdir() do temp_dir
+        proc, port, manifest_error, manifest_hash = mktempdir() do temp_dir
             errors_log_file = joinpath(temp_dir, "errors.log")
             touch(errors_log_file)
 
@@ -141,7 +142,7 @@ mutable struct Worker
             port_str = readline(proc)
             port = tryparse(UInt16, port_str)
 
-            manifest_file, manifest_error = _validate_worker_process_manifest(
+            manifest_hash, manifest_error = _validate_worker_process_manifest(
                 metadata_toml_file,
                 errors_log_file;
                 strict = strict_manifest_versions,
@@ -182,7 +183,7 @@ mutable struct Worker
                 end
             end
 
-            return proc, port, manifest_error, manifest_file
+            return proc, port, manifest_error, manifest_hash
         end
 
         socket = LockableIO(Sockets.connect(port))
@@ -192,7 +193,7 @@ mutable struct Worker
 
         w = finalizer(
             w -> Threads.@spawn(stop(w)),
-            new(port, proc, getpid(proc), socket, ConnectionState(), manifest_file),
+            new(port, proc, getpid(proc), socket, ConnectionState(), manifest_hash),
         )
         Logging.@debug "Worker started" pid = w.proc_pid port = w.port
         atexit(() -> stop(w))
@@ -415,11 +416,12 @@ function _validate_worker_process_manifest(
 
     isfile(manifest_toml_file) || return "", nothing
 
+    content_hash = bytes2hex(SHA.sha224(read(manifest_toml_file)))
+
     manifest = TOML.parsefile(manifest_toml_file)
     expected_julia_version = get(manifest, "julia_version", "")
-    project_hash = get(manifest, "project_hash", "")
 
-    isempty(expected_julia_version) && return project_hash, nothing
+    isempty(expected_julia_version) && return content_hash, nothing
 
     if !_compare_versions(actual_julia_version, expected_julia_version; strict)
         message = """
@@ -437,9 +439,9 @@ function _validate_worker_process_manifest(
         error_output = read(error_logs_file, String)
         isempty(error_output) || (message *= "\nERROR: $error_output")
 
-        return project_hash, message
+        return content_hash, message
     end
-    return project_hash, nothing
+    return content_hash, nothing
 end
 
 _compare_versions(a::AbstractString, b::AbstractString; strict = false) =
