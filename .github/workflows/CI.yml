@@ -66,7 +66,7 @@ jobs:
         with:
           persist-credentials: false
 
-      - uses: julia-actions/install-juliaup@853f07d58d0d6f63ca4b7e4e0a9fd450c9c5b7e5 # v3.0.0
+      - uses: julia-actions/install-juliaup@8443fbe455fef798f098a0279c61d93e642a58b0 # v3.1.0
         with:
           channel: "${{ matrix.version }}"
 
@@ -75,7 +75,7 @@ jobs:
       - run: juliaup add 1.10.7
       - run: juliaup add 1.11.2
 
-      - uses: julia-actions/cache@d10a6fd8f31b12404a54613ebad242900567f2b9 # v2.1.0
+      - uses: julia-actions/cache@9a93c5fb3e9c1c20b60fc80a478cae53e38618a4 # v3.0.2
 
       - uses: r-lib/actions/setup-r@6f6e5bc62fba3a704f74e7ad7ef7676c5c6a2590 # v2.11.4
         with:
@@ -119,7 +119,7 @@ jobs:
           depwarn: "yes"
       - uses: julia-actions/julia-processcoverage@03114f09f119417c3242a9fb6e0b722676aedf38 # v1.2.2
         if: matrix.os == 'ubuntu-latest' && matrix.version == '1'
-      - uses: codecov/codecov-action@671740ac38dd9b0130fbe1cec585b89eea48d3de # v5.5.2
+      - uses: codecov/codecov-action@57e3a136b779b570ffcdbf80b3bdc90e7fab3de2 # v6.0.0
         if: matrix.os == 'ubuntu-latest' && matrix.version == '1'
         with:
           verbose: true
@@ -135,7 +135,7 @@ jobs:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           persist-credentials: false
-      - uses: julia-actions/setup-julia@5c9647d97b78a5debe5164e9eec09d653d29bd71 # v2.6.1
+      - uses: julia-actions/setup-julia@4c0cb0fce8556fdb04a90347310e5db8b1f98fb9 # v2.7.0
         with:
           version: "1"
       - run: |
