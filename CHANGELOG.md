@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+### Changed
+
+- Remove `CLAUDE.md` symlink to avoid Quarto packaging issues [#412]
+
 ## [v0.18.1] - 2026-03-25
 
 ### Fixed
