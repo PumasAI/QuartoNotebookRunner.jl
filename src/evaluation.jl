@@ -40,8 +40,15 @@ function write_json(s::AbstractString, data)
         write_json(io, data)
     end
 end
-write_json(io::IO, data) = JSON3.pretty(io, data)
+write_json(io::IO, data) = JSON.print(io, data, 2)
 write_json(::Nothing, data) = data
+
+# Freshly evaluated cells are `NamedTuple`s; cells reloaded from the file cache
+# are `AbstractDict`s. Access the shared fields through these so both work.
+_chunk_id(chunk::AbstractDict) = chunk["id"]
+_chunk_id(chunk) = chunk.id
+_chunk_source(chunk::AbstractDict) = chunk["source"]
+_chunk_source(chunk) = chunk.source
 
 # The version of `julia` for a particular notebook file might not be the same
 # as the runner process, so query the worker for this value.
@@ -102,16 +109,18 @@ function evaluate!(
             # markdown cells with the new content.
             lookup = Dict(string(nth) => chunk for (nth, chunk) in enumerate(raw_chunks))
             for output_chunk in f.output_chunks
-                if haskey(lookup, output_chunk.id)
-                    new_raw_chunk = lookup[output_chunk.id]
+                id = _chunk_id(output_chunk)
+                if haskey(lookup, id)
+                    new_raw_chunk = lookup[id]
                     # Skip any markdown chunk if it contains potential inline
                     # executable code otherwise they would be replaced with
                     # their unexpanded raw chunk.
                     if !contains(new_raw_chunk.source, INLINE_CODE_PATTERN)
                         # Swap out any markdown chunks with their updated content.
                         new_source = process_cell_source(new_raw_chunk.source)
-                        empty!(output_chunk.source)
-                        append!(output_chunk.source, new_source)
+                        source = _chunk_source(output_chunk)
+                        empty!(source)
+                        append!(source, new_source)
                     end
                 end
             end

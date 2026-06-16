@@ -1,7 +1,7 @@
 [deps]
 Base64 = "2a0f44e3-6c83-55bd-87e4-b1978d98bd5f"
 Dates = "ade2ca70-3891-5945-98fb-dc099432e06a"
-JSON3 = "0f8b85d8-7281-11e9-16c2-39a750bddbf1"
+JSON = "682c06a0-de6a-54ab-a142-c8b1cf79cde6"
 JSONSchema = "7d188eb4-7ad8-530c-ae41-71a32a6d4692"
 Logging = "56ddb016-857b-54e1-b83d-db4d58db5568"
 NodeJS_18_jll = "c1e1d063-8311-5f52-a749-c7b05e91ae37"

@@ -92,7 +92,7 @@ end
 @testitem "diagnostic logging integration" tags = [:notebook] setup = [RunnerTestSetup] begin
     import .RunnerTestSetup as RTS
     import QuartoNotebookRunner as QNR
-    import JSON3
+    import JSON
 
     mktempdir() do tmpdir
         withenv("QUARTONOTEBOOKRUNNER_LOG" => tmpdir) do
@@ -105,7 +105,7 @@ end
                     output = buffer,
                     showprogress = false,
                 )
-                json = JSON3.read(seekstart(buffer), Any)
+                json = JSON.parse(seekstart(buffer))
                 json, server
             end
 

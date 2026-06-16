@@ -22,17 +22,12 @@ Garbage collect old cache files, keeping only the 3 most recent per notebook.
 function _gc_cache_files(dir::AbstractString)
     # Check all available caches, removing all but the 3 most recent per qmd file.
     if isdir(dir)
-        EntryT = @NamedTuple{
-            timestamp::Dates.DateTime,
-            file::String,
-            qnr_schema_version::VersionNumber,
-        }
-        CachesT = Vector{EntryT}
+        CachesT = Vector{CacheEntry}
         qmds = Dict{String,CachesT}()
         for file in readdir(dir; join = true)
             if endswith(file, ".json")
                 try
-                    json = JSON3.read(file, EntryT)
+                    json = _read_cache_entry(file)
                     caches = get!(CachesT, qmds, json.file)
                     push!(caches, (; json..., file))
                 catch error
@@ -61,13 +56,7 @@ function load_from_file!(f::File, source_code_hash)
         file = _cache_file(f, source_code_hash)
         if isfile(file)
             try
-                json = JSON3.read(
-                    file,
-                    @NamedTuple{
-                        cells::Vector{NamedTuple},
-                        qnr_schema_version::VersionNumber,
-                    }
-                )
+                json = _read_cached_cells(file)
                 if json.qnr_schema_version == SCHEMA_VERSION
                     f.output_chunks = json.cells
                     f.source_code_hash = source_code_hash
@@ -96,7 +85,7 @@ function save_to_file!(f::File)
         cells = f.output_chunks,
         timestamp = Dates.now(),
         file = f.path,
-        qnr_schema_version = SCHEMA_VERSION,
+        qnr_schema_version = string(SCHEMA_VERSION),
     )
     write_json(file, json)
 end

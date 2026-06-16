@@ -95,8 +95,7 @@ Extract and merge exeflags and environment variables for worker processes.
 Handles QUARTONOTEBOOKRUNNER_EXEFLAGS, project settings, and coverage flags.
 """
 function _exeflags_and_env(options)
-    env_exeflags =
-        JSON3.read(get(ENV, "QUARTONOTEBOOKRUNNER_EXEFLAGS", "[]"), Vector{String})
+    env_exeflags = _read_string_list(get(ENV, "QUARTONOTEBOOKRUNNER_EXEFLAGS", "[]"))
     julia_config = julia_worker_config(options)
     # We want to be able to override exeflags that are defined via environment variable,
     # but leave the remaining flags intact (for example override number of threads but leave sysimage).
