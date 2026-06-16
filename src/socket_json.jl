@@ -15,9 +15,9 @@ _key_to_hmac_bytes(key::Base.UUID) = Vector{UInt8}(string(key))
 Parse and validate a signed JSON message. Verifies HMAC before returning payload.
 """
 function _read_json(key::Base.UUID, data)
-    obj = JSON3.read(data, @NamedTuple{hmac::String, payload::String})
-    hmac = obj.hmac
-    payload = obj.payload
+    obj = JSON.parse(data; dicttype = Dict{String,Any})
+    hmac = obj["hmac"]::String
+    payload = obj["payload"]::String
 
     hmac_vec_client = Base64.base64decode(hmac)
     hmac_vec_server = SHA.hmac_sha256(_key_to_hmac_bytes(key), payload)
@@ -25,10 +25,11 @@ function _read_json(key::Base.UUID, data)
         throw(HMACMismatchError())
     end
 
-    return JSON3.read(
-        payload,
-        @NamedTuple{type::String, content::Union{String,Dict{String,Any}}}
-    )
+    parsed = JSON.parse(payload; dicttype = Dict{String,Any})
+    return @NamedTuple{type::String, content::Union{String,Dict{String,Any}}}((
+        parsed["type"],
+        parsed["content"],
+    ))
 end
 
 # https://codahale.com/a-lesson-in-timing-attacks/
@@ -47,10 +48,10 @@ end
 Write signed JSON message with HMAC.
 """
 function _write_hmac_json(socket, key::Base.UUID, data)
-    payload = JSON3.write(data)
+    payload = JSON.json(data)
     hmac = SHA.hmac_sha256(_key_to_hmac_bytes(key), payload)
     hmac_b64 = Base64.base64encode(hmac)
-    write(socket, JSON3.write((; hmac = hmac_b64, payload)), "\n")
+    write(socket, JSON.json((; hmac = hmac_b64, payload)), "\n")
     flush(socket)
 end
 
@@ -60,7 +61,7 @@ end
 Write JSON message without signing.
 """
 function _write_json(socket, data)
-    write(socket, JSON3.write(data), "\n")
+    write(socket, JSON.json(data), "\n")
     flush(socket)
 end
 

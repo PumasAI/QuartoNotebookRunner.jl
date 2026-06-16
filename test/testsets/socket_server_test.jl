@@ -1,6 +1,6 @@
 @testitem "socket server" tags = [:socket] begin
     import QuartoNotebookRunner as QNR
-    import JSON3
+    import JSON
     import Dates
     import NodeJS_18_jll
     import Logging
@@ -13,30 +13,30 @@
             client = joinpath(@__DIR__, "socket_server", "client.js")
             server = QNR.serve(; showprogress = false)
             sleep(1)
-            json(cmd) = JSON3.read(read(cmd, String), Any)
+            json(cmd) = JSON.parse(read(cmd, String))
 
             cell_types = abspath(joinpath(@__DIR__, "..", "examples", "cell_types.qmd"))
 
             @test json(`$node $client $(server.port) $(server.key) isready`)
 
             d1 = json(
-                `$node $client $(server.port) $(server.key) isopen $(JSON3.write(cell_types))`,
+                `$node $client $(server.port) $(server.key) isopen $(JSON.json(cell_types))`,
             )
             @test d1 == false
 
             d2 = json(
-                `$node $client $(server.port) $(server.key) run $(JSON3.write(cell_types))`,
+                `$node $client $(server.port) $(server.key) run $(JSON.json(cell_types))`,
             )
             @test length(d2["notebook"]["cells"]) == 9
 
             d3 = json(
-                `$node $client $(server.port) $(server.key) isopen $(JSON3.write(cell_types))`,
+                `$node $client $(server.port) $(server.key) isopen $(JSON.json(cell_types))`,
             )
             @test d3 == true
 
             t_before_run = Dates.now()
             d4 = json(
-                `$node $client $(server.port) $(server.key) run $(JSON3.write(cell_types))`,
+                `$node $client $(server.port) $(server.key) run $(JSON.json(cell_types))`,
             )
             t_after_run = Dates.now()
             @test d2 == d4
@@ -47,17 +47,17 @@
             @test occursin(abspath(cell_types), d5)
 
             d6 = json(
-                `$node $client $(server.port) $(server.key) close $(JSON3.write(cell_types))`,
+                `$node $client $(server.port) $(server.key) close $(JSON.json(cell_types))`,
             )
             @test d6["status"] == true
 
             d7 = json(
-                `$node $client $(server.port) $(server.key) isopen $(JSON3.write(cell_types))`,
+                `$node $client $(server.port) $(server.key) isopen $(JSON.json(cell_types))`,
             )
             @test d7 == false
 
             d8 = json(
-                `$node $client $(server.port) $(server.key) run $(JSON3.write(cell_types))`,
+                `$node $client $(server.port) $(server.key) run $(JSON.json(cell_types))`,
             )
             @test d2 == d8
 
@@ -65,7 +65,7 @@
 
             sleep_10 = abspath(joinpath(@__DIR__, "..", "examples", "sleep_10.qmd"))
             sleep_task = Threads.@spawn json(
-                `$node $client $(server.port) $(server.key) run $(JSON3.write(sleep_10))`,
+                `$node $client $(server.port) $(server.key) run $(JSON.json(sleep_10))`,
             )
 
             # wait until server lock locks due to the `run` command above
@@ -79,10 +79,10 @@
 
             # both of these tasks should then try to access the worker that is busy and fail
             d9_task = Threads.@spawn json(
-                `$node $client $(server.port) $(server.key) run $(JSON3.write(sleep_10))`,
+                `$node $client $(server.port) $(server.key) run $(JSON.json(sleep_10))`,
             )
             d10_task = Threads.@spawn json(
-                `$node $client $(server.port) $(server.key) close $(JSON3.write(sleep_10))`,
+                `$node $client $(server.port) $(server.key) close $(JSON.json(sleep_10))`,
             )
 
             d9 = fetch(d9_task)
@@ -105,7 +105,7 @@ end
 
 @testitem "socket server force close" tags = [:socket] begin
     import QuartoNotebookRunner as QNR
-    import JSON3
+    import JSON
     import NodeJS_18_jll
     import Logging
 
@@ -117,11 +117,11 @@ end
             client = joinpath(@__DIR__, "socket_server", "client.js")
             server = QNR.serve(; showprogress = false)
             sleep(1)
-            json(cmd) = JSON3.read(read(cmd, String), Any)
+            json(cmd) = JSON.parse(read(cmd, String))
 
             sleep_10 = abspath(joinpath(@__DIR__, "..", "examples", "sleep_10.qmd"))
             sleep_task = Threads.@spawn json(
-                `$node $client $(server.port) $(server.key) run $(JSON3.write(sleep_10))`,
+                `$node $client $(server.port) $(server.key) run $(JSON.json(sleep_10))`,
             )
 
             # wait until server lock locks due to the `run` command above
@@ -135,7 +135,7 @@ end
 
             # force-closing should kill the worker even if it's running
             d1 = json(
-                `$node $client $(server.port) $(server.key) forceclose $(JSON3.write(sleep_10))`,
+                `$node $client $(server.port) $(server.key) forceclose $(JSON.json(sleep_10))`,
             )
             @test d1 == Dict{String,Any}("status" => true)
 
@@ -147,11 +147,11 @@ end
             cell_types = abspath(joinpath(@__DIR__, "..", "examples", "cell_types.qmd"))
 
             d3 = json(
-                `$node $client $(server.port) $(server.key) run $(JSON3.write(cell_types))`,
+                `$node $client $(server.port) $(server.key) run $(JSON.json(cell_types))`,
             )
 
             d4 = json(
-                `$node $client $(server.port) $(server.key) forceclose $(JSON3.write(cell_types))`,
+                `$node $client $(server.port) $(server.key) forceclose $(JSON.json(cell_types))`,
             )
             @test d4 == Dict{String,Any}("status" => true)
 
@@ -165,7 +165,7 @@ end
 
 @testitem "source ranges" tags = [:socket] begin
     import QuartoNotebookRunner as QNR
-    import JSON3
+    import JSON
     import NodeJS_18_jll
     import Logging
 
@@ -220,7 +220,7 @@ end
             client = joinpath(@__DIR__, "socket_server", "client.js")
             server = QNR.serve(; showprogress = false)
             sleep(1)
-            json(cmd) = JSON3.read(read(cmd, String), Any)
+            json(cmd) = JSON.parse(read(cmd, String))
 
             options = (; target = (; markdown = (; value = full)))
 
@@ -228,7 +228,7 @@ end
 
             content_without_ranges = (; file = with_include, options)
             result = json(
-                `$node $client $(server.port) $(server.key) run $(JSON3.write(content_without_ranges))`,
+                `$node $client $(server.port) $(server.key) run $(JSON.json(content_without_ranges))`,
             )
 
             first_line_with_print =
@@ -245,7 +245,7 @@ end
             content_with_ranges =
                 (; file = with_include, sourceRanges = source_ranges, options)
             result = json(
-                `$node $client $(server.port) $(server.key) run $(JSON3.write(content_with_ranges))`,
+                `$node $client $(server.port) $(server.key) run $(JSON.json(content_with_ranges))`,
             )
 
             line_in_with_include = findfirst(
@@ -266,7 +266,7 @@ end
             # modify one of the source line boundaries so it mismatches
             source_ranges[1].sourceLines[2] -= 1
             result = json(
-                `$node $client $(server.port) $(server.key) run $(JSON3.write(content_with_ranges))`,
+                `$node $client $(server.port) $(server.key) run $(JSON.json(content_with_ranges))`,
             )
             @test contains(
                 result["juliaError"],

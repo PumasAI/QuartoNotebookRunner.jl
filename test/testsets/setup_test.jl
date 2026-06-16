@@ -1,12 +1,12 @@
 @testmodule RunnerTestSetup begin
     using Test
     import QuartoNotebookRunner as QNR
-    import JSON3
+    import JSON
     import JSONSchema
     import quarto_jll
 
     const SCHEMA = JSONSchema.Schema(
-        open(JSON3.read, joinpath(@__DIR__, "..", "schema", "nbformat.v4.schema.json")),
+        JSON.parsefile(joinpath(@__DIR__, "..", "schema", "nbformat.v4.schema.json")),
     )
 
     """
@@ -21,7 +21,7 @@
         buffer = IOBuffer()
         QNR.run!(server, path; options = options, output = buffer, showprogress = false)
         seekstart(buffer)
-        json = JSON3.read(buffer, Any)
+        json = JSON.parse(buffer)
         return json, server
     end
 

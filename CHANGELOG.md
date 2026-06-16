@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Switch the runner's JSON handling from `JSON3` to `JSON.jl` [#416]
 - Remove `CLAUDE.md` symlink to avoid Quarto packaging issues [#412]
 
 ## [v0.18.1] - 2026-03-25
@@ -531,3 +532,4 @@ caching is enabled. Delete this folder to clear the cache. [#259]
 [#407]: https://github.com/PumasAI/QuartoNotebookRunner.jl/issues/407
 [#408]: https://github.com/PumasAI/QuartoNotebookRunner.jl/issues/408
 [#412]: https://github.com/PumasAI/QuartoNotebookRunner.jl/issues/412
+[#416]: https://github.com/PumasAI/QuartoNotebookRunner.jl/issues/416

@@ -24,7 +24,7 @@ import Compat
 import Dates
 import InteractiveUtils
 import IterTools
-import JSON3
+import JSON
 import Logging
 import PrecompileTools
 import Preferences
