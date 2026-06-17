@@ -15,7 +15,7 @@ Return default frontmatter settings for notebooks.
 """
 function default_frontmatter()
     D = Dict{String,Any}
-    env = JSON3.read(get(ENV, "QUARTONOTEBOOKRUNNER_ENV", "[]"), Vector{String})
+    env = convert(Vector{String}, JSON.parse(get(ENV, "QUARTONOTEBOOKRUNNER_ENV", "[]")))
     return D(
         "fig-format" => "png",
         "julia" => D("env" => env, "exeflags" => []),
@@ -30,9 +30,7 @@ Parse options from a file path or return as-is if already a Dict.
 """
 function _parsed_options(options::String)
     isfile(options) || error("`options` is not a valid file: $(repr(options))")
-    open(options) do io
-        return JSON3.read(io, Any)
-    end
+    return JSON.parsefile(options; dicttype = Dict{String,Any})
 end
 _parsed_options(options::Dict{String,Any}) = options
 

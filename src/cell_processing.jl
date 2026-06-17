@@ -8,11 +8,11 @@ Split source string into lines.
 source_lines(s::AbstractString; keep = false) = collect(eachline(IOBuffer(s); keep = keep))
 
 """
-    json_reader(str)
+    json_reader(bytes)
 
-Parse JSON string content.
+Parse JSON content from a byte vector or string.
 """
-json_reader(str) = JSON3.read(str, Any)
+json_reader(bytes) = JSON.parse(IOBuffer(bytes); dicttype = Dict{String,Any})
 
 """
     process_cell_source(source, cell_options=Dict())

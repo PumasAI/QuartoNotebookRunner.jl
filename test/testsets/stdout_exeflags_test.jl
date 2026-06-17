@@ -15,7 +15,6 @@ end
 
 @testitem "exeflags notebook restart" tags = [:notebook] begin
     import QuartoNotebookRunner as QNR
-    import JSON3
 
     mktempdir() do dir
         content = read(joinpath(@__DIR__, "..", "examples", "stdout_exeflags.qmd"), String)

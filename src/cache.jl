@@ -32,9 +32,16 @@ function _gc_cache_files(dir::AbstractString)
         for file in readdir(dir; join = true)
             if endswith(file, ".json")
                 try
-                    json = JSON3.read(file, EntryT)
-                    caches = get!(CachesT, qmds, json.file)
-                    push!(caches, (; json..., file))
+                    json = JSON.parsefile(file; dicttype = Dict{String,Any})
+                    caches = get!(CachesT, qmds, json["file"]::String)
+                    push!(
+                        caches,
+                        (;
+                            timestamp = Dates.DateTime(json["timestamp"]),
+                            file,
+                            qnr_schema_version = VersionNumber(json["qnr_schema_version"]),
+                        ),
+                    )
                 catch error
                     @debug "invalid cache file, skipping" error
                 end
@@ -61,18 +68,13 @@ function load_from_file!(f::File, source_code_hash)
         file = _cache_file(f, source_code_hash)
         if isfile(file)
             try
-                json = JSON3.read(
-                    file,
-                    @NamedTuple{
-                        cells::Vector{NamedTuple},
-                        qnr_schema_version::VersionNumber,
-                    }
-                )
-                if json.qnr_schema_version == SCHEMA_VERSION
-                    f.output_chunks = json.cells
+                json = JSON.parsefile(file; dicttype = Dict{String,Any})
+                schema_version = VersionNumber(json["qnr_schema_version"])
+                if schema_version == SCHEMA_VERSION
+                    f.output_chunks = json["cells"]
                     f.source_code_hash = source_code_hash
                 else
-                    @debug "cache schema version mismatch" json.qnr_schema_version SCHEMA_VERSION
+                    @debug "cache schema version mismatch" schema_version SCHEMA_VERSION
                 end
             catch error
                 @debug "invalid cache file, skipping" error
@@ -96,7 +98,7 @@ function save_to_file!(f::File)
         cells = f.output_chunks,
         timestamp = Dates.now(),
         file = f.path,
-        qnr_schema_version = SCHEMA_VERSION,
+        qnr_schema_version = string(SCHEMA_VERSION),
     )
     write_json(file, json)
 end

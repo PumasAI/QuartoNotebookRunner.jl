@@ -1,6 +1,6 @@
 @testitem "render" tags = [:notebook] setup = [RunnerTestSetup] begin
     import QuartoNotebookRunner as QNR
-    import JSON3
+    import JSON
     import JSONSchema
     import .RunnerTestSetup as RTS
 
@@ -11,7 +11,7 @@
         showprogress = false,
     )
     seekstart(buffer)
-    json = JSON3.read(buffer, Any)
+    json = JSON.parse(buffer)
 
     @test JSONSchema.validate(RTS.SCHEMA, json) === nothing
 end

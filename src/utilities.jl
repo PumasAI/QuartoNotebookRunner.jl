@@ -47,7 +47,7 @@ function _stop_running_server()
     if isfile(transport_file)
         @info "Removing transport file." transport_file
 
-        json = open(JSON3.read, transport_file)
+        json = JSON.parsefile(transport_file; dicttype = Dict{String,Any})
         pid = get(json, "pid", nothing)
         try
             _kill_proc(pid)
@@ -120,7 +120,7 @@ function _cleanup_stale_transport_file()
 
     should_remove = false
     try
-        json = open(JSON3.read, transport_file)
+        json = JSON.parsefile(transport_file; dicttype = Dict{String,Any})
         pid = get(json, "pid", nothing)
         if pid !== nothing && !_process_running(pid)
             should_remove = true
