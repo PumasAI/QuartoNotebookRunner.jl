@@ -62,7 +62,7 @@ jobs:
           - version: "1.6"
             os: windows-latest
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           persist-credentials: false
 
@@ -77,7 +77,7 @@ jobs:
 
       - uses: julia-actions/cache@a45e8fa8be21c18a06b7177052533149e61e9b38 # v3.1.0
 
-      - uses: r-lib/actions/setup-r@a51a8012b0aab7c32ef9d19bf54da93f3254335e # v2.12.0
+      - uses: r-lib/actions/setup-r@d3c5be51b12e724e68f33216ca3c148b66d5f0b6 # v2.12.1
         with:
           use-public-rspm: true
           r-version: "4.3.3"
@@ -102,7 +102,7 @@ jobs:
         with:
           project: src/QuartoNotebookWorker
 
-      - uses: julia-actions/julia-runtest@d60b785c6f2bdf4ebfb18b2b6f7d93b7dfb0efe3 # v1.11.4
+      - uses: julia-actions/julia-runtest@fc07e51ec99db23b29943e95406b5762501e2897 # v1.11.5
         with:
           project: src/QuartoNotebookWorker
           depwarn: "yes"
@@ -114,12 +114,12 @@ jobs:
           version: 1.7.17
 
       - uses: julia-actions/julia-buildpkg@e3eb439fad4f9aba7da2667e7510e4a46ebc46e1 # v1.7.0
-      - uses: julia-actions/julia-runtest@d60b785c6f2bdf4ebfb18b2b6f7d93b7dfb0efe3 # v1.11.4
+      - uses: julia-actions/julia-runtest@fc07e51ec99db23b29943e95406b5762501e2897 # v1.11.5
         with:
           depwarn: "yes"
       - uses: julia-actions/julia-processcoverage@03114f09f119417c3242a9fb6e0b722676aedf38 # v1.2.2
         if: matrix.os == 'ubuntu-latest' && matrix.version == '1'
-      - uses: codecov/codecov-action@e79a6962e0d4c0c17b229090214935d2e33f8354 # v6.0.1
+      - uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v7.0.0
         if: matrix.os == 'ubuntu-latest' && matrix.version == '1'
         with:
           verbose: true
@@ -132,7 +132,7 @@ jobs:
     timeout-minutes: 20
 
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           persist-credentials: false
       - uses: julia-actions/setup-julia@fa02766e078afaaf09b14210362cee14137e6a32 # v3.0.2
