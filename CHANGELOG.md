@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+### Added
+
+- Attach renders to a live Julia session. A notebook with `julia.attach: true` in its frontmatter runs inside a running interactive session instead of a spawned worker process: call `QuartoNotebookWorker.serve!()` in a REPL rooted at the notebook's repository and subsequent renders evaluate there, keeping packages loaded and compiled code warm across renders while cells still run in an isolated notebook module. The runner never terminates or restarts the session, and re-attaches if the connection drops [#418]
+
 ### Changed
 
 - Remove `CLAUDE.md` symlink to avoid Quarto packaging issues [#412]
@@ -531,3 +535,4 @@ caching is enabled. Delete this folder to clear the cache. [#259]
 [#407]: https://github.com/PumasAI/QuartoNotebookRunner.jl/issues/407
 [#408]: https://github.com/PumasAI/QuartoNotebookRunner.jl/issues/408
 [#412]: https://github.com/PumasAI/QuartoNotebookRunner.jl/issues/412
+[#418]: https://github.com/PumasAI/QuartoNotebookRunner.jl/issues/418
