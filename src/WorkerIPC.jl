@@ -109,11 +109,30 @@ _get_running_procs() = filter!(Base.process_running, _running_procs)
 
 mutable struct Worker
     port::UInt16
-    proc::Base.Process
+    # The spawned worker process, or `nothing` when attached to an existing
+    # session that this host does not own (see the attach constructor).
+    proc::Union{Base.Process,Nothing}
     proc_pid::Int32
     socket::LockableIO{Sockets.TCPSocket}
     state::ConnectionState
     manifest_hash::String
+
+    # Attach to a session already serving the worker protocol (see
+    # `QuartoNotebookWorker.serve!`). The session's lifetime belongs to its
+    # owner: `stop` disconnects instead of terminating.
+    function Worker(port::Integer; pid::Integer = 0)
+        socket = LockableIO(Sockets.connect(Sockets.localhost, port))
+        read_handshake(socket)
+        w = finalizer(
+            w -> Threads.@spawn(stop(w)),
+            new(UInt16(port), nothing, Int32(pid), socket, ConnectionState(), ""),
+        )
+        Logging.@debug "Attached to worker session" pid port
+        atexit(() -> stop(w))
+        _receive_loop(w)
+        _manifest_in_sync_check(w)
+        return w
+    end
 
     function Worker(;
         exe = Base.julia_cmd()[1],
@@ -249,7 +268,8 @@ function call(worker::Worker, request::T)::response_type(T) where {T<:IPCRequest
     result isa CallOk ? result.value : throw(result.exception)
 end
 
-isrunning(w::Worker)::Bool = Base.process_running(w.proc)
+isrunning(w::Worker)::Bool =
+    w.proc === nothing ? !w.state.closed : Base.process_running(w.proc)
 
 function stop(w::Worker; exit_timeout::Real = 15.0, term_timeout::Real = 15.0)
     isrunning(w) || return false
@@ -261,7 +281,13 @@ function stop(w::Worker; exit_timeout::Real = 15.0, term_timeout::Real = 15.0)
     catch
     end
 
-    if !_poll(() -> !isrunning(w); timeout_s = exit_timeout)
+    if w.proc === nothing
+        # Attached session: disconnect and leave the process to its owner.
+        try
+            close(w.socket.io)
+        catch
+        end
+    elseif !_poll(() -> !isrunning(w); timeout_s = exit_timeout)
         Base.kill(w.proc, Base.SIGTERM)
         if !_poll(() -> !isrunning(w); timeout_s = term_timeout)
             Base.kill(w.proc, Base.SIGKILL)

@@ -85,3 +85,38 @@ the default will be used.
 """
 remote_repl(port::Union{Int,Nothing} = nothing) = _remote_repl(nothing, port)
 _remote_repl(::Any, port) = error("`RemoteREPL.jl` has not been loaded.")
+
+"""
+    serve!(; root = _attach_root()) -> AttachServer
+
+Serve the worker protocol from this Julia session, so `quarto render` runs
+notebooks in this process instead of a spawned worker. Call it from an
+interactive REPL:
+
+```julia
+import QuartoNotebookWorker
+QuartoNotebookWorker.serve!()
+```
+
+Notebooks opt in with `julia.attach: true` in their frontmatter. The runner
+then attaches to this session when the notebook lives under `root` (default:
+the enclosing git repository of the current directory, else the current
+directory).
+
+Notebook cells still evaluate in an isolated notebook module, refreshed per
+render. What is shared is the process: packages stay loaded, compiled code
+stays warm, and cells can reach this session's state explicitly through
+`Main`. The session registers itself in a registry directory
+(`\$QUARTONOTEBOOKRUNNER_ATTACH_DIR`, else `tempdir()/quartonotebookrunner-attach`)
+that the runner reads.
+
+Close the returned server with `close(server)`. Exiting the session cleans up
+the registry entry the same way.
+
+!!! warning
+
+    Renders mutate process-global state while they run: the working
+    directory, the active project, and environment variables. Concurrent
+    interactive work during a render sees those changes.
+"""
+serve!(; kws...) = WorkerIPC.serve!(; kws...)

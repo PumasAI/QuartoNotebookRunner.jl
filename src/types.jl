@@ -67,6 +67,7 @@ mutable struct File
     force_close_requested::Threads.Atomic{Bool} # Set by forceclose!, checked by run!
     sandbox_base::String                  # Shared sandbox base from Server
     worker_key::Union{Nothing,WorkerKey}  # Non-nothing when using a shared worker
+    attached::Bool                        # Worker is an attached session, not a spawned process
     state::FileState.T                    # Lifecycle state (Ready, Running, Closing)
 
     function File(
@@ -75,6 +76,7 @@ mutable struct File
         sandbox_base,
         worker::Union{Nothing,WorkerIPC.Worker} = nothing,
         worker_key::Union{Nothing,WorkerKey} = nothing,
+        attached::Bool = false,
     )
         if isfile(path)
             _, ext = splitext(path)
@@ -116,6 +118,7 @@ mutable struct File
                     Threads.Atomic{Bool}(false),
                     sandbox_base,
                     worker_key,
+                    attached,
                     FileState.Ready,
                 )
                 init!(file, merged_options)

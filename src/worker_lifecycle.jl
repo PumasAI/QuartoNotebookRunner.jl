@@ -72,7 +72,19 @@ function refresh!(file::File, options::Dict)
         julia_config.strict_manifest_versions != file.strict_manifest_versions
     worker_dead = !WorkerIPC.isrunning(file.worker)
 
-    if file.worker_key !== nothing
+    if file.attached
+        # Attached session: owned by the user, never restarted. A dead
+        # connection re-attaches, so a restarted session picks work back up.
+        if worker_dead
+            port, pid = _find_attach_server(file.path)
+            file.worker = WorkerIPC.Worker(port; pid)
+            file.source_code_hash = hash(VERSION)
+            file.output_chunks = []
+        end
+        if config_changed
+            @warn "Worker config changed for attached notebook $(file.path); ignoring (attached session is not restarted)"
+        end
+    elseif file.worker_key !== nothing
         # Shared worker: cannot restart — it's shared with other notebooks
         if worker_dead
             error("Shared worker process died unexpectedly")
@@ -106,10 +118,57 @@ function refresh!(file::File, options::Dict)
 end
 
 """
+    _find_attach_server(path)
+
+Find a live attached session serving the worker protocol whose root contains
+the notebook at `path`. Returns `(port, pid)`. Liveness is established by the
+caller's connection attempt; this resolves the registry entry to try.
+"""
+function _find_attach_server(path::String)
+    notebook_dir = dirname(abspath(path))
+    # Normalize through symlinks (e.g. macOS /tmp) so ancestor tests compare
+    # real paths on both sides.
+    notebook_real = isdir(notebook_dir) ? realpath(notebook_dir) : notebook_dir
+
+    candidates = filter(WorkerIPC._read_attach_entries()) do fields
+        root = get(fields, "root", "")
+        isempty(root) && return false
+        if get(fields, "protocol", "") != string(Int(WorkerIPC.PROTOCOL_VERSION))
+            Logging.@debug "Skipping attach entry with mismatched protocol" fields
+            return false
+        end
+        root_real = isdir(root) ? realpath(root) : return false
+        rel = relpath(notebook_real, root_real)
+        rel == "." || !startswith(rel, "..")
+    end
+
+    if isempty(candidates)
+        throw(UserError("""
+                        No attached Julia session found for notebook $(repr(path)).
+
+                        Start one in a REPL rooted at the notebook's repository:
+
+                            import QuartoNotebookWorker
+                            QuartoNotebookWorker.serve!()
+
+                        or remove `julia.attach: true` from the notebook frontmatter to
+                        run it in a spawned worker process instead.
+                        """))
+    end
+
+    # Deepest root wins so a session rooted at a subproject shadows one rooted
+    # at the repository.
+    sort!(candidates; by = fields -> length(fields["root"]), rev = true)
+    best = first(candidates)
+    return parse(Int, best["port"]), parse(Int, get(best, "pid", "0"))
+end
+
+"""
     _create_file(server, path, options)
 
-Create a File for `path`. If `share_worker_process` is enabled in frontmatter,
-reuse or create a shared worker via `server.shared_workers`.
+Create a File for `path`. If `julia.attach` is enabled in frontmatter, attach
+to a live user session from the attach registry. If `share_worker_process` is
+enabled, reuse or create a shared worker via `server.shared_workers`.
 """
 function _create_file(server::Server, path::String, options)
     parsed = _parsed_options(options)
@@ -117,7 +176,18 @@ function _create_file(server::Server, path::String, options)
     merged_options = _extract_relevant_options(file_frontmatter, parsed)
     julia_config = julia_worker_config(merged_options)
 
-    if julia_config.share_worker_process
+    if julia_config.attach
+        Logging.@debug "Creating attached worker file" path
+        port, pid = _find_attach_server(path)
+        worker = WorkerIPC.Worker(port; pid)
+        return File(
+            path,
+            options;
+            sandbox_base = server.sandbox_base,
+            worker,
+            attached = true,
+        )
+    elseif julia_config.share_worker_process
         Logging.@debug "Creating shared worker file" path
         exeflags, env, quarto_env = _exeflags_and_env(merged_options)
         exe, _exeflags = _julia_exe(exeflags)
