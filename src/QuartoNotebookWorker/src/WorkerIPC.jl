@@ -13,6 +13,12 @@ include("protocol.jl")
 # knows to surface per-render feedback that a spawned worker suppresses.
 const _SERVING = Ref(false)
 
+# Serializes render dispatch across connections. A serving session accepts
+# concurrent host connections, but renders mutate process-global state (the
+# working directory, active project, environment), so only one runs at a time.
+# Uncontended in a spawned worker, which serves a single connection.
+const _RENDER_LOCK = ReentrantLock()
+
 function __init__()
     if ccall(:jl_generating_output, Cint, ()) == 0
         Base.exit_on_sigint(false)
@@ -114,7 +120,9 @@ function handle_call(
     Logging.@debug "Handling request" request_type = nameof(typeof(request))
 
     result, success = try
-        (QuartoNotebookWorker.dispatch(request, contexts, contexts_lock), true)
+        Base.lock(_RENDER_LOCK) do
+            (QuartoNotebookWorker.dispatch(request, contexts, contexts_lock), true)
+        end
     catch e
         (format_error(e, catch_backtrace()), false)
     end
@@ -200,9 +208,10 @@ function serve!(; root::String = _attach_root())
         try
             while isopen(server)
                 socket = Sockets.accept(server)
-                # Sequential: one host connection at a time, matching the
-                # spawned worker's single-connection model.
-                serve_connection(socket)
+                # One task per host connection so a session can serve several
+                # notebooks, and several runners, at once. Handshake happens
+                # immediately; renders serialize on `_RENDER_LOCK`.
+                Threads.@spawn _serve_attached(socket)
             end
         catch err
             if !(err isa Base.IOError || err isa EOFError)
@@ -214,6 +223,18 @@ function serve!(; root::String = _attach_root())
     end
     atexit(() -> rm(entry; force = true))
     return handle
+end
+
+# Serve one attached connection, isolating its failures from the accept loop
+# and its sibling connections.
+function _serve_attached(socket::Sockets.TCPSocket)
+    try
+        serve_connection(socket)
+    catch err
+        if !(err isa Base.IOError || err isa EOFError)
+            Logging.@error "Attach connection error" exception = (err, catch_backtrace())
+        end
+    end
 end
 
 function send_error(io::LockableIO, msg_id::MsgID, err)

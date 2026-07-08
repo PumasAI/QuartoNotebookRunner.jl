@@ -125,6 +125,44 @@ end
     end
 end
 
+@testitem "attach_serves_multiple_notebooks" tags = [:attach] setup =
+    [RunnerTestSetup, AttachSession] begin
+    import .RunnerTestSetup as RTS
+    import QuartoNotebookRunner as QNR
+
+    registry = mktempdir()
+    dir = mktempdir()
+    cell = "```{julia}\nMain.ATTACH_MARKER\n```\n"
+    a = joinpath(dir, "a.qmd")
+    b = joinpath(dir, "b.qmd")
+    write(a, "---\ntitle: a\n---\n\n$cell")
+    write(b, "---\ntitle: b\n---\n\n$cell")
+
+    proc = start_attach_session(dir, registry)
+
+    try
+        withenv("QUARTONOTEBOOKRUNNER_ATTACH_DIR" => registry) do
+            marker(json) = join(json["cells"][2]["outputs"][1]["data"]["text/plain"])
+
+            # Each notebook holds its own connection to the session. Before the
+            # session accepted connections concurrently, opening the second one
+            # deadlocked the runner in the attach handshake. Both reach the same
+            # `Main.ATTACH_MARKER`, proving they share the one live process.
+            json, server = RTS.run_notebook(a)
+            @test marker(json) == "42"
+
+            buffer = IOBuffer()
+            QNR.run!(server, b; output = buffer, showprogress = false)
+            seekstart(buffer)
+            @test marker(RTS.JSON3.read(buffer, Any)) == "42"
+
+            QNR.close!(server)
+        end
+    finally
+        kill(proc)
+    end
+end
+
 @testitem "attach_opt_out_forces_spawn" tags = [:attach] setup =
     [RunnerTestSetup, AttachSession] begin
     import .RunnerTestSetup as RTS
