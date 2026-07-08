@@ -121,7 +121,6 @@ mutable struct File
                     attached,
                     FileState.Ready,
                 )
-                init!(file, merged_options)
                 return file
             else
                 throw(

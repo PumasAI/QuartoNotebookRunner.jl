@@ -94,6 +94,37 @@ end
     end
 end
 
+@testitem "attach_announces_once_per_render" tags = [:attach] setup =
+    [RunnerTestSetup, AttachSession] begin
+    import .RunnerTestSetup as RTS
+    import QuartoNotebookRunner as QNR
+
+    registry = mktempdir()
+    dir = mktempdir()
+    qmd = joinpath(dir, "once.qmd")
+    write(qmd, "---\ntitle: once\n---\n\n```{julia}\n1 + 1\n```\n")
+
+    proc = start_attach_session(dir, registry)
+
+    try
+        withenv("QUARTONOTEBOOKRUNNER_ATTACH_DIR" => registry) do
+            # A render announces itself exactly once. Both prints in a doubled
+            # render flush before `run!` returns, so any second line is already
+            # buffered on the pipe after the first is drained.
+            _, server = RTS.run_notebook(qmd)
+            line = readline(proc)
+            @test startswith(line, "attached render:")
+            @test occursin("once.qmd", line)
+            sleep(0.5)
+            @test bytesavailable(proc) == 0
+
+            QNR.close!(server)
+        end
+    finally
+        kill(proc)
+    end
+end
+
 @testitem "attach_opt_out_forces_spawn" tags = [:attach] setup =
     [RunnerTestSetup, AttachSession] begin
     import .RunnerTestSetup as RTS
