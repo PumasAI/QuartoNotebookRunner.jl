@@ -27,6 +27,10 @@
         @assert startswith(port_line, "ATTACH_PORT=") port_line
         return proc
     end
+
+    # The session announces renders with `printstyled`, so under forced color
+    # the line arrives wrapped in ANSI escapes. Strip them to assert on text.
+    strip_ansi(s) = replace(s, r"\e\[[0-9;]*m" => "")
 end
 
 @testitem "attach_to_live_session" tags = [:attach] setup = [RunnerTestSetup, AttachSession] begin
@@ -68,7 +72,7 @@ end
             @test first_output(json, 4) == "1"
 
             # The session announces each render it absorbs.
-            log_line = readline(proc)
+            log_line = strip_ansi(readline(proc))
             @test startswith(log_line, "attached render:")
             @test occursin("attach.qmd", log_line)
 
@@ -112,7 +116,7 @@ end
             # render flush before `run!` returns, so any second line is already
             # buffered on the pipe after the first is drained.
             _, server = RTS.run_notebook(qmd)
-            line = readline(proc)
+            line = strip_ansi(readline(proc))
             @test startswith(line, "attached render:")
             @test occursin("once.qmd", line)
             sleep(0.5)
