@@ -8,6 +8,17 @@ import Sockets
 
 include("protocol.jl")
 
+# True in a session that opted into serving via `serve!`, false in a spawned
+# worker. The two run the same dispatch code, so this is how a serving REPL
+# knows to surface per-render feedback that a spawned worker suppresses.
+const _SERVING = Ref(false)
+
+# Serializes render dispatch across connections. A serving session accepts
+# concurrent host connections, but renders mutate process-global state (the
+# working directory, active project, environment), so only one runs at a time.
+# Uncontended in a spawned worker, which serves a single connection.
+const _RENDER_LOCK = ReentrantLock()
+
 function __init__()
     if ccall(:jl_generating_output, Cint, ()) == 0
         Base.exit_on_sigint(false)
@@ -35,7 +46,13 @@ function serve(server::Sockets.TCPServer)
     Logging.@debug "Waiting for connection"
     socket = Sockets.accept(server)
     Logging.@debug "Connected"
+    serve_connection(socket)
+end
 
+# One host connection: handshake, then the message loop until shutdown or
+# disconnect. Notebook contexts are scoped to the connection, so a host that
+# reconnects starts from fresh notebook state in a warm process.
+function serve_connection(socket::Sockets.TCPSocket)
     Sockets.nagle(socket, false)
     Sockets.quickack(socket, true)
 
@@ -103,7 +120,9 @@ function handle_call(
     Logging.@debug "Handling request" request_type = nameof(typeof(request))
 
     result, success = try
-        (QuartoNotebookWorker.dispatch(request, contexts, contexts_lock), true)
+        Base.lock(_RENDER_LOCK) do
+            (QuartoNotebookWorker.dispatch(request, contexts, contexts_lock), true)
+        end
     catch e
         (format_error(e, catch_backtrace()), false)
     end
@@ -125,6 +144,96 @@ function handle_call(
         write_message(io, Message(msg_type, msg.id, payload))
     catch e
         Logging.@error "Failed to send response" exception = (e, catch_backtrace())
+    end
+end
+
+# In-process worker server for attach mode.
+#
+# A live Julia session (typically an interactive REPL) serves the worker
+# protocol so `quarto render` evaluates notebooks in this process instead of a
+# spawned one. The session registers itself in the attach registry; the host
+# finds it there when a notebook opts in with `julia.attach: true`.
+
+mutable struct AttachServer
+    port::Int
+    root::String
+    server::Sockets.TCPServer
+    entry::String
+    task::Union{Task,Nothing}
+end
+
+function Base.show(io::IO, ::MIME"text/plain", s::AttachServer)
+    print(io, "QuartoNotebookWorker.AttachServer")
+    if !isopen(s.server)
+        print(io, " (stopped)")
+        return
+    end
+    print(io, " (running)")
+    print(io, "\n  port: ", s.port)
+    print(io, "\n  root: ", s.root)
+end
+
+function Base.close(s::AttachServer)
+    close(s.server)
+    rm(s.entry; force = true)
+    return nothing
+end
+
+# The directory this session serves: the enclosing git root, so any notebook
+# in the repository can attach, else the directory itself. A `.git` path test
+# covers worktrees, where `.git` is a file.
+function _attach_root(dir::String = pwd())
+    d = abspath(dir)
+    while true
+        ispath(joinpath(d, ".git")) && return d
+        parent = dirname(d)
+        parent == d && return abspath(dir)
+        d = parent
+    end
+end
+
+function serve!(; root::String = _attach_root())
+    _SERVING[] = true
+    # Renders activate the notebook's project, which need not carry
+    # QuartoNotebookWorker. Spawned workers keep the package resolvable by
+    # pushing its environment onto LOAD_PATH in startup.jl; uphold the same
+    # invariant here so notebook modules can always import it.
+    project = pkgdir(QuartoNotebookWorker)
+    project in LOAD_PATH || push!(LOAD_PATH, project)
+
+    port, server = Sockets.listenany(Sockets.localhost, 8100)
+    entry = _write_attach_entry(port, root)
+    handle = AttachServer(Int(port), root, server, entry, nothing)
+    handle.task = Threads.@spawn begin
+        try
+            while isopen(server)
+                socket = Sockets.accept(server)
+                # One task per host connection so a session can serve several
+                # notebooks, and several runners, at once. Handshake happens
+                # immediately; renders serialize on `_RENDER_LOCK`.
+                Threads.@spawn _serve_attached(socket)
+            end
+        catch err
+            if !(err isa Base.IOError || err isa EOFError)
+                Logging.@error "Attach server error" exception = (err, catch_backtrace())
+            end
+        finally
+            rm(entry; force = true)
+        end
+    end
+    atexit(() -> rm(entry; force = true))
+    return handle
+end
+
+# Serve one attached connection, isolating its failures from the accept loop
+# and its sibling connections.
+function _serve_attached(socket::Sockets.TCPSocket)
+    try
+        serve_connection(socket)
+    catch err
+        if !(err isa Base.IOError || err isa EOFError)
+            Logging.@error "Attach connection error" exception = (err, catch_backtrace())
+        end
     end
 end
 

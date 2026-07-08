@@ -72,7 +72,39 @@ function refresh!(file::File, options::Dict)
         julia_config.strict_manifest_versions != file.strict_manifest_versions
     worker_dead = !WorkerIPC.isrunning(file.worker)
 
-    if file.worker_key !== nothing
+    if file.attached
+        # Attached session: owned by the user, never restarted. A dead
+        # connection re-attaches; if the session is gone, degrade to a spawned
+        # worker so rendering continues.
+        if worker_dead
+            worker = _try_attach(file.path)
+            if worker !== nothing
+                file.worker = worker
+                file.source_code_hash = hash(VERSION)
+                file.output_chunks = []
+            else
+                exe, _exeflags = _julia_exe(exeflags)
+                file.worker = _start_worker(;
+                    exe,
+                    exeflags = _exeflags,
+                    env = vcat(env, quarto_env),
+                    strict_manifest_versions = julia_config.strict_manifest_versions,
+                    sandbox_base = file.sandbox_base,
+                    notebook_dir = dirname(file.path),
+                )
+                file.attached = false
+                file.exe = exe
+                file.exeflags = exeflags
+                file.env = env
+                file.strict_manifest_versions = julia_config.strict_manifest_versions
+                file.source_code_hash = hash(VERSION)
+                file.output_chunks = []
+            end
+        end
+        if file.attached && config_changed
+            @warn "Worker config changed for attached notebook $(file.path); ignoring (attached session is not restarted)"
+        end
+    elseif file.worker_key !== nothing
         # Shared worker: cannot restart — it's shared with other notebooks
         if worker_dead
             error("Shared worker process died unexpectedly")
@@ -106,16 +138,81 @@ function refresh!(file::File, options::Dict)
 end
 
 """
+    _attach_candidates(path)
+
+Registry entries for sessions whose root contains the notebook at `path`,
+deepest root first so a session rooted at a subproject shadows one rooted at the
+repository. Empty when no session is registered.
+"""
+function _attach_candidates(path::String)
+    notebook_dir = dirname(abspath(path))
+    # Normalize through symlinks (e.g. macOS /tmp) so ancestor tests compare
+    # real paths on both sides.
+    notebook_real = isdir(notebook_dir) ? realpath(notebook_dir) : notebook_dir
+
+    candidates = filter(WorkerIPC._read_attach_entries()) do fields
+        root = get(fields, "root", "")
+        isempty(root) && return false
+        if get(fields, "protocol", "") != string(Int(WorkerIPC.PROTOCOL_VERSION))
+            Logging.@debug "Skipping attach entry with mismatched protocol" fields
+            return false
+        end
+        root_real = isdir(root) ? realpath(root) : return false
+        rel = relpath(notebook_real, root_real)
+        rel == "." || !startswith(rel, "..")
+    end
+
+    sort!(candidates; by = fields -> length(fields["root"]), rev = true)
+    return candidates
+end
+
+"""
+    _try_attach(path) -> Union{WorkerIPC.Worker,Nothing}
+
+Connect to a live session serving the worker protocol for the notebook at
+`path`, or `nothing` when none is reachable. Liveness is established by
+connecting, so a stale registry entry is skipped after a failed connection.
+"""
+function _try_attach(path::String)
+    for fields in _attach_candidates(path)
+        port = parse(Int, fields["port"])
+        pid = parse(Int, get(fields, "pid", "0"))
+        try
+            return WorkerIPC.Worker(port; pid)
+        catch err
+            Logging.@debug "Skipping unreachable attach session" port pid exception = err
+        end
+    end
+    return nothing
+end
+
+"""
     _create_file(server, path, options)
 
-Create a File for `path`. If `share_worker_process` is enabled in frontmatter,
-reuse or create a shared worker via `server.shared_workers`.
+Create a File for `path`. When a live user session serves the notebook's root
+(and `QUARTONOTEBOOKRUNNER_NO_ATTACH` is unset), attach to it. Otherwise, if
+`share_worker_process` is enabled, reuse or create a shared worker via
+`server.shared_workers`; failing that, spawn a dedicated worker.
 """
 function _create_file(server::Server, path::String, options)
     parsed = _parsed_options(options)
     _, _, file_frontmatter = raw_text_chunks(path)
     merged_options = _extract_relevant_options(file_frontmatter, parsed)
     julia_config = julia_worker_config(merged_options)
+
+    if get(ENV, "QUARTONOTEBOOKRUNNER_NO_ATTACH", "false") != "true"
+        worker = _try_attach(path)
+        if worker !== nothing
+            Logging.@debug "Creating attached worker file" path
+            return File(
+                path,
+                options;
+                sandbox_base = server.sandbox_base,
+                worker,
+                attached = true,
+            )
+        end
+    end
 
     if julia_config.share_worker_process
         Logging.@debug "Creating shared worker file" path

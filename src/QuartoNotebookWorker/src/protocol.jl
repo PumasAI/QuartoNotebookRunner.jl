@@ -410,3 +410,61 @@ end
 function _ipc_deserialize(bytes::Vector{UInt8})
     _deserialize(IOBuffer(bytes))
 end
+
+# Attach registry.
+#
+# A live session that serves the worker protocol (see `serve!`) advertises
+# itself with one key=value file per server, named by port. The host reads the
+# directory to find a session to attach to instead of spawning a worker
+# process. Liveness is established by connecting, not by the entry, so a stale
+# entry costs one failed connection attempt.
+
+function _attach_registry_dir()
+    dir = get(ENV, "QUARTONOTEBOOKRUNNER_ATTACH_DIR") do
+        joinpath(tempdir(), "quartonotebookrunner-attach")
+    end
+    mkpath(dir)
+    return dir
+end
+
+function _write_attach_entry(port::Integer, root::String)
+    dir = _attach_registry_dir()
+    entry = joinpath(dir, string(Int(port)))
+    # Atomic write so a reader never sees a partial entry.
+    temp = "$entry.tmp.$(getpid())"
+    open(temp, "w") do io
+        println(io, "port=", Int(port))
+        println(io, "pid=", getpid())
+        println(io, "root=", root)
+        println(io, "protocol=", Int(PROTOCOL_VERSION))
+        println(io, "julia_version=", VERSION)
+    end
+    mv(temp, entry; force = true)
+    return entry
+end
+
+function _parse_attach_entry(path::String)
+    fields = Dict{String,String}()
+    for line in eachline(path)
+        parts = split(line, '='; limit = 2)
+        length(parts) == 2 && (fields[parts[1]] = parts[2])
+    end
+    return fields
+end
+
+function _read_attach_entries()
+    dir = _attach_registry_dir()
+    entries = Dict{String,String}[]
+    for name in readdir(dir)
+        all(isdigit, name) || continue
+        path = joinpath(dir, name)
+        isfile(path) || continue
+        fields = try
+            _parse_attach_entry(path)
+        catch
+            continue
+        end
+        haskey(fields, "port") && haskey(fields, "root") && push!(entries, fields)
+    end
+    return entries
+end
