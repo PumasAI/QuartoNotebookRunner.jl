@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- Attach renders to a live Julia session. A notebook with `julia.attach: true` in its frontmatter runs inside a running interactive session instead of a spawned worker process: call `QuartoNotebookWorker.serve!()` in a REPL rooted at the notebook's repository and subsequent renders evaluate there, keeping packages loaded and compiled code warm across renders while cells still run in an isolated notebook module. The runner never terminates or restarts the session, and re-attaches if the connection drops [#418]
+- Attach renders to a live Julia session. Start one by serving the worker protocol from a REPL rooted at a repository (`QuartoNotebookWorker.serve!()`, or `QuartoTools.attach!()`), and `quarto render` for any notebook under that root evaluates inside the session instead of a spawned worker process, keeping packages loaded and compiled code warm across renders while cells still run in an isolated notebook module. Attachment is implicit: a notebook attaches whenever a session serves its root, with no frontmatter flag. The session prints `attached render: <path>` for each render it absorbs. The runner never terminates or restarts the session, and re-attaches if the connection drops. Set `QUARTONOTEBOOKRUNNER_NO_ATTACH=1` on the `quarto render` invocation to force a spawned worker [#418]
 
 ### Changed
 

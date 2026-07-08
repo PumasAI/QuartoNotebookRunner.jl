@@ -8,6 +8,11 @@ import Sockets
 
 include("protocol.jl")
 
+# True in a session that opted into serving via `serve!`, false in a spawned
+# worker. The two run the same dispatch code, so this is how a serving REPL
+# knows to surface per-render feedback that a spawned worker suppresses.
+const _SERVING = Ref(false)
+
 function __init__()
     if ccall(:jl_generating_output, Cint, ()) == 0
         Base.exit_on_sigint(false)
@@ -180,6 +185,7 @@ function _attach_root(dir::String = pwd())
 end
 
 function serve!(; root::String = _attach_root())
+    _SERVING[] = true
     # Renders activate the notebook's project, which need not carry
     # QuartoNotebookWorker. Spawned workers keep the package resolvable by
     # pushing its environment onto LOAD_PATH in startup.jl; uphold the same

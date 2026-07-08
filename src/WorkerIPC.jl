@@ -119,7 +119,9 @@ mutable struct Worker
 
     # Attach to a session already serving the worker protocol (see
     # `QuartoNotebookWorker.serve!`). The session's lifetime belongs to its
-    # owner: `stop` disconnects instead of terminating.
+    # owner: `stop` disconnects instead of terminating. No manifest-in-sync
+    # check: the session's ambient project is the user's, and renders activate
+    # the notebook's own project per-render.
     function Worker(port::Integer; pid::Integer = 0)
         socket = LockableIO(Sockets.connect(Sockets.localhost, port))
         read_handshake(socket)
@@ -130,7 +132,6 @@ mutable struct Worker
         Logging.@debug "Attached to worker session" pid port
         atexit(() -> stop(w))
         _receive_loop(w)
-        _manifest_in_sync_check(w)
         return w
     end
 

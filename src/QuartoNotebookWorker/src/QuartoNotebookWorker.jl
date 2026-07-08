@@ -125,6 +125,12 @@ function dispatch(
     lock::ReentrantLock,
 )
     Logging.@debug "NotebookInit" file = req.file project = req.project
+    # A serving session runs renders the user did not directly invoke; announce
+    # each one so implicit attach is visible. A spawned worker stays quiet.
+    if WorkerIPC._SERVING[]
+        printstyled(stdout, "attached render: ", req.file, '\n'; color = :cyan)
+        flush(stdout)
+    end
     ctx, options_changed = Base.lock(lock) do
         ctx = get(contexts, req.file, nothing)
         if ctx === nothing

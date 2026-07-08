@@ -98,10 +98,13 @@ import QuartoNotebookWorker
 QuartoNotebookWorker.serve!()
 ```
 
-Notebooks opt in with `julia.attach: true` in their frontmatter. The runner
-then attaches to this session when the notebook lives under `root` (default:
-the enclosing git repository of the current directory, else the current
-directory).
+Any notebook that lives under `root` (default: the enclosing git repository of
+the current directory, else the current directory) attaches to this session
+automatically. Set `QUARTONOTEBOOKRUNNER_NO_ATTACH=1` on the `quarto render`
+invocation to force a spawned worker instead.
+
+`QuartoTools.attach!()` is the convenient entrypoint: it locates this package and
+calls `serve!` without needing `QuartoNotebookRunner` in the active project.
 
 Notebook cells still evaluate in an isolated notebook module, refreshed per
 render. What is shared is the process: packages stay loaded, compiled code

@@ -1,12 +1,37 @@
-@testitem "attach_to_live_session" tags = [:attach] setup = [RunnerTestSetup] begin
+@testsnippet AttachSession begin
+    # Launch a live session serving the worker protocol in a separate process,
+    # standing in for a user's REPL. QuartoNotebookWorker resolves from its
+    # package directory on the LOAD_PATH; its dependencies are stdlibs. The
+    # session defines `ATTACH_MARKER`/`ATTACH_COUNTER` in its `Main` so renders
+    # can prove they reached its state. Returns the process, already past the
+    # `ATTACH_PORT=` handshake.
+    function start_attach_session(dir, registry)
+        worker_pkg =
+            normpath(joinpath(dirname(@__DIR__), "..", "src", "QuartoNotebookWorker"))
+        session_code = """
+        push!(LOAD_PATH, $(repr(worker_pkg)))
+        import QuartoNotebookWorker
+        server = QuartoNotebookWorker.serve!(root = $(repr(dir)))
+        ATTACH_MARKER = 42
+        ATTACH_COUNTER = Ref(0)
+        println("ATTACH_PORT=", server.port)
+        flush(stdout)
+        wait(server.task)
+        """
+        cmd = addenv(
+            `$(Base.julia_cmd()) --startup-file=no -e $session_code`,
+            "QUARTONOTEBOOKRUNNER_ATTACH_DIR" => registry,
+        )
+        proc = open(cmd, "r")
+        port_line = readline(proc)
+        @assert startswith(port_line, "ATTACH_PORT=") port_line
+        return proc
+    end
+end
+
+@testitem "attach_to_live_session" tags = [:attach] setup = [RunnerTestSetup, AttachSession] begin
     import .RunnerTestSetup as RTS
     import QuartoNotebookRunner as QNR
-
-    # A live session serving the worker protocol, in a separate process like a
-    # user's REPL. QuartoNotebookWorker resolves from its package directory on
-    # the LOAD_PATH; its dependencies are stdlibs.
-    worker_pkg = joinpath(dirname(@__DIR__), "..", "src", "QuartoNotebookWorker")
-    worker_pkg = normpath(worker_pkg)
 
     registry = mktempdir()
     dir = mktempdir()
@@ -15,8 +40,7 @@
         qmd,
         """
         ---
-        julia:
-          attach: true
+        title: attach
         ---
 
         ```{julia}
@@ -29,35 +53,24 @@
         """,
     )
 
-    session_code = """
-    push!(LOAD_PATH, $(repr(worker_pkg)))
-    import QuartoNotebookWorker
-    server = QuartoNotebookWorker.serve!(root = $(repr(dir)))
-    ATTACH_MARKER = 42
-    ATTACH_COUNTER = Ref(0)
-    println("ATTACH_PORT=", server.port)
-    flush(stdout)
-    wait(server.task)
-    """
-    cmd = addenv(
-        `$(Base.julia_cmd()) --startup-file=no -e $session_code`,
-        "QUARTONOTEBOOKRUNNER_ATTACH_DIR" => registry,
-    )
-    proc = open(cmd, "r")
+    proc = start_attach_session(dir, registry)
 
     try
-        # Wait for the session to register.
-        port_line = readline(proc)
-        @test startswith(port_line, "ATTACH_PORT=")
-
         withenv("QUARTONOTEBOOKRUNNER_ATTACH_DIR" => registry) do
             first_output(json, nth) =
                 join(json["cells"][nth]["outputs"][1]["data"]["text/plain"])
 
+            # No `attach` in the frontmatter: attachment follows from a live
+            # session serving the notebook's root.
             json, server = RTS.run_notebook(qmd)
             RTS.validate_notebook(json)
             @test first_output(json, 2) == "42"
             @test first_output(json, 4) == "1"
+
+            # The session announces each render it absorbs.
+            log_line = readline(proc)
+            @test startswith(log_line, "attached render:")
+            @test occursin("attach.qmd", log_line)
 
             # Re-render: same warm process, fresh notebook module.
             buffer = IOBuffer()
@@ -81,18 +94,58 @@
     end
 end
 
-@testitem "attach_without_session_errors" tags = [:attach] setup = [RunnerTestSetup] begin
+@testitem "attach_opt_out_forces_spawn" tags = [:attach] setup =
+    [RunnerTestSetup, AttachSession] begin
     import .RunnerTestSetup as RTS
     import QuartoNotebookRunner as QNR
 
+    registry = mktempdir()
     dir = mktempdir()
-    qmd = joinpath(dir, "attach.qmd")
+    qmd = joinpath(dir, "optout.qmd")
     write(
         qmd,
         """
         ---
-        julia:
-          attach: true
+        title: optout
+        ---
+
+        ```{julia}
+        isdefined(Main, :ATTACH_MARKER)
+        ```
+        """,
+    )
+
+    proc = start_attach_session(dir, registry)
+
+    try
+        # A session is serving this root, but the opt-out forces a spawned
+        # worker whose fresh `Main` has no `ATTACH_MARKER`.
+        withenv(
+            "QUARTONOTEBOOKRUNNER_ATTACH_DIR" => registry,
+            "QUARTONOTEBOOKRUNNER_NO_ATTACH" => "true",
+        ) do
+            first_output(json, nth) =
+                join(json["cells"][nth]["outputs"][1]["data"]["text/plain"])
+            json, server = RTS.run_notebook(qmd)
+            @test first_output(json, 2) == "false"
+            QNR.close!(server)
+        end
+    finally
+        kill(proc)
+    end
+end
+
+@testitem "render_without_session_spawns" tags = [:attach] setup = [RunnerTestSetup] begin
+    import .RunnerTestSetup as RTS
+    import QuartoNotebookRunner as QNR
+
+    dir = mktempdir()
+    qmd = joinpath(dir, "plain.qmd")
+    write(
+        qmd,
+        """
+        ---
+        title: plain
         ---
 
         ```{julia}
@@ -101,10 +154,13 @@ end
         """,
     )
 
-    # An empty registry: no session to attach to.
+    # An empty registry: no session serves the root, so the render spawns a
+    # worker instead of erroring.
     withenv("QUARTONOTEBOOKRUNNER_ATTACH_DIR" => mktempdir()) do
-        server = QNR.Server()
-        @test_throws QNR.UserError QNR.run!(server, qmd; showprogress = false)
+        first_output(json, nth) =
+            join(json["cells"][nth]["outputs"][1]["data"]["text/plain"])
+        json, server = RTS.run_notebook(qmd)
+        @test first_output(json, 2) == "2"
         QNR.close!(server)
     end
 end
