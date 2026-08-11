@@ -65,7 +65,8 @@ end
     mod = Module(:TestModCellOptions)
 
     expr = QNW._process_code(mod, "#| echo: true\n?sum"; filename = "test.qmd", lineno = 1)
-    @test contains(string(expr), "helpmode")
+    @test string(expr) ==
+          string(QNW._process_code(mod, "?sum"; filename = "test.qmd", lineno = 1))
 
     expr = QNW._process_code(
         mod,
