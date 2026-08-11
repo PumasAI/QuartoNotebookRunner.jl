@@ -59,6 +59,33 @@ end
     @test length(expr.args) >= 2
 end
 
+@testitem "_process_code repl modes with cell options" begin
+    import QuartoNotebookWorker as QNW
+
+    mod = Module(:TestModCellOptions)
+
+    expr = QNW._process_code(mod, "#| echo: true\n?sum"; filename = "test.qmd", lineno = 1)
+    @test string(expr) ==
+          string(QNW._process_code(mod, "?sum"; filename = "test.qmd", lineno = 1))
+
+    expr = QNW._process_code(
+        mod,
+        "#| echo: true\n\n#| eval: true\n\n;echo hello";
+        filename = "test.qmd",
+        lineno = 1,
+    )
+    str = string(expr)
+    @test contains(str, "run")
+    @test contains(str, "echo hello")
+    @test expr.args[1].args[2].args[2] == LineNumberNode(5, Symbol("test.qmd"))
+
+    expr =
+        QNW._process_code(mod, "#| echo: true\n]status"; filename = "test.qmd", lineno = 1)
+    str = string(expr)
+    @test contains(str, "@pkg_str")
+    @test contains(str, "status")
+end
+
 @testitem "_transform_output" begin
     import QuartoNotebookWorker as QNW
 

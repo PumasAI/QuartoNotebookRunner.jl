@@ -21,35 +21,48 @@ function _helpmode(code::AbstractString, mod::Module)
     end
 end
 
+# The cell options are still part of the code that is sent to the worker, so
+# they have to be dropped, along with any blank lines that separate them from
+# the code, before checking for the REPL mode prefixes.
+function _drop_cell_options(code::AbstractString)
+    lines = collect(eachline(IOBuffer(code); keep = true))
+    is_droppable(line) = startswith(line, "#|") || isempty(strip(line))
+    dropped = something(findfirst(!is_droppable, lines), length(lines) + 1) - 1
+    return join(lines[dropped+1:end]), dropped
+end
+
 function _process_code(
     mod::Module,
     code::AbstractString;
     filename::AbstractString,
     lineno::Integer,
 )
+    code_without_options, dropped_lines = _drop_cell_options(code)
+    lineno_without_options = lineno + dropped_lines
+
     help_regex = r"^\s*\?"
-    if startswith(code, help_regex)
-        code = String(chomp(replace(code, help_regex => ""; count = 1)))
+    if startswith(code_without_options, help_regex)
+        code = String(chomp(replace(code_without_options, help_regex => ""; count = 1)))
         ex = _helpmode(code, mod)
         return Expr(:toplevel, ex)
     end
 
     shell_regex = r"^\s*;"
-    if startswith(code, shell_regex)
-        code = String(chomp(replace(code, shell_regex => ""; count = 1)))
+    if startswith(code_without_options, shell_regex)
+        code = String(chomp(replace(code_without_options, shell_regex => ""; count = 1)))
         ex = :($(Base).@cmd($code))
 
         # Force the line numbering of macroexpansion errors to match the
         # location in the notebook cell where the shell command was
         # written.
-        ex.args[2] = LineNumberNode(lineno, filename)
+        ex.args[2] = LineNumberNode(lineno_without_options, filename)
 
         return Expr(:toplevel, :($(Base).run($ex)), nothing)
     end
 
     pkg_regex = r"^\s*\]"
-    if startswith(code, pkg_regex)
-        code = String(chomp(replace(code, pkg_regex => ""; count = 1)))
+    if startswith(code_without_options, pkg_regex)
+        code = String(chomp(replace(code_without_options, pkg_regex => ""; count = 1)))
         return Expr(:toplevel, :(
             let printed = $(Pkg).REPLMode.PRINTED_REPL_WARNING[]
                 $(Pkg).REPLMode.PRINTED_REPL_WARNING[] = true
