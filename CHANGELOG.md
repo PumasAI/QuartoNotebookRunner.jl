@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+### Fixed
+
+- Shell (`;`), help (`?`), and Pkg (`]`) mode cells now work when the cell has `#|` options [#422]
+
 ### Changed
 
 - Remove `CLAUDE.md` symlink to avoid Quarto packaging issues [#412]
@@ -531,3 +535,4 @@ caching is enabled. Delete this folder to clear the cache. [#259]
 [#407]: https://github.com/PumasAI/QuartoNotebookRunner.jl/issues/407
 [#408]: https://github.com/PumasAI/QuartoNotebookRunner.jl/issues/408
 [#412]: https://github.com/PumasAI/QuartoNotebookRunner.jl/issues/412
+[#422]: https://github.com/PumasAI/QuartoNotebookRunner.jl/issues/422
