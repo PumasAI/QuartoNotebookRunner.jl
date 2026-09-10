@@ -51,13 +51,16 @@
 
     cell = cells[18]
 
-    outputs = cell["outputs"]
+    # Each failing `show` method reports its own error. Their order follows
+    # `Dict` iteration of the mimetypes, which the hashing of the keys decides,
+    # so sort them here to compare against fixed expectations.
+    outputs = sort(cell["outputs"]; by = output -> output["ename"])
     @test length(outputs) == 4
 
     output = outputs[1]
     @test output["output_type"] == "error"
-    @test output["ename"] == "text/plain showerror"
-    @test length(output["traceback"]) == 11
+    @test output["ename"] == "image/svg+xml showerror"
+    @test length(output["traceback"]) == 9
     @test contains(output["traceback"][end], "multimedia.jl")
 
     output = outputs[2]
@@ -74,8 +77,8 @@
 
     output = outputs[4]
     @test output["output_type"] == "error"
-    @test output["ename"] == "image/svg+xml showerror"
-    @test length(output["traceback"]) == 9
+    @test output["ename"] == "text/plain showerror"
+    @test length(output["traceback"]) == 11
     @test contains(output["traceback"][end], "multimedia.jl")
 
     QNR.close!(server)
