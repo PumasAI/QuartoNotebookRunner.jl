@@ -14,6 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - CI tests Julia 1.13 through the `1` channel and pins 1.12 so the previous stable release stays covered [#429]
+- Worker tests drop `CairoMakie` on Julia 1.6, where its `DelaunayTriangulation` dependency no longer compiles [#429]
 
 ## [v0.18.2] - 2026-09-02
 

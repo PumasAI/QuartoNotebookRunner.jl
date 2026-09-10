@@ -90,9 +90,10 @@ jobs:
         if: matrix.os == 'ubuntu-latest' && matrix.version == '1.6'
 
       # Worker tests
-      # Plots.jl's GR backend uses Julia 1.10+ syntax. Remove it on older
-      # Julia to avoid compile errors; the test is filtered out via tags.
-      - run: julia --project=src/QuartoNotebookWorker/test -e 'using Pkg; Pkg.rm("Plots"; io=devnull)'
+      # Plots.jl's GR backend and CairoMakie.jl's DelaunayTriangulation.jl
+      # dependency use Julia 1.10+ syntax. Remove them on older Julia to avoid
+      # compile errors; those tests are filtered out via tags.
+      - run: julia --project=src/QuartoNotebookWorker/test -e 'using Pkg; Pkg.rm(["Plots", "CairoMakie"]; io=devnull)'
         if: matrix.version == '1.6'
 
       # RCall + Julia 1.12 and above hangs on Windows during temp file cleanup.
