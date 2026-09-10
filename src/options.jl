@@ -5,7 +5,7 @@
 
 Recursively merge dictionaries, with later values overriding earlier ones.
 """
-_recursive_merge(x::AbstractDict...) = merge(_recursive_merge, x...)
+_recursive_merge(x::AbstractDict...) = mergewith(_recursive_merge, x...)
 _recursive_merge(x...) = x[end]
 
 """

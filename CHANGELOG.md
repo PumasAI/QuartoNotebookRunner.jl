@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+### Fixed
+
+- Frontmatter merging no longer warns on Julia 1.13, which deprecates `merge(combine, ::AbstractDict...)` in favour of `mergewith` [#429]
+
 ## [v0.18.2] - 2026-09-02
 
 ### Fixed
@@ -539,3 +543,4 @@ caching is enabled. Delete this folder to clear the cache. [#259]
 [#408]: https://github.com/PumasAI/QuartoNotebookRunner.jl/issues/408
 [#412]: https://github.com/PumasAI/QuartoNotebookRunner.jl/issues/412
 [#422]: https://github.com/PumasAI/QuartoNotebookRunner.jl/issues/422
+[#429]: https://github.com/PumasAI/QuartoNotebookRunner.jl/issues/429
