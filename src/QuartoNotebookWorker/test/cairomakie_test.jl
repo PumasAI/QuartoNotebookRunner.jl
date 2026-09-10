@@ -1,4 +1,4 @@
-@testitem "CairoMakie svg format" tags = [:integration] begin
+@testitem "CairoMakie svg format" tags = [:integration, :julia110] begin
     import QuartoNotebookWorker as QNW
     import CairoMakie
 
@@ -18,7 +18,7 @@
     end
 end
 
-@testitem "CairoMakie png format" tags = [:integration] begin
+@testitem "CairoMakie png format" tags = [:integration, :julia110] begin
     import QuartoNotebookWorker as QNW
     import CairoMakie
 
@@ -39,7 +39,7 @@ end
     end
 end
 
-@testitem "Makie extension configures size" tags = [:integration] begin
+@testitem "Makie extension configures size" tags = [:integration, :julia110] begin
     import QuartoNotebookWorker as QNW
     import CairoMakie
     Makie = CairoMakie.Makie
@@ -57,7 +57,7 @@ end
     end
 end
 
-@testitem "CairoMakie dpi affects pixel dimensions" tags = [:integration] begin
+@testitem "CairoMakie dpi affects pixel dimensions" tags = [:integration, :julia110] begin
     import QuartoNotebookWorker as QNW
     import CairoMakie
 
