@@ -11,6 +11,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Frontmatter merging no longer warns on Julia 1.13, which deprecates `merge(combine, ::AbstractDict...)` in favour of `mergewith` [#429]
 
+### Changed
+
+- CI tests Julia 1.13 through the `1` channel and pins 1.12 so the previous stable release stays covered [#429]
+
 ## [v0.18.2] - 2026-09-02
 
 ### Fixed
