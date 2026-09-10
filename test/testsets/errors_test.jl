@@ -42,7 +42,9 @@
     @test count("integer division error", traceback) == 1
     @test count("top-level scope", traceback) == 1
     @test count("errors.qmd:26", traceback) == 1
-    @test count("(repeats 4 times)", traceback) == 1
+    # Julia 1.13 draws repeated stack frames in a box labelled `repeated 4
+    # times` where earlier versions appended `(repeats 4 times)` to the frame.
+    @test count(r"\(repeats 4 times\)|repeated 4 times", traceback) == 1
     @test count("errors.qmd:27", traceback) == 1
 
     cell = cells[14]
