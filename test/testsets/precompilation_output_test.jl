@@ -37,11 +37,16 @@
 
         cell = json["cells"][2]
         @test cell["cell_type"] == "code"
+        # A report for `JSON` itself stays, since the notebook asked for that
+        # package, so the extension is what the cell must not mention.
         @test !any(
-            output -> contains(get(output, "text", ""), "Precompiling"),
+            output -> contains(get(output, "text", ""), "QuartoNotebookWorker"),
             cell["outputs"],
         )
-        @test cell["outputs"][1]["data"]["text/plain"] == "\"[1,2,3]\""
+        result = only(
+            filter(output -> output["output_type"] == "execute_result", cell["outputs"]),
+        )
+        @test result["data"]["text/plain"] == "\"[1,2,3]\""
 
         QNR.close!(server)
     end
