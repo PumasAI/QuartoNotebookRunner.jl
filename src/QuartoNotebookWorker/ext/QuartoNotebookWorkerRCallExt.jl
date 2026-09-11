@@ -75,6 +75,7 @@ end
 
 function __init__()
     if ccall(:jl_generating_output, Cint, ()) == 0
+        QuartoNotebookWorker.extension_loaded!(@__MODULE__)
         RCall_temp_files_ref[] = mktempdir()
         configure()
         QuartoNotebookWorker.add_package_loading_hook!(configure)

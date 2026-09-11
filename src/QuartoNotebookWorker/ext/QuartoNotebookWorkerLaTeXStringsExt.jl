@@ -24,4 +24,10 @@ function Base.show(io::IO, ::MIME"text/markdown", s::LaTeXStringWrapper)
 end
 Base.showable(::MIME"text/markdown", ::LaTeXStringWrapper) = true
 
+function __init__()
+    if ccall(:jl_generating_output, Cint, ()) == 0
+        QNW.extension_loaded!(@__MODULE__)
+    end
+end
+
 end

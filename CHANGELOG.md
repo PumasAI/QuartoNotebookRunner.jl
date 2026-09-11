@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - Frontmatter merging no longer warns on Julia 1.13, which deprecates `merge(combine, ::AbstractDict...)` in favour of `mergewith` [#429]
+- Precompilation reports for `QuartoNotebookWorker`'s own extensions no longer appear in cell output. A report that one of them failed to precompile is kept, as is the report for any other package the cell loads [#431]
 
 ### Changed
 
@@ -549,3 +550,4 @@ caching is enabled. Delete this folder to clear the cache. [#259]
 [#412]: https://github.com/PumasAI/QuartoNotebookRunner.jl/issues/412
 [#422]: https://github.com/PumasAI/QuartoNotebookRunner.jl/issues/422
 [#429]: https://github.com/PumasAI/QuartoNotebookRunner.jl/issues/429
+[#431]: https://github.com/PumasAI/QuartoNotebookRunner.jl/issues/431

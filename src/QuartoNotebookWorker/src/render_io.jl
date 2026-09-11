@@ -3,18 +3,26 @@
 function io_capture(f; cell_options, kws...)
     warning = get(cell_options, "warning", true)
     capture() = Packages.IOCapture.capture(f; kws...)
-    if warning
-        return capture()
+    # Extensions append themselves as they load, so anything past this mark
+    # loaded while the cell ran.
+    mark = length(LOADED_EXTENSIONS)
+    captured = if warning
+        capture()
     else
         logger = Logging.global_logger()
         current_level = Logging.min_enabled_level(logger)
         try
             Logging.disable_logging(Logging.Error)
-            return capture()
+            capture()
         finally
             Logging.disable_logging(current_level - 1)
         end
     end
+    extensions = @view LOADED_EXTENSIONS[mark+1:end]
+    return merge(
+        captured,
+        (; output = strip_worker_precompilation(captured.output, extensions)),
+    )
 end
 
 # passing our module removes Main.Notebook noise when printing types etc.

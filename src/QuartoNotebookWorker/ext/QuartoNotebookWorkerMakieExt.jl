@@ -29,6 +29,7 @@ end
 
 function __init__()
     if ccall(:jl_generating_output, Cint, ()) == 0
+        QuartoNotebookWorker.extension_loaded!(@__MODULE__)
         configure()
         QuartoNotebookWorker.add_package_refresh_hook!(configure)
     end
