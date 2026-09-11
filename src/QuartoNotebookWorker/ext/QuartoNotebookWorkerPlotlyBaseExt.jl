@@ -55,6 +55,7 @@ end
 
 function __init__()
     if ccall(:jl_generating_output, Cint, ()) == 0
+        QuartoNotebookWorker.extension_loaded!(@__MODULE__)
         QuartoNotebookWorker.add_package_refresh_hook!(reset_first_plot_displayed_flag!)
     end
 end

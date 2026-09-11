@@ -1,0 +1,11 @@
+---
+title: precompilation output
+---
+
+A cell that triggers a worker extension must not carry the precompilation
+report for it.
+
+```{julia}
+import JSON
+JSON.json([1, 2, 3])
+```

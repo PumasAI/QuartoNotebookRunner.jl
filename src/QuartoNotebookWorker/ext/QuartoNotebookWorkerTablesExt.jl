@@ -8,4 +8,10 @@ import Tables
 QuartoNotebookWorker._istable(::Nothing, obj) = Tables.istable(obj)
 QuartoNotebookWorker._ojs_rows(::Nothing, obj) = NamedTuple.(Tables.rows(obj))
 
+function __init__()
+    if ccall(:jl_generating_output, Cint, ()) == 0
+        QuartoNotebookWorker.extension_loaded!(@__MODULE__)
+    end
+end
+
 end
