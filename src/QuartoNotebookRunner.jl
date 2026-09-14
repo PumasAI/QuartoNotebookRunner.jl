@@ -24,7 +24,7 @@ import Compat
 import Dates
 import InteractiveUtils
 import IterTools
-import JSON3
+import JSON
 import Logging
 import PrecompileTools
 import Preferences
@@ -51,6 +51,7 @@ include("QuartoNotebookWorker/src/diagnostic_logger.jl")
 include("UserError.jl")
 include("WorkerIPC.jl")
 include("WorkerSetup.jl")
+include("json_compat.jl")
 include("types.jl")
 include("worker_setup.jl")
 include("options.jl")

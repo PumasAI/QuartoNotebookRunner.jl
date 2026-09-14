@@ -1,6 +1,6 @@
 @testitem "relative paths in output" tags = [:notebook] begin
     import QuartoNotebookRunner as QNR
-    import JSON3
+    import JSON
 
     mktempdir() do dir
         content = read(joinpath(@__DIR__, "..", "examples", "stdout.qmd"), String)
@@ -10,11 +10,11 @@
             ipynb = "notebook.ipynb"
             QNR.run!(server, "notebook.qmd"; output = ipynb, showprogress = false)
 
-            json = JSON3.read(ipynb)
+            json = JSON.parsefile(ipynb)
 
-            cells = json.cells
+            cells = json["cells"]
             cell = cells[8]
-            @test contains(cell.outputs[1].text, "info text")
+            @test contains(cell["outputs"][1]["text"], "info text")
 
             QNR.close!(server)
         end

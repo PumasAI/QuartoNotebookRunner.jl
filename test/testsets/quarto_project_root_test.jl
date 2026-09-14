@@ -33,7 +33,7 @@
                 output = buf_a,
                 showprogress = false,
             )
-            json_a = RTS.JSON3.read(seekstart(buf_a), Any)
+            json_a = RTS.JSON.parse(seekstart(buf_a))
             RTS.validate_notebook(json_a)
 
             buf_b = IOBuffer()
@@ -44,7 +44,7 @@
                 output = buf_b,
                 showprogress = false,
             )
-            json_b = RTS.JSON3.read(seekstart(buf_b), Any)
+            json_b = RTS.JSON.parse(seekstart(buf_b))
             RTS.validate_notebook(json_b)
 
             output_a = json_a["cells"][2]["outputs"][1]["data"]["text/plain"]

@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+### Changed
+
+- Switch the runner's JSON handling from `JSON3` to `JSON.jl` [#416]
+
 ## [v0.18.3] - 2026-09-11
 
 ### Fixed
@@ -551,6 +555,7 @@ caching is enabled. Delete this folder to clear the cache. [#259]
 [#407]: https://github.com/PumasAI/QuartoNotebookRunner.jl/issues/407
 [#408]: https://github.com/PumasAI/QuartoNotebookRunner.jl/issues/408
 [#412]: https://github.com/PumasAI/QuartoNotebookRunner.jl/issues/412
+[#416]: https://github.com/PumasAI/QuartoNotebookRunner.jl/issues/416
 [#422]: https://github.com/PumasAI/QuartoNotebookRunner.jl/issues/422
 [#429]: https://github.com/PumasAI/QuartoNotebookRunner.jl/issues/429
 [#431]: https://github.com/PumasAI/QuartoNotebookRunner.jl/issues/431
