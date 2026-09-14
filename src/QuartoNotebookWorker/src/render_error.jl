@@ -18,7 +18,9 @@ function clean_bt_str(is_error::Bool, bt, err, mod::Module, prefix = "", mimetyp
     buf = IOBuffer()
     buf_context = with_context(buf, mod)
     print(buf_context, prefix)
-    _showerror(buf_context, err, bt)
+    # Frame formatting reads the bindings of functions the notebook defined
+    # after this call's world was fixed, which Julia 1.12 warns about on stderr.
+    Base.@invokelatest _showerror(buf_context, err, bt)
 
     return take!(buf)
 end

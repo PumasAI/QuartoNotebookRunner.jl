@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+### Fixed
+
+- Notebook errors are no longer echoed to the server log, which now records how many there were and the server's own backtrace. Quarto redirects the server's stderr into a blocking pipe it drains once a second, so a notebook whose stacktraces exceeded that pipe's buffer blocked the write and hung the render. Quarto still reports the errors in full [#435]
+- Rendering a notebook error no longer emits a Julia 1.12 world age warning for each function named in its stacktrace. Formatting the backtrace read the bindings of functions the notebook had defined after the rendering code's world was fixed [#435]
+
 ### Changed
 
 - Switch the runner's JSON handling from `JSON3` to `JSON.jl` [#416]
@@ -559,3 +564,4 @@ caching is enabled. Delete this folder to clear the cache. [#259]
 [#422]: https://github.com/PumasAI/QuartoNotebookRunner.jl/issues/422
 [#429]: https://github.com/PumasAI/QuartoNotebookRunner.jl/issues/429
 [#431]: https://github.com/PumasAI/QuartoNotebookRunner.jl/issues/431
+[#435]: https://github.com/PumasAI/QuartoNotebookRunner.jl/issues/435

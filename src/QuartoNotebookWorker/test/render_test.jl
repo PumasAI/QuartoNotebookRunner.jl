@@ -227,3 +227,37 @@ end
         @test String(response.cells[1].display_results[1]["text/html"].data) == "<p></p>"
     end
 end
+
+@testitem "backtrace rendering does not warn about world age" tags = [:julia112] begin
+    import QuartoNotebookWorker as QNW
+
+    # Formatting a backtrace looks up the bindings of functions the notebook
+    # defined after this code's world was fixed. Julia 1.12 writes a warning to
+    # stderr for each one, which the worker's inherited descriptors carry into
+    # quarto's server log.
+    #
+    # The evaluation and the rendering have to sit inside one call, as they do
+    # when a cell runs: a world age is fixed on entry, so splitting them across
+    # two top-level statements hands the rendering a world that already knows
+    # the function and nothing warns.
+    function evaluate_and_render(mod)
+        Core.eval(mod, :(summarise(v) = tally(v)))
+        err, bt = try
+            Core.eval(mod, :(summarise([1, 2, 3])))
+        catch error
+            error, catch_backtrace()
+        end
+        return String(QNW.clean_bt_str(true, bt, err, mod))
+    end
+
+    pipe = Pipe()
+    reader = @async read(pipe, String)
+    rendered = redirect_stderr(pipe) do
+        evaluate_and_render(Module(:TestModWorldAge))
+    end
+    close(pipe.in)
+    warnings = fetch(reader)
+
+    @test contains(rendered, "tally")
+    @test !contains(warnings, "world prior to its definition")
+end
