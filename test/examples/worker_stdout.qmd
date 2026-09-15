@@ -1,0 +1,16 @@
+---
+title: "Worker writes to stdout after the cell finishes"
+format: html
+engine: julia
+---
+
+```{julia}
+# The task outlives the cell, so its output escapes the cell's IO capture and
+# reaches the worker's real stdout.
+Threads.@spawn begin
+    sleep(1)
+    print(stdout, repeat("x", 200_000))
+    flush(stdout)
+end
+1 + 1
+```

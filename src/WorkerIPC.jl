@@ -133,13 +133,33 @@ mutable struct Worker
 
             env = vcat("WORKERIPC_TEMP_DIR=$temp_dir", env)
 
+            port_file = joinpath(temp_dir, "port.txt")
+
+            # The worker's `stdout` goes nowhere. Giving it a pipe means giving
+            # it one nothing reads after startup, which fills and then leaves
+            # the worker unable to exit. `stdin` was a pipe the host never wrote
+            # to, so it goes the same way rather than inheriting the server's.
+            # `stderr` stays inherited, as it was before.
             cmd = _get_worker_cmd(; exe, env, exeflags, scratchspace, sandbox_base)
-            proc = open(Cmd(cmd; detach = true, windows_hide = true), "w+")
+            proc = run(
+                pipeline(
+                    Cmd(cmd; detach = true, windows_hide = true);
+                    stdin = devnull,
+                    stdout = devnull,
+                );
+                wait = false,
+            )
 
             _get_running_procs()
             push!(_running_procs, proc)
 
-            port_str = readline(proc)
+            # Wait for the worker to report its port, or to die trying. Startup
+            # precompiles the worker environment on a cold scratchspace, so
+            # there is no useful deadline here beyond the process exiting.
+            _poll(; interval = 0.05, timeout_s = Inf) do
+                isfile(port_file) || !Base.process_running(proc)
+            end
+            port_str = isfile(port_file) ? strip(read(port_file, String)) : ""
             port = tryparse(UInt16, port_str)
 
             manifest_hash, manifest_error = _validate_worker_process_manifest(
