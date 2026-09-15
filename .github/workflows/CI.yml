@@ -41,6 +41,10 @@ jobs:
     timeout-minutes: 90
     env:
       JULIA_NUM_PRECOMPILE_TASKS: 2
+      # Host and worker each write `<prefix>-<pid>.log` here, appending, so a
+      # process that fails keeps its own file. Quarto inherits this and passes
+      # it to the server it starts.
+      QUARTONOTEBOOKRUNNER_LOG: ${{ github.workspace }}/qnr-logs
     strategy:
       fail-fast: false
       matrix:
@@ -131,6 +135,17 @@ jobs:
           files: lcov.info
           token: ${{ secrets.CODECOV_TOKEN }}
           fail_ci_if_error: false
+
+      # Quarto reports a server that closed the connection as a JSON parse
+      # error naming neither the server nor the process that went away, so a
+      # failed integration test leaves nothing to inspect once the runner is
+      # gone. Keep the diagnostic logs instead.
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        if: failure()
+        with:
+          name: qnr-logs-${{ matrix.version }}-${{ matrix.os }}
+          path: ${{ github.workspace }}/qnr-logs
+          if-no-files-found: ignore
 
   format:
     runs-on: ubuntu-latest
