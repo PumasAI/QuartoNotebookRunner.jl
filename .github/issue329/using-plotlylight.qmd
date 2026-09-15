@@ -1,0 +1,13 @@
+---
+title: Install the plotting packages, load PlotlyLight
+engine: julia
+---
+
+```{julia}
+using Pkg
+Pkg.activate("testenv")
+Pkg.add("PlotlyLight")
+Pkg.add("PlotlyKaleido")
+
+using PlotlyLight
+```

@@ -1,0 +1,303 @@
+name: Issue 329
+
+# Reproduction harness for https://github.com/PumasAI/QuartoNotebookRunner.jl/issues/329,
+# a Windows render that never returns.
+#
+# Run 34979444632: the notebook from the issue hangs on Windows against
+# v0.17.3, v0.18.3 and this branch alike, while the same `Pkg.activate`/`Pkg.add`
+# pattern without the plotting packages renders in under a minute, and Linux
+# renders everything.
+#
+# Run 34981818017 bisected the cell. Installing the packages, loading
+# `PlotlyLight` and loading `PlotlyKaleido` all render in about 70 seconds. The
+# full cell hangs, so `PlotlyKaleido.start()` is the line that blocks.
+#
+# Run 34982699903 took quarto and the worker out of the picture:
+# `PlotlyKaleido.start()` finishes in a plain Julia process on Windows, and hangs
+# when the same call runs inside `IOCapture.capture`, which is what wraps every
+# cell. Linux does both.
+#
+# Run 34983903775 said where it stops. The root task sits in `IOCapture`'s
+# cleanup, waiting for its pipe to reach EOF, while the drain task waits on a
+# pipe the kaleido process still holds the write end of. `start()` had already
+# returned. Writing a megabyte to a captured stream hangs nothing, so volume is
+# not what does it; a child outliving the cell is.
+#
+# Run 34984775649 settled it: a child that exits releases the pipe, a child that
+# lingers holds it, and the capture waits either way, on Windows and on Linux
+# both. The Windows-only symptom is kaleido, whose child inherits the pipe there
+# and not on Linux.
+#
+# `fixed` now renders the notebook from the issue against the patched worker.
+# `linger` keeps the package-free version of the hang, and `stacks`, `probe`,
+# `bisect` and `versions` stay available on demand.
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  fixed:
+    name: fixed / ${{ matrix.os }} / ${{ matrix.notebook }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - windows-latest
+          - ubuntu-latest
+        notebook:
+          # The notebook from the issue, and the same cell without the line
+          # that starts kaleido, which rendered all along.
+          - reported
+          - using-plotlykaleido
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: julia-actions/install-juliaup@1cc1b0ecfb06c04ff09fe24cab1476106460750e # v3.1.5
+        with:
+          channel: "lts"
+
+      - uses: quarto-dev/quarto-actions/setup@8a96df13519ee81fd526f2dfca5962811136661b # v2.2.0
+        with:
+          version: 1.7.17
+
+      - name: Install QuartoNotebookRunner from this branch
+        run: |
+          mkdir -p qnrenv
+          julia --project=qnrenv <<'EOF'
+          using Pkg
+          Pkg.develop(; path = pwd())
+          Pkg.instantiate()
+          Pkg.precompile()
+          EOF
+
+      - name: Render ${{ matrix.notebook }}.qmd
+        continue-on-error: true
+        env:
+          QUARTO_JULIA_PROJECT: ${{ github.workspace }}/qnrenv
+        run: |
+          bash .github/issue329/deadline.sh "${{ matrix.notebook }}.qmd" 300 \
+            quarto render .github/issue329/${{ matrix.notebook }}.qmd --to html
+
+  linger:
+    name: linger / ${{ matrix.os }} / ${{ matrix.stream }} / ${{ matrix.linger }}s
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - windows-latest
+          - ubuntu-latest
+        # A child that exits releases the capture pipe; one that outlives the
+        # cell holds it. Both streams are tried, since a cell's child inherits
+        # whichever the capture owns.
+        linger:
+          - 0
+          - 600
+        stream:
+          - stdout
+          - stderr
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: julia-actions/install-juliaup@1cc1b0ecfb06c04ff09fe24cab1476106460750e # v3.1.5
+        with:
+          channel: "lts"
+
+      - name: Leave a child alive for ${{ matrix.linger }}s past the capture
+        continue-on-error: true
+        env:
+          PROBE_STREAM: ${{ matrix.stream }}
+          PROBE_LINGER: ${{ matrix.linger }}
+        run: |
+          bash .github/issue329/deadline.sh "${{ matrix.stream }} linger ${{ matrix.linger }}s" 120 \
+            julia .github/issue329/capture-probe.jl
+
+  stacks:
+    name: stacks
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: julia-actions/install-juliaup@1cc1b0ecfb06c04ff09fe24cab1476106460750e # v3.1.5
+        with:
+          channel: "lts"
+
+      # The watchdog prints the backtrace of every task once the hang has had
+      # time to set in, which says which call the cell is stopped in.
+      - name: Start kaleido under capture and dump the task backtraces
+        continue-on-error: true
+        env:
+          PROBE_MODE: capture
+          PROBE_WATCHDOG: 180
+        run: |
+          bash .github/issue329/deadline.sh "kaleido stacks" 300 \
+            julia --threads=2 .github/issue329/kaleido-probe.jl
+
+  probe:
+    name: probe / ${{ matrix.os }} / ${{ matrix.mode }}
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - windows-latest
+          - ubuntu-latest
+        mode:
+          # `bare` calls `PlotlyKaleido.start()` in a plain Julia process.
+          # `capture` wraps it in the IO capture a notebook cell runs under.
+          - bare
+          - capture
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: julia-actions/install-juliaup@1cc1b0ecfb06c04ff09fe24cab1476106460750e # v3.1.5
+        with:
+          channel: "lts"
+
+      - name: Start kaleido in ${{ matrix.mode }} mode
+        continue-on-error: true
+        env:
+          PROBE_MODE: ${{ matrix.mode }}
+        run: |
+          bash .github/issue329/deadline.sh "kaleido ${{ matrix.mode }}" 300 \
+            julia .github/issue329/kaleido-probe.jl
+
+  bisect:
+    name: bisect / ${{ matrix.notebook }}
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: windows-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        notebook:
+          - install
+          - using-plotlylight
+          - using-plotlykaleido
+          - reported
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: julia-actions/install-juliaup@1cc1b0ecfb06c04ff09fe24cab1476106460750e # v3.1.5
+        with:
+          channel: "lts"
+
+      - uses: quarto-dev/quarto-actions/setup@8a96df13519ee81fd526f2dfca5962811136661b # v2.2.0
+        with:
+          version: 1.7.17
+
+      - name: Install QuartoNotebookRunner from this branch
+        run: |
+          mkdir -p qnrenv
+          julia --project=qnrenv <<'EOF'
+          using Pkg
+          Pkg.develop(; path = pwd())
+          Pkg.instantiate()
+          Pkg.precompile()
+          EOF
+
+      # The renders that worked took 66s to 82s on these runners, so three
+      # minutes is long enough to tell a slow render from a stuck one.
+      - name: Render ${{ matrix.notebook }}.qmd
+        continue-on-error: true
+        env:
+          QUARTO_JULIA_PROJECT: ${{ github.workspace }}/qnrenv
+        run: |
+          bash .github/issue329/deadline.sh "${{ matrix.notebook }}.qmd" 180 \
+            quarto render .github/issue329/${{ matrix.notebook }}.qmd --to html
+
+  versions:
+    name: ${{ matrix.os }} / ${{ matrix.qnr }}
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - windows-latest
+          # Linux is the control: the issue reports the same notebook rendering
+          # fine there.
+          - ubuntu-latest
+        qnr:
+          # The release current when the issue was filed, the latest release,
+          # and this branch, which redirects the worker's stdout to `devnull`.
+          - "v0.17.3"
+          - "v0.18.3"
+          - "current"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: julia-actions/install-juliaup@1cc1b0ecfb06c04ff09fe24cab1476106460750e # v3.1.5
+        with:
+          channel: "lts"
+
+      - uses: quarto-dev/quarto-actions/setup@8a96df13519ee81fd526f2dfca5962811136661b # v2.2.0
+        with:
+          version: 1.7.17
+
+      - name: Install QuartoNotebookRunner ${{ matrix.qnr }}
+        env:
+          QNR_VERSION: ${{ matrix.qnr }}
+        run: |
+          mkdir -p qnrenv
+          julia --project=qnrenv <<'EOF'
+          using Pkg
+          version = ENV["QNR_VERSION"]
+          if version == "current"
+              Pkg.develop(; path = pwd())
+          else
+              Pkg.add(; url = "https://github.com/PumasAI/QuartoNotebookRunner.jl", rev = version)
+          end
+          Pkg.instantiate()
+          Pkg.precompile()
+          EOF
+
+      - name: Record which versions are under test
+        run: |
+          echo "## ${{ matrix.os }} / QuartoNotebookRunner ${{ matrix.qnr }}" >> "$GITHUB_STEP_SUMMARY"
+          julia --project=qnrenv -e 'using Pkg; Pkg.status()'
+          quarto --version
+
+      - name: Render the notebook from the issue
+        continue-on-error: true
+        env:
+          QUARTO_JULIA_PROJECT: ${{ github.workspace }}/qnrenv
+        run: |
+          bash .github/issue329/deadline.sh reported.qmd 300 \
+            quarto render .github/issue329/reported.qmd --to html
+
+      - name: Render a notebook that only installs packages
+        continue-on-error: true
+        env:
+          QUARTO_JULIA_PROJECT: ${{ github.workspace }}/qnrenv
+        run: |
+          bash .github/issue329/deadline.sh minimal.qmd 300 \
+            quarto render .github/issue329/minimal.qmd --to html

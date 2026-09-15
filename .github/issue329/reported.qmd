@@ -1,0 +1,16 @@
+---
+title: Test
+engine: julia
+---
+
+```{julia}
+using Pkg
+Pkg.activate("testenv")
+Pkg.add("PlotlyLight")
+Pkg.add("PlotlyKaleido")
+
+using PlotlyLight
+using PlotlyKaleido
+
+PlotlyKaleido.start()
+```

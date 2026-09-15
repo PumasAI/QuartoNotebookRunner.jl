@@ -1,0 +1,12 @@
+---
+title: Package installation chatter only
+engine: julia
+---
+
+```{julia}
+using Pkg
+Pkg.activate("minimalenv")
+Pkg.add("Example")
+Pkg.add("Colors")
+using Example
+```
