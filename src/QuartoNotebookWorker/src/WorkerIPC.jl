@@ -21,14 +21,25 @@ function main()
         port, server = Sockets.listenany(port_hint)
 
         Logging.@debug "Listening on port $port"
-        println(stdout, port)
-        flush(stdout)
+        _announce_port(port)
 
         Sockets.nagle(server, false)
         Sockets.quickack(server, true)
 
         serve(server)
     end
+end
+
+# The port goes to a file in the parent-provided temp directory rather than to
+# `stdout`. Nothing reads this process's `stdout` once the parent has the port,
+# so output written to it later fills the pipe and leaves the process unable to
+# exit. Rename the file into place so the parent cannot read a partial port.
+function _announce_port(port)
+    dir = ENV["WORKERIPC_TEMP_DIR"]
+    temp_file = joinpath(dir, "port.txt.tmp")
+    write(temp_file, string(port))
+    mv(temp_file, joinpath(dir, "port.txt"); force = true)
+    return nothing
 end
 
 function serve(server::Sockets.TCPServer)
