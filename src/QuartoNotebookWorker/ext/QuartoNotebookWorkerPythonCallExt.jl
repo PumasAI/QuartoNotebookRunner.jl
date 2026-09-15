@@ -50,7 +50,7 @@ prior to calling. Use `assign_globals` for that.
 """
 function eval_code(m::Module, filename::String, start_lineno::Integer, source::String)
     # During evaluation we point Python's `stdout` and `stderr` to the Julia
-    # `stdout` and `stderr` streams such that `IOCapture` can capture the
+    # `stdout` and `stderr` streams such that the cell capture collects the
     # output. It works without this when the Julia process is interactive, e.g.
     # it's been started via `QuartoNotebookRunner.WorkerSetup.debug()`, but
     # when run properly in a notebook process it did not get captured

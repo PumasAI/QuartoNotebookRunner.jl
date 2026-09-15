@@ -25,11 +25,12 @@ function io_capture(f; cell_options, kws...)
     )
 end
 
-# Capture what the cell writes to `stdout`, `stderr` and the logger, following
-# `IOCapture.capture` except in how it finishes. That one waits for its pipe to
-# reach end of file, and a process the cell started and left running holds a
-# copy of the write end, so the wait lasts as long as the process does. On
-# Windows `PlotlyKaleido.start()` is enough to make it permanent.
+# Capture what the cell writes to `stdout`, `stderr` and the logger. The reader
+# stops once the cell's code has returned rather than once the pipe reaches its
+# end: a process the cell started and left running holds a copy of the write
+# end, and would hold the cell open for as long as it runs.
+#
+# Derived from IOCapture.jl (MIT), which took it from Documenter.jl.
 function _capture(f; rethrow::Type = Any, color::Bool = false, io_context = ())
     default_stdout = stdout
     default_stderr = stderr
