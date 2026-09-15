@@ -16,13 +16,22 @@ import Scratch
 
 include("QuartoNotebookWorker/src/protocol.jl")
 
-# Scratchspace for worker environments, keyed on Project.toml content hash
-# so dependency changes invalidate the cached env.
+# Scratchspace for worker environments, keyed on the worker package path and its
+# Project.toml content, so dependency changes invalidate the cached env. The path
+# belongs in the key because the environment develops it: two checkouts of one
+# version share a key without it, and the first to create the environment is the
+# one every later checkout then runs.
 function _get_scratchspace_path()
-    worker_project = joinpath(String(worker_package), "Project.toml")
-    project_hash = string(hash(read(worker_project)); base = 62)
-    key = "worker-qnr$(QuartoNotebookRunner.QNR_VERSION)-$(project_hash)"
+    key = _scratchspace_key(String(worker_package))
     Scratch.@get_scratch!(key)
+end
+
+function _scratchspace_key(package_path::AbstractString)
+    project_hash = string(
+        hash((package_path, read(joinpath(package_path, "Project.toml"))));
+        base = 62,
+    )
+    return "worker-qnr$(QuartoNotebookRunner.QNR_VERSION)-$(project_hash)"
 end
 
 # Exceptions
@@ -154,10 +163,23 @@ mutable struct Worker
             push!(_running_procs, proc)
 
             # Wait for the worker to report its port, or to die trying. Startup
-            # precompiles the worker environment on a cold scratchspace, so
-            # there is no useful deadline here beyond the process exiting.
-            _poll(; interval = 0.05, timeout_s = Inf) do
+            # precompiles the worker environment on a cold scratchspace, so the
+            # deadline is generous rather than tight.
+            timeout_s = _worker_startup_timeout()
+            announced = _poll(; interval = 0.05, timeout_s) do
                 isfile(port_file) || !Base.process_running(proc)
+            end
+            if !announced
+                _kill_worker_process(proc)
+                error(
+                    """
+                    Timed out after $(timeout_s) seconds waiting for the worker process to report its port.
+
+                    The worker writes its port to `$(port_file)` once it is listening. It may have still been starting, since a cold worker environment precompiles first, in which case raise the deadline with `QUARTONOTEBOOKRUNNER_WORKER_STARTUP_TIMEOUT`. A worker that keeps running without ever writing the file is reporting its port some other way, which means the worker package it loaded is not the one this process ships. That package is recorded in `$(joinpath(scratchspace, "julia-<version>", "Manifest.toml"))`.
+
+                    $(_startup_diagnostics(temp_dir))
+                    """,
+                )
             end
             port_str = isfile(port_file) ? strip(read(port_file, String)) : ""
             port = tryparse(UInt16, port_str)
@@ -169,13 +191,7 @@ mutable struct Worker
             )
 
             if port === nothing
-                # Process may already be dead; ignore kill errors (esp. EACCES on Windows)
-                try
-                    Base.kill(proc, Base.SIGTERM)
-                catch err
-                    @debug "failed to kill worker process" exception =
-                        (err, catch_backtrace())
-                end
+                _kill_worker_process(proc)
                 _validate_worker_cmd(exe, exeflags)
 
                 err_output = read(errors_log_file, String)
@@ -365,6 +381,56 @@ function _exit_loop(worker::Worker)
             end
         end
     end
+end
+
+# A cold scratchspace precompiles the worker environment before the worker can
+# listen, and that runs into minutes on a slow machine, so the default deadline
+# is generous.
+function _worker_startup_timeout()
+    value = get(ENV, "QUARTONOTEBOOKRUNNER_WORKER_STARTUP_TIMEOUT", nothing)
+    value === nothing && return 600.0
+    seconds = tryparse(Float64, value)
+    if seconds === nothing || seconds <= 0
+        throw(
+            QuartoNotebookRunner.UserError(
+                "QUARTONOTEBOOKRUNNER_WORKER_STARTUP_TIMEOUT must be a positive number of seconds, got \"$(value)\".",
+            ),
+        )
+    end
+    return seconds
+end
+
+# What the worker writes before it listens says whether it was still starting:
+# `pkg.log` while it builds its environment, `errors.log` if startup threw,
+# `metadata.toml` once it knows its own version.
+function _startup_diagnostics(temp_dir)
+    io = IOBuffer()
+    for name in ("errors.log", "pkg.log", "metadata.toml")
+        file = joinpath(temp_dir, name)
+        isfile(file) || continue
+        contents = strip(read(file, String))
+        isempty(contents) && continue
+        println(io, "$(name):")
+        println(io, _last_lines(contents, 10))
+    end
+    report = String(take!(io))
+    return isempty(report) ? "The worker wrote none of those files." : report
+end
+
+function _last_lines(text::AbstractString, count::Integer)
+    lines = split(text, '\n')
+    return join(lines[max(firstindex(lines), lastindex(lines) - count + 1):end], '\n')
+end
+
+# The process may already be dead, and killing a dead one throws, on Windows
+# with `EACCES`.
+function _kill_worker_process(proc)
+    try
+        Base.kill(proc, Base.SIGTERM)
+    catch err
+        @debug "failed to kill worker process" exception = (err, catch_backtrace())
+    end
+    return nothing
 end
 
 function _poll(f::Function; interval::Real = 0.01, timeout_s::Real = Inf64)
