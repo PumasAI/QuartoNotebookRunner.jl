@@ -11,7 +11,7 @@ import TestItemRunner
 const RCALL_AVAILABLE = !isnothing(Base.find_package("RCall"))
 
 function should_run(ti)
-    version_tags = (julia110 = v"1.10",)
+    version_tags = (julia110 = v"1.10", julia112 = v"1.12")
     for tag in ti.tags
         min_ver = get(version_tags, tag, nothing)
         min_ver !== nothing && VERSION < min_ver && return false

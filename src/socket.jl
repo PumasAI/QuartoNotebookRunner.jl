@@ -425,10 +425,21 @@ function _log_error(message, error::QuartoNotebookRunner.UserError, backtrace)
     @error message exception = (error, backtrace)
     return (; error = message, juliaError = sprint(Base.showerror, error))
 end
-# EvaluationErrors don't send their local backtrace because only the contained
-# notebook-related errors are interesting for the user
+# EvaluationErrors don't send their local backtrace to the client because only
+# the contained notebook-related errors are interesting for the user. The log
+# keeps the opposite half.
+#
+# The notebook's own stacktraces stay out of it. They are unbounded in size, and
+# quarto runs the server with its stderr redirected into a blocking pipe that it
+# drains once a second, so a record larger than that pipe's buffer blocks the
+# write and wedges the server. The client receives all of them in `juliaError`
+# and quarto reports them verbatim, so the log names only how many there were.
 function _log_error(message, error::QuartoNotebookRunner.EvaluationError, backtrace)
-    @error message exception = (error, backtrace)
+    count = length(error.metadata)
+    reported = ErrorException(
+        "$count notebook error$(count == 1 ? "" : "s") reported to the client, not logged",
+    )
+    @error message exception = (reported, backtrace)
     return (; error = message, juliaError = sprint(Base.showerror, error))
 end
 function _log_error(message)
