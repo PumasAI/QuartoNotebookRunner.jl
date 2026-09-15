@@ -1,0 +1,13 @@
+---
+title: "A cell starts a process and leaves it running"
+format: html
+engine: julia
+---
+
+```{julia}
+println("before the process starts")
+# The process inherits the pipe the cell's output is captured through, and
+# outlives the cell, so the capture cannot wait for that pipe to reach its end.
+run(`$(Base.julia_cmd()) -e "sleep(90)"`; wait = false)
+println("after the process starts")
+```
