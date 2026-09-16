@@ -31,14 +31,14 @@ function configure()
     height_inches = fm.fig_height_inch !== nothing ? fm.fig_height_inch : 5
     dpi = fm.fig_dpi !== nothing ? fm.fig_dpi : 96
 
+    # `png` sizes in pixels and takes the resolution separately, `svg` in inches.
+    device_options =
+        rcalljl_device === :png ?
+        Dict(:width => width_inches * dpi, :height => height_inches * dpi, :res => dpi) :
+        Dict(:width => width_inches, :height => height_inches)
+
     RCall.rcall_p(:options; rcalljl_device)
-    RCall.rcall_p(
-        :options,
-        rcalljl_options = Dict(
-            :width => width_inches * dpi,
-            :height => height_inches * dpi,
-        ),
-    )
+    RCall.rcall_p(:options, rcalljl_options = device_options)
 
     return nothing
 end
