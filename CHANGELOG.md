@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+## [v0.18.4] - 2026-09-16
+
 ### Fixed
 
 - Notebook errors are no longer echoed to the server log, which now records how many there were and the server's own backtrace. Quarto redirects the server's stderr into a blocking pipe it drains once a second, so a notebook whose stacktraces exceeded that pipe's buffer blocked the write and hung the render. Quarto still reports the errors in full [#435]
@@ -467,6 +469,7 @@ caching is enabled. Delete this folder to clear the cache. [#259]
 [v0.18.1]: https://github.com/PumasAI/QuartoNotebookRunner.jl/releases/tag/v0.18.1
 [v0.18.2]: https://github.com/PumasAI/QuartoNotebookRunner.jl/releases/tag/v0.18.2
 [v0.18.3]: https://github.com/PumasAI/QuartoNotebookRunner.jl/releases/tag/v0.18.3
+[v0.18.4]: https://github.com/PumasAI/QuartoNotebookRunner.jl/releases/tag/v0.18.4
 [#9]: https://github.com/PumasAI/QuartoNotebookRunner.jl/issues/9
 [#11]: https://github.com/PumasAI/QuartoNotebookRunner.jl/issues/11
 [#14]: https://github.com/PumasAI/QuartoNotebookRunner.jl/issues/14
