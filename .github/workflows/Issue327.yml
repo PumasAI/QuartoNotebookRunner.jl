@@ -3,27 +3,30 @@ name: Issue 327
 # Reproduction harness for https://github.com/PumasAI/QuartoNotebookRunner.jl/issues/327,
 # a Windows render that never returns once a cell calls `OMJulia.OMCSession()`.
 #
-# The cause looks like the one #436 fixed for #329. OMJulia v0.3.2, the release
-# current when the issue was filed, spawns omc as
-# `open(pipeline(`$ompath $args1 $args2`))` in one branch only: Windows, with
-# the path taken from `OPENMODELICAHOME`, which is what `OMCSession()` with no
-# argument does there. Every other branch, Linux included, redirects stdout and
-# stderr to files. Unredirected, omc inherits the cell's capture pipe on stderr
-# and holds the write end for the life of the session, so the capture never
-# reaches end of file and the cell never ends. That is the matrix below: the
-# same notebook against the runner before and after #436, and against OMJulia
-# before and after it started redirecting.
+# The cause is the one #436 fixed for #329. omc outlives the cell that starts
+# it, so it holds the write end of the pipe the cell's output is captured
+# through, and a capture that waits for end of file waits for omc.
 #
-# The hang does not depend on `OMCSession()` succeeding. v0.3.2 waits 2 s for
-# omc's port file and then throws, without killing omc, so a slow start ends
-# the cell's code and leaves the pipe held all the same.
+# Run 35074896921 ran the notebook on Windows against OMJulia v0.3.2, the
+# release current when the issue was filed. v0.18.3 stopped at
+# `Running [2/3] ... omc = OMJulia.OMCSession();` and was killed at the 900 s
+# deadline, which is the issue's report line for line. The branch carrying #436
+# rendered in 128 s. Linux rendered in 100 s, as the issue says it does.
+#
+# Run 35079033299 added the port-file probe and kept each render. The probe
+# starts omc the way v0.3.2 does and reports the port file after 0.09-0.16 s
+# with omc still running, so nothing here turns on omc being slow or dead. The
+# branch renders all three cells and `getInstallationDirectoryPath()` returns
+# `C:/Program Files/OpenModelica1.25.1-64bit`. v0.18.3 hangs.
+#
+# It hangs against OMJulia v0.4.0 too, which redirects omc's stdout and stderr
+# to files in every branch. Redirecting the child's own streams does not stop it
+# inheriting the capture pipe on Windows, so upgrading OMJulia is not a way
+# around this and the runner change is what the notebook needs.
 #
 # Delete this workflow and `.github/issue327/` once the question is settled.
 
 on:
-  push:
-    branches:
-      - mh/issue-327-repro
   workflow_dispatch:
 
 permissions:
@@ -50,9 +53,9 @@ jobs:
           - os: windows-latest
             runner: branch
             omjulia: "0.3.2"
-          # OMJulia v0.4.0 redirects omc's output in every branch, so it should
-          # render without the runner fix. It is also the newest release in the
-          # General registry: v1.0.0 is tagged but not registered.
+          # OMJulia v0.4.0 redirects omc's output in every branch and hangs here
+          # anyway. It is the newest release in the General registry: v1.0.0 is
+          # tagged but not registered.
           - os: windows-latest
             runner: "0.18.3"
             omjulia: "0.4.0"
