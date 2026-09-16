@@ -122,3 +122,15 @@ jobs:
           bash .github/issue327/deadline.sh \
             "${{ matrix.os }} runner ${{ matrix.runner }} OMJulia ${{ matrix.omjulia }}" 900 \
             quarto render .github/issue327/reported.qmd --to html
+
+      # A render that finishes still has to have run the cells. The html says
+      # which of them produced output and what the errors were.
+      - name: Keep the rendered notebook
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: rendered-${{ matrix.os }}-${{ matrix.runner }}-${{ matrix.omjulia }}
+          path: |
+            .github/issue327/reported.html
+            .github/issue327/reported_files
+          if-no-files-found: warn
