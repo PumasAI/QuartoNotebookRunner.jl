@@ -21,7 +21,7 @@ import TOML
 
 is_precompiling() = ccall(:jl_generating_output, Cint, ()) == 1
 
-const packages = map(["Requires", "PackageExtensionCompat", "IOCapture"]) do each
+const packages = map(["Requires", "PackageExtensionCompat"]) do each
     joinpath(@__DIR__, "vendor", each, "src", "$each.jl")
 end
 const rewrites = Set(Symbol.(first.(splitext.(basename.(packages)))))
