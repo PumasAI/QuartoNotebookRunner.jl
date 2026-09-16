@@ -1,0 +1,115 @@
+name: Issue 327
+
+# Reproduction harness for https://github.com/PumasAI/QuartoNotebookRunner.jl/issues/327,
+# a Windows render that never returns once a cell calls `OMJulia.OMCSession()`.
+#
+# The cause looks like the one #436 fixed for #329. OMJulia v0.3.2, the release
+# current when the issue was filed, spawns omc as
+# `open(pipeline(`$ompath $args1 $args2`))` in one branch only: Windows, with
+# the path taken from `OPENMODELICAHOME`, which is what `OMCSession()` with no
+# argument does there. Every other branch, Linux included, redirects stdout and
+# stderr to files. Unredirected, omc inherits the cell's capture pipe on stderr
+# and holds the write end for the life of the session, so the capture never
+# reaches end of file and the cell never ends. That is the matrix below: the
+# same notebook against the runner before and after #436, and against OMJulia
+# before and after it started redirecting.
+#
+# The hang does not depend on `OMCSession()` succeeding. v0.3.2 waits 2 s for
+# omc's port file and then throws, without killing omc, so a slow start ends
+# the cell's code and leaves the pipe held all the same.
+#
+# Delete this workflow and `.github/issue327/` once the question is settled.
+
+on:
+  push:
+    branches:
+      - mh/issue-327-repro
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  render:
+    name: ${{ matrix.os }} / runner ${{ matrix.runner }} / OMJulia ${{ matrix.omjulia }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # The combination the issue reports.
+          - os: windows-latest
+            runner: "0.18.3"
+            omjulia: "0.3.2"
+          # The same thing with #436 in the runner.
+          - os: windows-latest
+            runner: branch
+            omjulia: "0.3.2"
+          # OMJulia v1.0.0 redirects omc's output in every branch, so it should
+          # render without the runner fix.
+          - os: windows-latest
+            runner: "0.18.3"
+            omjulia: "1.0.0"
+          # What a reader of the issue gets today.
+          - os: windows-latest
+            runner: branch
+            omjulia: "1.0.0"
+          # Linux rendered the notebook all along.
+          - os: ubuntu-latest
+            runner: "0.18.3"
+            omjulia: "0.3.2"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: julia-actions/install-juliaup@1cc1b0ecfb06c04ff09fe24cab1476106460750e # v3.1.5
+        with:
+          channel: "lts"
+
+      - uses: quarto-dev/quarto-actions/setup@8a96df13519ee81fd526f2dfca5962811136661b # v2.2.0
+        with:
+          version: 1.10.18
+
+      # Sets `OPENMODELICAHOME` on Windows, which is the branch of `OMCSession`
+      # the issue goes through.
+      - uses: OpenModelica/setup-openmodelica@419f31141aa79a22f7033def5626047dd3bb5069 # v1.2
+        with:
+          version: "1.25.1"
+
+      - name: Report the versions under test
+        run: |
+          omc --version || true
+          quarto --version
+          julia --version
+
+      - name: Install QuartoNotebookRunner ${{ matrix.runner }}
+        env:
+          RUNNER_SOURCE: ${{ matrix.runner }}
+        run: |
+          mkdir -p qnrenv
+          julia --project=qnrenv <<'EOF'
+          using Pkg
+          if ENV["RUNNER_SOURCE"] == "branch"
+              Pkg.develop(; path = pwd())
+          else
+              Pkg.add(; name = "QuartoNotebookRunner", version = ENV["RUNNER_SOURCE"])
+          end
+          Pkg.instantiate()
+          Pkg.precompile()
+          EOF
+
+      - name: Render reported.qmd
+        continue-on-error: true
+        env:
+          QUARTO_JULIA_PROJECT: ${{ github.workspace }}/qnrenv
+          OMJULIA_VERSION: ${{ matrix.omjulia }}
+        run: |
+          bash .github/issue327/deadline.sh \
+            "${{ matrix.os }} runner ${{ matrix.runner }} OMJulia ${{ matrix.omjulia }}" 900 \
+            quarto render .github/issue327/reported.qmd --to html

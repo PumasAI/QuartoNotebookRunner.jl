@@ -1,0 +1,24 @@
+---
+title: openmodelica_quarto
+engine: julia
+---
+
+```{julia}
+using Pkg
+Pkg.activate("omenv")
+Pkg.add(name = "OMJulia", version = ENV["OMJULIA_VERSION"])
+
+using OMJulia
+```
+
+Calling `OMCSession` hangs the render on Windows and works from the REPL.
+
+```{julia}
+omc = OMJulia.OMCSession();
+```
+
+The cell below never ran in the report.
+
+```{julia}
+installDir = OMJulia.sendExpression(omc, "getInstallationDirectoryPath()")
+```
