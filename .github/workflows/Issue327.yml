@@ -50,15 +50,16 @@ jobs:
           - os: windows-latest
             runner: branch
             omjulia: "0.3.2"
-          # OMJulia v1.0.0 redirects omc's output in every branch, so it should
-          # render without the runner fix.
+          # OMJulia v0.4.0 redirects omc's output in every branch, so it should
+          # render without the runner fix. It is also the newest release in the
+          # General registry: v1.0.0 is tagged but not registered.
           - os: windows-latest
             runner: "0.18.3"
-            omjulia: "1.0.0"
+            omjulia: "0.4.0"
           # What a reader of the issue gets today.
           - os: windows-latest
             runner: branch
-            omjulia: "1.0.0"
+            omjulia: "0.4.0"
           # Linux rendered the notebook all along.
           - os: ubuntu-latest
             runner: "0.18.3"
@@ -87,6 +88,14 @@ jobs:
           omc --version || true
           quarto --version
           julia --version
+
+      # Whether omc announces its port inside the 2 s v0.3.2 allows, and whether
+      # it stays alive when it does not. A cell that ends because omc died says
+      # nothing about the capture.
+      - name: Time omc's port file
+        if: runner.os == 'Windows'
+        continue-on-error: true
+        run: julia .github/issue327/port-file-probe.jl
 
       - name: Install QuartoNotebookRunner ${{ matrix.runner }}
         env:
