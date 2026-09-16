@@ -14,6 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A worker that writes to `stdout` can still shut down. The worker reported its port on `stdout`, and nothing read that pipe afterwards, so a worker printing more than the pipe buffer could no longer exit and took 30 seconds and a `SIGKILL` to close. The port now goes through a file instead [#436]
 - Worker environments are keyed on the worker package path as well as its `Project.toml`, so two checkouts of one version no longer share an environment and run whichever of them was developed into it first [#436]
 - Waiting for a worker to report its port is bounded, and says which port file it waited on and which environment the worker loaded when the deadline passes. `QUARTONOTEBOOKRUNNER_WORKER_STARTUP_TIMEOUT` sets that deadline. A worker that starts but never reports a port used to hang the server with no message [#436]
+- R plots are no longer blank under `fig-format: svg`. R's `svg()` device measures width and height in inches while `png()` measures them in pixels, and the RCall extension passed pixels to both, so a 6 by 5 inch figure asked for a 576 by 480 inch canvas that its contents disappeared into. `png()` now also receives `res`, so `fig-dpi` sets the resolution rather than enlarging the drawing area [#440]
 - A cell that starts a process and leaves it running no longer hangs the notebook. Cell output is captured through a pipe, a process the cell starts inherits the write end, and the capture waited for that pipe to reach its end, so it waited for the process. On Windows `PlotlyKaleido.start()` is enough to trigger it. Such a process now gets a write error if it writes to those streams after its cell has finished [#329]
 
 ### Changed
@@ -571,3 +572,4 @@ caching is enabled. Delete this folder to clear the cache. [#259]
 [#431]: https://github.com/PumasAI/QuartoNotebookRunner.jl/issues/431
 [#435]: https://github.com/PumasAI/QuartoNotebookRunner.jl/issues/435
 [#436]: https://github.com/PumasAI/QuartoNotebookRunner.jl/issues/436
+[#440]: https://github.com/PumasAI/QuartoNotebookRunner.jl/issues/440
