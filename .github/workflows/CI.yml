@@ -69,7 +69,7 @@ jobs:
         with:
           persist-credentials: false
 
-      - uses: julia-actions/install-juliaup@1cc1b0ecfb06c04ff09fe24cab1476106460750e # v3.1.5
+      - uses: julia-actions/install-juliaup@8d13b44e0eb1620c4e2d2d0a4ceee7d98100b955 # v3.1.6
         with:
           channel: "${{ matrix.version }}"
 
@@ -80,7 +80,7 @@ jobs:
 
       - uses: julia-actions/cache@a7bed9df697e5d7309d68afe7542a87621a8b6c8 # v3.3.0
 
-      - uses: r-lib/actions/setup-r@465b7d8e732ca3921382b1674c59bada9cbf3399 # v2.13.0
+      - uses: r-lib/actions/setup-r@f9a764fea8d5c63df6ef9a5c7795bf7deb5d7e05 # v2.14.0
         with:
           use-public-rspm: true
           r-version: "4.3.3"
@@ -124,7 +124,7 @@ jobs:
           depwarn: "yes"
       - uses: julia-actions/julia-processcoverage@03114f09f119417c3242a9fb6e0b722676aedf38 # v1.2.2
         if: matrix.os == 'ubuntu-latest' && matrix.version == '1'
-      - uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v7.0.0
+      - uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7.1.1
         if: matrix.os == 'ubuntu-latest' && matrix.version == '1'
         with:
           verbose: true
