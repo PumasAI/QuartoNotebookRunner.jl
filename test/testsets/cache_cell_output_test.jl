@@ -52,3 +52,24 @@
         end
     end
 end
+
+@testitem "cache invalidation on metadata change" tags = [:notebook] begin
+    import QuartoNotebookRunner as QNR
+
+    notebook_file = joinpath(@__DIR__, "..", "examples", "cache-cell-output.qmd")
+    cache = joinpath(dirname(notebook_file), ".cache")
+    isdir(cache) && rm(cache; recursive = true)
+
+    D = Dict{String,Any}
+    options(value) = D("format" => D("metadata" => D("custom" => D("key" => value))))
+    cell_output(server, value) =
+        QNR.run!(server, notebook_file; options = options(value)).cells[2].outputs[1].data["text/plain"]
+
+    server = QNR.Server()
+    first_output = cell_output(server, 1)
+    @test cell_output(server, 1) == first_output
+    @test cell_output(server, 2) != first_output
+    QNR.close!(server)
+
+    rm(cache; recursive = true)
+end

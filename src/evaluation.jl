@@ -85,8 +85,8 @@ function evaluate!(
             raw_text_chunks(f, markdown; source_ranges)
         merged_options = _extract_relevant_options(file_frontmatter, options)
 
-        # A change of parameter values must invalidate the source code hash.
-        source_code_hash = hash(merged_options["params"], source_code_hash)
+        # A change of metadata, including parameter values, must invalidate the source code hash.
+        source_code_hash = hash(merged_options["format"]["metadata"], source_code_hash)
 
         Logging.@debug "evaluate!" path chunks = length(raw_chunks)
         refresh!(f, merged_options)

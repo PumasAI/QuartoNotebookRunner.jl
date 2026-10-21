@@ -9,7 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- `notebook_options()` now includes all document and project metadata under `format.metadata`, not only `julia` and `params`.
+- `notebook_options()` now includes all document and project metadata under `format.metadata`, not only `julia` and `params` [#447]
+
+### Changed
+
+- Any change to document or project metadata now invalidates the cell output cache, not only changes to `params` [#447]
 
 ## [v0.18.4] - 2026-09-16
 
@@ -580,3 +584,4 @@ caching is enabled. Delete this folder to clear the cache. [#259]
 [#435]: https://github.com/PumasAI/QuartoNotebookRunner.jl/issues/435
 [#436]: https://github.com/PumasAI/QuartoNotebookRunner.jl/issues/436
 [#440]: https://github.com/PumasAI/QuartoNotebookRunner.jl/issues/440
+[#447]: https://github.com/PumasAI/QuartoNotebookRunner.jl/issues/447
