@@ -62,7 +62,7 @@ function _options_template(;
     error,
     eval,
     pandoc_to,
-    julia,
+    metadata,
     daemon,
     params,
     cache,
@@ -84,7 +84,7 @@ function _options_template(;
                 "cache" => cache,
             ),
             "pandoc" => D("to" => pandoc_to),
-            "metadata" => D("julia" => julia),
+            "metadata" => metadata,
         ),
         "params" => D(params),
         "env" => env,
@@ -101,6 +101,7 @@ Merge file frontmatter with runtime options into standardized format.
 function _extract_relevant_options(file_frontmatter::Dict, options::Dict)
     D = Dict{String,Any}
 
+    metadata_default = file_frontmatter
     file_frontmatter = _recursive_merge(default_frontmatter(), file_frontmatter)
 
     fig_width_default = get(file_frontmatter, "fig-width", nothing)
@@ -127,7 +128,10 @@ function _extract_relevant_options(file_frontmatter::Dict, options::Dict)
             error = error_default,
             eval = eval_default,
             pandoc_to = pandoc_to_default,
-            julia = julia_default,
+            metadata = merge(
+                metadata_default,
+                D("julia" => julia_default, "params" => params_default),
+            ),
             daemon = daemon_default,
             params = params_default,
             cache = cache_default,
@@ -174,7 +178,10 @@ function _extract_relevant_options(file_frontmatter::Dict, options::Dict)
             error,
             eval,
             pandoc_to,
-            julia = julia_merged,
+            metadata = merge(
+                metadata,
+                D("julia" => julia_merged, "params" => params_merged),
+            ),
             daemon,
             params = params_merged,
             cache,

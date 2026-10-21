@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+### Added
+
+- `notebook_options()` now includes all document and project metadata under `format.metadata`, not only `julia` and `params`.
+
 ## [v0.18.4] - 2026-09-16
 
 ### Fixed

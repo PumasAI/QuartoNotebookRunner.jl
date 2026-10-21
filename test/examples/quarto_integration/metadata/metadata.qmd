@@ -1,0 +1,12 @@
+---
+engine: julia
+custom:
+  from_document: document
+  shared: document
+---
+
+```{julia}
+import QuartoNotebookWorker
+custom = QuartoNotebookWorker.notebook_options()["format"]["metadata"]["custom"]
+print(join(sort(["$k=$v" for (k, v) in custom]), ", "))
+```
