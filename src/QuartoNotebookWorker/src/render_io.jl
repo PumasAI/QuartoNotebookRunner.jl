@@ -67,9 +67,9 @@ Base.unsafe_write(stream::CapturedStream, p::Ptr{UInt8}, nb::UInt) =
     _write!(io -> unsafe_write(io, p, nb), stream)
 Base.write(stream::CapturedStream, byte::UInt8) = _write!(io -> write(io, byte), stream)
 
-# A cell can keep a reference to its stream, such as a logger it installs. Once
-# the cell has finished, a write through that reference goes to the stream of
-# the same name that is current, as it would in a REPL.
+# A cell can keep a reference to its stream, as in `saved = stdout`. Once the
+# cell has finished, a write through that reference goes to the stream of the
+# same name that is current, as it would in a REPL.
 function _write!(write_bytes, stream::CapturedStream)
     if isopen(stream.pipe.in)
         return _record!(write_bytes, stream.runs, stream.name)
