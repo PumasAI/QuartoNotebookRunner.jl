@@ -84,6 +84,7 @@ function include_str(
     file::AbstractString,
     line::Integer,
     cell_options::AbstractDict,
+    displays::Vector{Any},
 )
     loc = LineNumberNode(line, Symbol(file))
     try
@@ -91,6 +92,7 @@ function include_str(
         @assert Meta.isexpr(ast, :toplevel)
         return io_capture(;
             cell_options = cell_options,
+            displays,
             rethrow = InterruptException,
             color = true,
             io_context = _io_context(mod, cell_options),

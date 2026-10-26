@@ -1,10 +1,10 @@
 # IO capture and context for cell evaluation.
 
-function io_capture(f; cell_options, kws...)
+function io_capture(f; cell_options, displays::Vector{Any}, kws...)
     # Extensions append themselves as they load, so anything past this mark
     # loaded while the cell ran.
     mark = length(LOADED_EXTENSIONS)
-    captured = _capture(f; kws...)
+    captured = _capture(f, displays; kws...)
     extensions = @view LOADED_EXTENSIONS[mark+1:end]
     warning = get(cell_options, "warning", true)
     return merge(
@@ -114,11 +114,17 @@ end
 # ends, and would hold the cell open for as long as it runs.
 #
 # Derived from IOCapture.jl (MIT), which took it from Documenter.jl.
-function _capture(f; rethrow::Type = Any, color::Bool = false, io_context = ())
+function _capture(
+    f,
+    displays::Vector{Any};
+    rethrow::Type = Any,
+    color::Bool = false,
+    io_context = (),
+)
     default_stdout = stdout
     default_stderr = stderr
 
-    runs = StreamRuns(inline_display_queue())
+    runs = StreamRuns(displays)
     captured_stdout = CapturedStream("stdout", runs)
     captured_stderr = CapturedStream("stderr", runs)
     colored = get(default_stdout, :color, false) & color

@@ -16,9 +16,11 @@ function render(
     # matter to the server, it's just the outermost cell that matters.
     is_expansion_ref = Ref(false)
     cells = Base.@invokelatest(
-        collect(_render_thunk(code, mod, cell_options, is_expansion_ref; inline) do
-                Base.@invokelatest include_str(mod, code; file, line, cell_options)
-            end)
+        collect(
+            _render_thunk(code, mod, cell_options, is_expansion_ref; inline) do displays
+                Base.@invokelatest include_str(mod, code; file, line, cell_options, displays)
+            end,
+        )
     )
     return WorkerIPC.RenderResponse(cells, is_expansion_ref[])
 end
@@ -26,7 +28,7 @@ end
 # Recursively render cell thunks. This might be an `include_str` call,
 # which is the starting point for a source cell, or it may be a
 # user-provided thunk that comes from a source cell with `expand` set
-# to `true`.
+# to `true`. The thunk receives the cell's display queue.
 function _render_thunk(
     thunk::Base.Callable,
     code::AbstractString,
@@ -73,10 +75,11 @@ function _render_thunk(
         # the results to a single list of cells before passing back
         # to the server. Cell expansion is recursive.
         return _flatmap(expansion) do cell
-            wrapped = function ()
+            wrapped = function (displays)
                 return io_capture(
                     cell.thunk;
                     cell_options = cell.options,
+                    displays,
                     rethrow = InterruptException,
                     color = true,
                 )
