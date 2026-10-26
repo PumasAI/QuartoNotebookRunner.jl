@@ -24,6 +24,14 @@ function Base.display(d::InlineDisplay, x)
 end
 Base.displayable(::InlineDisplay, m::MIME) = true
 
+# The queue that the cell's `display` calls are going to, empty outside a cell.
+function inline_display_queue()
+    for display in Iterators.reverse(Base.Multimedia.displays)
+        display isa InlineDisplay && return display.queue
+    end
+    return Any[]
+end
+
 function with_inline_display(f, cell_options)
     inline_display = InlineDisplay(cell_options)
     pushdisplay(inline_display)

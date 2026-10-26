@@ -17,6 +17,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Log records render in the `stderr` stream, styled by Quarto's `.cell-output-stderr` class [#450]
 - `warning: false` no longer raises the global log level while the cell runs. Records still reach any logger the cell installs itself, and the worker drops the cell's `stderr` output afterwards [#450]
 - A cell's `stdout` or `stderr` that code keeps hold of, as in `saved = stdout`, now writes into the output of whichever cell runs later. Writing to it used to throw an `IOError` once its own cell had finished [#450]
+- Printed output and the objects a cell passes to `display` appear in the order the cell produced them. All printed output used to come before every displayed object. In a cell with a figure `layout`, each block of printed output now takes its place in the grid in code order, as Quarto lays out knitr output [#451]
 
 ## [v0.18.5] - 2026-10-21
 
@@ -600,3 +601,4 @@ caching is enabled. Delete this folder to clear the cache. [#259]
 [#440]: https://github.com/PumasAI/QuartoNotebookRunner.jl/issues/440
 [#447]: https://github.com/PumasAI/QuartoNotebookRunner.jl/issues/447
 [#450]: https://github.com/PumasAI/QuartoNotebookRunner.jl/issues/450
+[#451]: https://github.com/PumasAI/QuartoNotebookRunner.jl/issues/451

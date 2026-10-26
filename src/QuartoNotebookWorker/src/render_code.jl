@@ -124,7 +124,7 @@ function include_str(
         if err isa Base.Meta.ParseError
             return (;
                 result = err,
-                streams = Tuple{String,String}[],
+                streams = Tuple{String,String,Int}[],
                 error = true,
                 backtrace = catch_backtrace(),
             )

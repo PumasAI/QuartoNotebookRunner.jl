@@ -11,8 +11,11 @@
         println("four")
         """
         response = QNW.render(code, "test.jl", 1; mod)
-        @test response.cells[1].streams ==
-              [("stdout", "one\n"), ("stderr", "two\n"), ("stdout", "three\nfour\n")]
+        @test response.cells[1].streams == [
+            ("stdout", "one\n", 0),
+            ("stderr", "two\n", 0),
+            ("stdout", "three\nfour\n", 0),
+        ]
     end
 end
 
@@ -42,7 +45,7 @@ end
         nothing
         """
         response = QNW.render(code, "test.jl", 1; mod)
-        streams = Dict(response.cells[1].streams)
+        streams = Dict(name => text for (name, text, _) in response.cells[1].streams)
         @test streams["stdout"] == "out\n"
         @test streams["stderr"] == "err\n"
     end
@@ -63,7 +66,7 @@ end
         """
         options = Dict{String,Any}("warning" => false)
         response = QNW.render(code, "test.jl", 1, options; mod)
-        @test response.cells[1].streams == [("stdout", "one\ntwo\n")]
+        @test response.cells[1].streams == [("stdout", "one\ntwo\n", 0)]
     end
 end
 
@@ -106,8 +109,54 @@ end
         response = QNW.render(code, "test.jl", 2; mod)
         @test response.cells[1].error === nothing
         @test first.(response.cells[1].streams) == ["stdout", "stderr"]
-        @test last(response.cells[1].streams[1]) == "late\n"
-        @test contains(last(response.cells[1].streams[2]), "late warning")
+        @test response.cells[1].streams[1][2] == "late\n"
+        @test contains(response.cells[1].streams[2][2], "late warning")
+    end
+end
+
+@testitem "streams record how many displays came before them" begin
+    import QuartoNotebookWorker as QNW
+
+    QNW.NotebookState.with_test_context() do
+        mod = QNW.NotebookState.notebook_module()
+
+        code = """
+        println("before")
+        display("first")
+        println("between")
+        println(stderr, "still between")
+        display("second")
+        display("third")
+        println("after")
+        """
+        response = QNW.render(code, "test.jl", 1; mod)
+        @test response.cells[1].streams == [
+            ("stdout", "before\n", 0),
+            ("stdout", "between\n", 1),
+            ("stderr", "still between\n", 1),
+            ("stdout", "after\n", 3),
+        ]
+        @test length(response.cells[1].display_results) == 3
+    end
+end
+
+@testitem "warning false joins stdout only between the same displays" begin
+    import QuartoNotebookWorker as QNW
+
+    QNW.NotebookState.with_test_context() do
+        mod = QNW.NotebookState.notebook_module()
+
+        code = """
+        println("one")
+        @warn "hidden"
+        println("two")
+        display("shown")
+        println("three")
+        """
+        options = Dict{String,Any}("warning" => false)
+        response = QNW.render(code, "test.jl", 1, options; mod)
+        @test response.cells[1].streams ==
+              [("stdout", "one\ntwo\n", 0), ("stdout", "three\n", 1)]
     end
 end
 

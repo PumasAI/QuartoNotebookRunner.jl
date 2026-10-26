@@ -21,7 +21,7 @@ end
         mod = QNW.NotebookState.notebook_module()
 
         response = QNW.render("println(\"hello\")", "test.jl", 1; mod)
-        @test response.cells[1].streams == [("stdout", "hello\n")]
+        @test response.cells[1].streams == [("stdout", "hello\n", 0)]
     end
 end
 

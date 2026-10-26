@@ -45,7 +45,7 @@ PrecompileTools.@setup_workload begin
                             WorkerIPC.MimeResult("text/plain", false, UInt8[0x31]),
                     ),
                     WorkerIPC.MimeResult[],
-                    [("stdout", "1\n")],
+                    [("stdout", "1\n", 0)],
                     nothing,
                     String[],
                 ),

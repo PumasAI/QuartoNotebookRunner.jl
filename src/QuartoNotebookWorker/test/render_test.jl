@@ -161,10 +161,12 @@ end
 
         if !Sys.iswindows()
             response = QNW.render(";echo OK", "test.jl", 1; mod)
-            @test contains(Dict(response.cells[1].streams)["stdout"], "OK")
+            @test only(response.cells[1].streams)[1] == "stdout"
+            @test contains(only(response.cells[1].streams)[2], "OK")
         else
             response = QNW.render(";cmd /c echo OK", "test.jl", 1; mod)
-            @test contains(Dict(response.cells[1].streams)["stdout"], "OK")
+            @test only(response.cells[1].streams)[1] == "stdout"
+            @test contains(only(response.cells[1].streams)[2], "OK")
         end
     end
 end
@@ -176,7 +178,7 @@ end
         mod = QNW.NotebookState.notebook_module()
 
         response = QNW.render("]status", "test.jl", 1; mod)
-        output = join(last.(response.cells[1].streams))
+        output = join(text for (_, text, _) in response.cells[1].streams)
         @test contains(output, "Status") || contains(output, "Project")
     end
 end
@@ -210,7 +212,7 @@ end
         print(x)
         """
         response = QNW.render(code, "test.jl", 1; mod)
-        @test response.cells[1].streams == [("stdout", "M(22)")]
+        @test response.cells[1].streams == [("stdout", "M(22)", 0)]
     end
 end
 

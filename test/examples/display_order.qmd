@@ -1,0 +1,26 @@
+---
+title: display order
+---
+
+```{julia}
+println("before")
+display("first")
+println("between")
+display("second")
+println("after")
+```
+
+```{julia}
+println("computing")
+display("shown")
+@info "done"
+1 + 1
+```
+
+```{julia}
+#| warning: false
+println("one")
+@warn "hidden"
+display("shown")
+println("two")
+```
