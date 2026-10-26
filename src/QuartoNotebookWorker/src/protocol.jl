@@ -15,7 +15,7 @@ Base.lock(f, lio::LockableIO) =
 
 const MsgID = UInt64
 const MAGIC = UInt32(0x514E5257)  # "QNRW"
-const PROTOCOL_VERSION = UInt8(6)  # Separate notebook context key from source file
+const PROTOCOL_VERSION = UInt8(7)  # Separate stdout and stderr streams in cell results
 
 module MsgType
 const CALL = 0x01       # expects response
@@ -117,7 +117,7 @@ struct CellResult
     cell_options::Dict{String,Any}
     results::Dict{String,MimeResult}
     display_results::Vector{Dict{String,MimeResult}}
-    output::String
+    streams::Vector{Tuple{String,String}}
     error::Union{Nothing,String}
     backtrace::Vector{String}
 end
@@ -268,7 +268,7 @@ function _serialize(io::IO, x::CellResult)
     _serialize(io, x.cell_options)
     _serialize(io, x.results)
     _serialize(io, x.display_results)
-    _serialize(io, x.output)
+    _serialize(io, x.streams)
     _serialize(io, x.error)
     _serialize(io, x.backtrace)
 end

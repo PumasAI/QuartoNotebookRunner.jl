@@ -5,7 +5,7 @@
     json, server = RTS.run_notebook(joinpath(@__DIR__, "..", "examples", "stdout.qmd"))
     RTS.validate_notebook(json)
 
-    @test length(json["cells"]) == 21
+    @test length(json["cells"]) == 25
 
     cell = json["cells"][1]
     @test cell["cell_type"] == "markdown"
@@ -47,7 +47,7 @@
     @test cell["cell_type"] == "code"
     @test cell["execution_count"] == 1
     @test cell["outputs"][1]["output_type"] == "stream"
-    @test cell["outputs"][1]["name"] == "stdout"
+    @test cell["outputs"][1]["name"] == "stderr"
     @test contains(cell["outputs"][1]["text"], "Info:")
     @test contains(cell["outputs"][1]["text"], "info text")
     @test contains(cell["outputs"][1]["text"], "value = 1")
@@ -59,7 +59,7 @@
     @test cell["cell_type"] == "code"
     @test cell["execution_count"] == 1
     @test cell["outputs"][1]["output_type"] == "stream"
-    @test cell["outputs"][1]["name"] == "stdout"
+    @test cell["outputs"][1]["name"] == "stderr"
     @test contains(cell["outputs"][1]["text"], "Warning:")
     @test contains(cell["outputs"][1]["text"], "warn text")
     @test contains(cell["outputs"][1]["text"], "value = 2")
@@ -71,7 +71,7 @@
     @test cell["cell_type"] == "code"
     @test cell["execution_count"] == 1
     @test cell["outputs"][1]["output_type"] == "stream"
-    @test cell["outputs"][1]["name"] == "stdout"
+    @test cell["outputs"][1]["name"] == "stderr"
     @test contains(cell["outputs"][1]["text"], "Error:")
     @test contains(cell["outputs"][1]["text"], "error text")
     @test contains(cell["outputs"][1]["text"], "value = 3")
@@ -87,11 +87,19 @@
         outputs = cell["outputs"]
         @test length(outputs) == 1
         @test outputs[1]["output_type"] == "stream"
+        @test outputs[1]["name"] == "stderr"
         @test contains(outputs[1]["text"], "info")
         @test contains(outputs[1]["text"], "warn")
         @test contains(outputs[1]["text"], "error")
         @test contains(outputs[1]["text"], "stdout.qmd")
     end
+
+    # Stream order
+    streams = [(output["name"], output["text"]) for output in json["cells"][22]["outputs"]]
+    @test streams == [("stdout", "one\n"), ("stderr", "two\n"), ("stdout", "three\n")]
+
+    streams = [(output["name"], output["text"]) for output in json["cells"][24]["outputs"]]
+    @test streams == [("stdout", "one\ntwo\n")]
 
     QNR.close!(server)
 end

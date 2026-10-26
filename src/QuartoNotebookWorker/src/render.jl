@@ -57,7 +57,7 @@ function _render_thunk(
                     Dict{String,Any}(), # or options
                     Dict{String,WorkerIPC.MimeResult}(),
                     display_results,
-                    captured.output,
+                    captured.streams,
                     string(typeof(error)),
                     collect(eachline(IOBuffer(clean_bt_str(true, backtrace, error, mod)))),
                 ),
@@ -105,7 +105,7 @@ function _render_thunk(
                 Dict{String,Any}(cell_options),
                 results,
                 display_results,
-                captured.output,
+                captured.streams,
                 captured.error ? string(typeof(captured.value)) : nothing,
                 collect(
                     eachline(

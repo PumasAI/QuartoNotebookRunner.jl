@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+### Fixed
+
+- Output a cell writes to `stderr` now reaches Quarto as a `stderr` stream, so `warning: false` hides it as it does under the Jupyter engine. The worker used to capture both streams through one pipe and report everything as `stdout`, so only log records could be hidden [#450]
+
+### Changed
+
+- A cell's output streams are reported in the order the cell wrote them, as alternating `stdout` and `stderr` outputs, and Quarto renders each one as its own block. Output from C libraries and subprocesses is placed when the worker reads it, so its order relative to output written from Julia is approximate [#450]
+- Log records render in the `stderr` stream, styled by Quarto's `.cell-output-stderr` class [#450]
+- `warning: false` no longer raises the global log level while the cell runs. Records still reach any logger the cell installs itself, and the worker drops the cell's `stderr` output afterwards [#450]
+
 ## [v0.18.5] - 2026-10-21
 
 ### Added
@@ -588,3 +598,4 @@ caching is enabled. Delete this folder to clear the cache. [#259]
 [#436]: https://github.com/PumasAI/QuartoNotebookRunner.jl/issues/436
 [#440]: https://github.com/PumasAI/QuartoNotebookRunner.jl/issues/440
 [#447]: https://github.com/PumasAI/QuartoNotebookRunner.jl/issues/447
+[#450]: https://github.com/PumasAI/QuartoNotebookRunner.jl/issues/450
