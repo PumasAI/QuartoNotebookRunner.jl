@@ -16,6 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A cell's output streams are reported in the order the cell wrote them, as alternating `stdout` and `stderr` outputs, and Quarto renders each one as its own block. Output from C libraries and subprocesses is placed when the worker reads it, so its order relative to output written from Julia is approximate [#450]
 - Log records render in the `stderr` stream, styled by Quarto's `.cell-output-stderr` class [#450]
 - `warning: false` no longer raises the global log level while the cell runs. Records still reach any logger the cell installs itself, and the worker drops the cell's `stderr` output afterwards [#450]
+- A cell's `stdout` or `stderr` that code keeps hold of, such as the stream behind a logger the cell installs, now writes into the output of whichever cell runs later. It used to throw an error once its own cell had finished [#450]
 
 ## [v0.18.5] - 2026-10-21
 
