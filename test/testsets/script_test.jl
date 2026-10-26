@@ -16,7 +16,7 @@
     @test cell["cell_type"] == "code"
     @test cell["execution_count"] == 1
     @test cell["outputs"][1]["output_type"] == "stream"
-    @test cell["outputs"][1]["name"] == "stdout"
+    @test cell["outputs"][1]["name"] == "stderr"
     @test contains(cell["outputs"][1]["text"], "Script files")
 
     cell = cells[3]

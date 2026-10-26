@@ -12,7 +12,7 @@
     @test cell["cell_type"] == "code"
     @test cell["execution_count"] == 1
     @test cell["outputs"][1]["output_type"] == "stream"
-    @test cell["outputs"][1]["name"] == "stdout"
+    @test cell["outputs"][1]["name"] == "stderr"
     @test cell["outputs"][2]["output_type"] == "execute_result"
     @test contains(cell["outputs"][2]["data"]["text/plain"], "10×10")
 
