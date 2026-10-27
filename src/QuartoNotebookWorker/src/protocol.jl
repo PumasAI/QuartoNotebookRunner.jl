@@ -15,7 +15,7 @@ Base.lock(f, lio::LockableIO) =
 
 const MsgID = UInt64
 const MAGIC = UInt32(0x514E5257)  # "QNRW"
-const PROTOCOL_VERSION = UInt8(7)  # Separate stdout and stderr streams in cell results
+const PROTOCOL_VERSION = UInt8(8)  # Place cell streams relative to display results
 
 module MsgType
 const CALL = 0x01       # expects response
@@ -117,7 +117,8 @@ struct CellResult
     cell_options::Dict{String,Any}
     results::Dict{String,MimeResult}
     display_results::Vector{Dict{String,MimeResult}}
-    streams::Vector{Tuple{String,String}}
+    # Stream name, text, and how many of `display_results` came before it.
+    streams::Vector{Tuple{String,String,Int}}
     error::Union{Nothing,String}
     backtrace::Vector{String}
 end

@@ -1,10 +1,10 @@
 # IO capture and context for cell evaluation.
 
-function io_capture(f; cell_options, kws...)
+function io_capture(f; cell_options, inline_display::InlineDisplay, kws...)
     # Extensions append themselves as they load, so anything past this mark
     # loaded while the cell ran.
     mark = length(LOADED_EXTENSIONS)
-    captured = _capture(f; kws...)
+    captured = _capture(f, inline_display; kws...)
     extensions = @view LOADED_EXTENSIONS[mark+1:end]
     warning = get(cell_options, "warning", true)
     return merge(
@@ -17,38 +17,43 @@ end
 # leave the `stdout` runs either side of each one as separate blocks, so the
 # worker drops those streams itself and joins the runs that remain.
 function _tidy_streams(streams, extensions, warning::Bool)
-    tidied = Tuple{String,String}[]
-    for (name, text) in streams
+    tidied = Tuple{String,String,Int}[]
+    for (name, text, displays) in streams
         warning || name == "stdout" || continue
         text = strip_worker_precompilation(text, extensions)
         isempty(text) && continue
-        if !isempty(tidied) && first(tidied[end]) == name
-            tidied[end] = (name, last(tidied[end]) * text)
+        previous = isempty(tidied) ? nothing : tidied[end]
+        if previous !== nothing && previous[1] == name && previous[3] == displays
+            tidied[end] = (name, previous[2] * text, displays)
         else
-            push!(tidied, (name, text))
+            push!(tidied, (name, text, displays))
         end
     end
     return tidied
 end
 
 # What a cell wrote, as runs of consecutive writes to one stream, in the order
-# they were written.
+# they were written. Each run notes how many of the cell's `display` calls came
+# before it, so a display between two writes to one stream splits the run. The
+# display's lock guards the runs too, so the count and the queue agree.
 struct StreamRuns
-    runs::Vector{Pair{String,IOBuffer}}
-    lock::ReentrantLock
+    runs::Vector{Tuple{String,Int,IOBuffer}}
+    inline_display::InlineDisplay
 end
-StreamRuns() = StreamRuns(Pair{String,IOBuffer}[], ReentrantLock())
+StreamRuns(inline_display) = StreamRuns(Tuple{String,Int,IOBuffer}[], inline_display)
 
 function _record!(write_bytes, runs::StreamRuns, name::String)
-    lock(runs.lock) do
-        if isempty(runs.runs) || first(runs.runs[end]) != name
-            push!(runs.runs, name => IOBuffer())
+    lock(runs.inline_display.lock) do
+        run = (name, length(runs.inline_display.queue))
+        if isempty(runs.runs) || runs.runs[end][1:2] != run
+            push!(runs.runs, (run..., IOBuffer()))
         end
-        write_bytes(last(runs.runs[end]))
+        write_bytes(runs.runs[end][3])
     end
 end
 
-_streams(runs::StreamRuns) = [(name, String(take!(buffer))) for (name, buffer) in runs.runs]
+_streams(runs::StreamRuns) =
+    [(name, String(take!(buffer)), displays) for (name, displays, buffer) in runs.runs]
 
 # One of the streams a cell writes to. A write from Julia is recorded as it
 # happens, which is what keeps the order across streams. The file descriptor
@@ -109,11 +114,17 @@ end
 # ends, and would hold the cell open for as long as it runs.
 #
 # Derived from IOCapture.jl (MIT), which took it from Documenter.jl.
-function _capture(f; rethrow::Type = Any, color::Bool = false, io_context = ())
+function _capture(
+    f,
+    inline_display::InlineDisplay;
+    rethrow::Type = Any,
+    color::Bool = false,
+    io_context = (),
+)
     default_stdout = stdout
     default_stderr = stderr
 
-    runs = StreamRuns()
+    runs = StreamRuns(inline_display)
     captured_stdout = CapturedStream("stdout", runs)
     captured_stderr = CapturedStream("stderr", runs)
     colored = get(default_stdout, :color, false) & color

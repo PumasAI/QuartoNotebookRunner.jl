@@ -99,7 +99,7 @@ end
                     IPC.MimeResult("text/html", false, UInt8[0x3c, 0x70, 0x3e]),
             ),
         ],
-        [("stdout", "out\n"), ("stderr", "err\n")],
+        [("stdout", "out\n", 0), ("stderr", "err\n", 1)],
         nothing,
         String[],
     )
@@ -111,7 +111,7 @@ end
     @test length(result.cells) == 1
     @test result.is_expansion == false
     @test result.cells[1].code == "code"
-    @test result.cells[1].streams == [("stdout", "out\n"), ("stderr", "err\n")]
+    @test result.cells[1].streams == [("stdout", "out\n", 0), ("stderr", "err\n", 1)]
     @test result.cells[1].error === nothing
     @test haskey(result.cells[1].results, "text/plain")
     @test result.cells[1].results["text/plain"].data == UInt8[0x32]

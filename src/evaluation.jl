@@ -399,32 +399,22 @@ function _format_worker_outputs(remote, allow_error_cell, record_error!, chunk)
     outputs = []
     processed = process_results(remote.results)
 
-    if isnothing(remote.error)
-        for display_result in remote.display_results
-            processed_display = process_results(display_result)
-            if !isempty(processed_display.data)
-                push!(
-                    outputs,
-                    (;
-                        output_type = "display_data",
-                        processed_display.data,
-                        processed_display.metadata,
-                    ),
-                )
-            end
-            if !isempty(processed_display.errors)
-                append!(outputs, processed_display.errors)
-                if !allow_error_cell
-                    for each_error in processed_display.errors
-                        record_error!(
-                            :show,
-                            "$(chunk.file):$(chunk.line)",
-                            join(each_error.traceback, "\n"),
-                        )
-                    end
-                end
-            end
+    # Streams and displays go out in the order the cell wrote them. A cell that
+    # throws keeps its streams but not its displays.
+    displays = isnothing(remote.error) ? remote.display_results : []
+    shown = 0
+    for (name, text, displays_before) in remote.streams
+        while shown < min(displays_before, length(displays))
+            shown += 1
+            _push_display!(outputs, displays[shown], allow_error_cell, record_error!, chunk)
         end
+        push!(outputs, (; output_type = "stream", name, text))
+    end
+    for display_result in displays[shown+1:end]
+        _push_display!(outputs, display_result, allow_error_cell, record_error!, chunk)
+    end
+
+    if isnothing(remote.error)
         if !isempty(processed.data)
             push!(
                 outputs,
@@ -456,26 +446,33 @@ function _format_worker_outputs(remote, allow_error_cell, record_error!, chunk)
         end
     end
 
-    prepend!(
-        outputs,
-        [(; output_type = "stream", name, text) for (name, text) in remote.streams],
-    )
-
     # Errors from the `show` output of values, not from cell evaluation.
     # If something throws here the user's `show` method has a bug.
-    if !isempty(processed.errors)
-        append!(outputs, processed.errors)
-        if !allow_error_cell
-            for each_error in processed.errors
-                record_error!(
-                    :show,
-                    "$(chunk.file):$(chunk.line)",
-                    join(each_error.traceback, "\n"),
-                )
-            end
+    _push_show_errors!(outputs, processed.errors, allow_error_cell, record_error!, chunk)
+
+    return outputs
+end
+
+function _push_display!(outputs, display_result, allow_error_cell, record_error!, chunk)
+    processed = process_results(display_result)
+    if !isempty(processed.data)
+        push!(outputs, (; output_type = "display_data", processed.data, processed.metadata))
+    end
+    _push_show_errors!(outputs, processed.errors, allow_error_cell, record_error!, chunk)
+    return outputs
+end
+
+function _push_show_errors!(outputs, errors, allow_error_cell, record_error!, chunk)
+    append!(outputs, errors)
+    if !allow_error_cell
+        for each_error in errors
+            record_error!(
+                :show,
+                "$(chunk.file):$(chunk.line)",
+                join(each_error.traceback, "\n"),
+            )
         end
     end
-
     return outputs
 end
 

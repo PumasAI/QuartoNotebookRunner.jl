@@ -84,6 +84,7 @@ function include_str(
     file::AbstractString,
     line::Integer,
     cell_options::AbstractDict,
+    inline_display::InlineDisplay,
 )
     loc = LineNumberNode(line, Symbol(file))
     try
@@ -91,6 +92,7 @@ function include_str(
         @assert Meta.isexpr(ast, :toplevel)
         return io_capture(;
             cell_options = cell_options,
+            inline_display,
             rethrow = InterruptException,
             color = true,
             io_context = _io_context(mod, cell_options),
@@ -124,7 +126,7 @@ function include_str(
         if err isa Base.Meta.ParseError
             return (;
                 result = err,
-                streams = Tuple{String,String}[],
+                streams = Tuple{String,String,Int}[],
                 error = true,
                 backtrace = catch_backtrace(),
             )
