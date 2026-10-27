@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+## [v0.18.6] - 2026-10-27
+
 ### Fixed
 
 - Output a cell writes to `stderr` now reaches Quarto as a `stderr` stream, so `warning: false` hides it as it does under the Jupyter engine. The worker used to capture both streams through one pipe and report everything as `stdout`, so only log records could be hidden [#450]
@@ -493,6 +495,7 @@ caching is enabled. Delete this folder to clear the cache. [#259]
 [v0.18.3]: https://github.com/PumasAI/QuartoNotebookRunner.jl/releases/tag/v0.18.3
 [v0.18.4]: https://github.com/PumasAI/QuartoNotebookRunner.jl/releases/tag/v0.18.4
 [v0.18.5]: https://github.com/PumasAI/QuartoNotebookRunner.jl/releases/tag/v0.18.5
+[v0.18.6]: https://github.com/PumasAI/QuartoNotebookRunner.jl/releases/tag/v0.18.6
 [#9]: https://github.com/PumasAI/QuartoNotebookRunner.jl/issues/9
 [#11]: https://github.com/PumasAI/QuartoNotebookRunner.jl/issues/11
 [#14]: https://github.com/PumasAI/QuartoNotebookRunner.jl/issues/14
