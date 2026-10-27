@@ -393,7 +393,7 @@ end
     _format_worker_outputs(remote, allow_error_cell, record_error!, chunk)
 
 Build the outputs vector for a single worker result cell. Handles display results,
-execute results, evaluation errors, stdout, and show errors.
+execute results, evaluation errors, output streams, and show errors.
 """
 function _format_worker_outputs(remote, allow_error_cell, record_error!, chunk)
     outputs = []
@@ -456,12 +456,10 @@ function _format_worker_outputs(remote, allow_error_cell, record_error!, chunk)
         end
     end
 
-    if !isempty(remote.output)
-        pushfirst!(
-            outputs,
-            (; output_type = "stream", name = "stdout", text = remote.output),
-        )
-    end
+    prepend!(
+        outputs,
+        [(; output_type = "stream", name, text) for (name, text) in remote.streams],
+    )
 
     # Errors from the `show` output of values, not from cell evaluation.
     # If something throws here the user's `show` method has a bug.

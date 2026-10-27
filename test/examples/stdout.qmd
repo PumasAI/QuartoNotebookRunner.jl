@@ -60,3 +60,19 @@ Warning suppression:
 @warn "explicit warn"
 @error "explicit error"
 ```
+
+Stream order:
+
+```{julia}
+println("one")
+println(stderr, "two")
+println("three")
+```
+
+```{julia}
+#| warning: false
+println("one")
+@warn "hidden warning"
+println(stderr, "hidden direct write")
+println("two")
+```

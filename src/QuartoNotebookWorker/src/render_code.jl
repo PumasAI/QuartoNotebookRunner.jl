@@ -89,9 +89,6 @@ function include_str(
     try
         ast = _process_code(mod, code; filename = file, lineno = line)
         @assert Meta.isexpr(ast, :toplevel)
-        # Note: IO capturing combines stdout and stderr into a single
-        # `.output`, but Jupyter notebook spec appears to want them
-        # separate. Revisit this if it causes issues.
         return io_capture(;
             cell_options = cell_options,
             rethrow = InterruptException,
@@ -127,7 +124,7 @@ function include_str(
         if err isa Base.Meta.ParseError
             return (;
                 result = err,
-                output = "",
+                streams = Tuple{String,String}[],
                 error = true,
                 backtrace = catch_backtrace(),
             )

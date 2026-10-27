@@ -1,58 +1,136 @@
 # IO capture and context for cell evaluation.
 
 function io_capture(f; cell_options, kws...)
-    warning = get(cell_options, "warning", true)
-    capture() = _capture(f; kws...)
     # Extensions append themselves as they load, so anything past this mark
     # loaded while the cell ran.
     mark = length(LOADED_EXTENSIONS)
-    captured = if warning
-        capture()
-    else
-        logger = Logging.global_logger()
-        current_level = Logging.min_enabled_level(logger)
-        try
-            Logging.disable_logging(Logging.Error)
-            capture()
-        finally
-            Logging.disable_logging(current_level - 1)
-        end
-    end
+    captured = _capture(f; kws...)
     extensions = @view LOADED_EXTENSIONS[mark+1:end]
+    warning = get(cell_options, "warning", true)
     return merge(
         captured,
-        (; output = strip_worker_precompilation(captured.output, extensions)),
+        (; streams = _tidy_streams(captured.streams, extensions, warning)),
     )
 end
 
-# Capture what the cell writes to `stdout`, `stderr` and the logger. The reader
-# stops once the cell's code has returned rather than once the pipe reaches its
+# Quarto drops the `stderr` streams of a cell with `warning: false`, which would
+# leave the `stdout` runs either side of each one as separate blocks, so the
+# worker drops those streams itself and joins the runs that remain.
+function _tidy_streams(streams, extensions, warning::Bool)
+    tidied = Tuple{String,String}[]
+    for (name, text) in streams
+        warning || name == "stdout" || continue
+        text = strip_worker_precompilation(text, extensions)
+        isempty(text) && continue
+        if !isempty(tidied) && first(tidied[end]) == name
+            tidied[end] = (name, last(tidied[end]) * text)
+        else
+            push!(tidied, (name, text))
+        end
+    end
+    return tidied
+end
+
+# What a cell wrote, as runs of consecutive writes to one stream, in the order
+# they were written.
+struct StreamRuns
+    runs::Vector{Pair{String,IOBuffer}}
+    lock::ReentrantLock
+end
+StreamRuns() = StreamRuns(Pair{String,IOBuffer}[], ReentrantLock())
+
+function _record!(write_bytes, runs::StreamRuns, name::String)
+    lock(runs.lock) do
+        if isempty(runs.runs) || first(runs.runs[end]) != name
+            push!(runs.runs, name => IOBuffer())
+        end
+        write_bytes(last(runs.runs[end]))
+    end
+end
+
+_streams(runs::StreamRuns) = [(name, String(take!(buffer))) for (name, buffer) in runs.runs]
+
+# One of the streams a cell writes to. A write from Julia is recorded as it
+# happens, which is what keeps the order across streams. The file descriptor
+# points at `pipe` instead, so writes from C libraries and subprocesses are
+# recorded when the reader gets to them.
+struct CapturedStream <: Base.AbstractPipe
+    name::String
+    pipe::Pipe
+    runs::StreamRuns
+end
+
+Base.pipe_writer(stream::CapturedStream) = stream.pipe.in
+Base.pipe_reader(stream::CapturedStream) = stream.pipe.out
+
+Base.unsafe_write(stream::CapturedStream, p::Ptr{UInt8}, nb::UInt) =
+    _write!(io -> unsafe_write(io, p, nb), stream)
+Base.write(stream::CapturedStream, byte::UInt8) = _write!(io -> write(io, byte), stream)
+Base.flush(stream::CapturedStream) =
+    flush(isopen(stream.pipe.in) ? stream.pipe.in : _current(stream))
+
+# A cell can keep a reference to its stream, as in `saved = stdout`. Once the
+# cell has finished, a write through that reference goes to the stream of the
+# same name that is current, as it would in a REPL.
+function _write!(write_bytes, stream::CapturedStream)
+    if isopen(stream.pipe.in)
+        return _record!(write_bytes, stream.runs, stream.name)
+    else
+        return write_bytes(_current(stream))
+    end
+end
+
+_current(stream::CapturedStream) = stream.name == "stdout" ? stdout : stderr
+
+function CapturedStream(name::String, runs::StreamRuns)
+    pipe = Pipe()
+    Base.link_pipe!(pipe; reader_supports_async = true, writer_supports_async = true)
+    return CapturedStream(name, pipe, runs)
+end
+
+function _read_pipe(stream::CapturedStream)
+    while !eof(stream.pipe.out)
+        bytes = readavailable(stream.pipe.out)
+        _record!(buffer -> write(buffer, bytes), stream.runs, stream.name)
+    end
+end
+
+@static if VERSION < v"1.7"
+    # Julia 1.6 redirects only to a stream with a file descriptor. Given an
+    # `IOContext` it redirects to what the context wraps, then points the global
+    # at the context.
+    Base.redirect_stdout(stream::CapturedStream) = redirect_stdout(Base.pipe_writer(stream))
+    Base.redirect_stderr(stream::CapturedStream) = redirect_stderr(Base.pipe_writer(stream))
+end
+
+# Capture what the cell writes to `stdout`, `stderr` and the logger. The readers
+# stop once the cell's code has returned rather than once the pipes reach their
 # end: a process the cell started and left running holds a copy of the write
-# end, and would hold the cell open for as long as it runs.
+# ends, and would hold the cell open for as long as it runs.
 #
 # Derived from IOCapture.jl (MIT), which took it from Documenter.jl.
 function _capture(f; rethrow::Type = Any, color::Bool = false, io_context = ())
     default_stdout = stdout
     default_stderr = stderr
 
-    pipe = Pipe()
-    Base.link_pipe!(pipe; reader_supports_async = true, writer_supports_async = true)
+    runs = StreamRuns()
+    captured_stdout = CapturedStream("stdout", runs)
+    captured_stderr = CapturedStream("stderr", runs)
     colored = get(default_stdout, :color, false) & color
-    pipe_stdout = IOContext(pipe.in, :color => colored, io_context...)
-    pipe_stderr = IOContext(pipe.in, :color => colored, io_context...)
-    redirect_stdout(pipe_stdout)
-    redirect_stderr(pipe_stderr)
-    logger = Logging.ConsoleLogger(pipe_stderr)
+    context_stdout = IOContext(captured_stdout, :color => colored, io_context...)
+    context_stderr = IOContext(captured_stderr, :color => colored, io_context...)
+    redirect_stdout(context_stdout)
+    redirect_stderr(context_stderr)
+    logger = Logging.ConsoleLogger(context_stderr)
 
-    buffer = IOBuffer()
     # A new task seeds its rng from the current task, which moves the stream the
     # cell's own code draws from, so put the seed back afterwards.
     @static if VERSION >= v"1.7"
         seed = copy(Random.default_rng())
-        reader = @async write(buffer, pipe)
+    end
+    readers = [@async(_read_pipe(captured_stdout)), @async(_read_pipe(captured_stderr))]
+    @static if VERSION >= v"1.7"
         copy!(Random.default_rng(), seed)
-    else
-        reader = @async write(buffer, pipe)
     end
 
     value, errored, backtrace = Logging.with_logger(logger) do
@@ -66,29 +144,36 @@ function _capture(f; rethrow::Type = Any, color::Bool = false, io_context = ())
         finally
             redirect_stdout(default_stdout)
             redirect_stderr(default_stderr)
-            close(pipe_stdout)
-            close(pipe_stderr)
-            _stop_reading(reader, pipe)
+            pipes = [captured_stdout.pipe, captured_stderr.pipe]
+            foreach(pipe -> close(pipe.in), pipes)
+            _stop_reading(readers, pipes)
         end
     end
 
-    return (; value, output = String(take!(buffer)), error = errored, backtrace)
+    return (; value, streams = _streams(runs), error = errored, backtrace)
 end
 
-# Closing the write end ends the reader, unless a process the cell left running
-# holds the other copy of it. Give the reader a moment to reach the end on its
-# own, then close the read end under it, which ends it with the output so far.
-function _stop_reading(reader::Task, pipe::Pipe; grace::Real = 1)
+# Closing the write ends ends the readers, unless a process the cell left
+# running holds the other copy of one. Give the readers a moment to reach the
+# end on their own, then close the read ends under them, which ends them with
+# the output so far.
+function _stop_reading(readers::Vector{Task}, pipes::Vector{Pipe}; grace::Real = 1)
     timer = Timer(grace) do _
-        istaskdone(reader) || close(pipe.out)
+        for (reader, pipe) in zip(readers, pipes)
+            istaskdone(reader) || close(pipe.out)
+        end
     end
     try
-        wait(reader)
-    catch error
-        error isa TaskFailedException || Base.rethrow(error)
+        for reader in readers
+            try
+                wait(reader)
+            catch error
+                error isa TaskFailedException || Base.rethrow(error)
+            end
+        end
     finally
         close(timer)
-        close(pipe)
+        foreach(close, pipes)
     end
     return nothing
 end
