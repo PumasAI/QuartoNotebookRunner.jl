@@ -100,6 +100,7 @@ end
         QNW.render(code, "test.jl", 1; mod)
         code = """
         println(saved, "late")
+        flush(saved)
         Base.CoreLogging.with_logger(() -> @warn("late warning"), logger)
         """
         response = QNW.render(code, "test.jl", 2; mod)

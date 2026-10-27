@@ -66,6 +66,8 @@ Base.pipe_reader(stream::CapturedStream) = stream.pipe.out
 Base.unsafe_write(stream::CapturedStream, p::Ptr{UInt8}, nb::UInt) =
     _write!(io -> unsafe_write(io, p, nb), stream)
 Base.write(stream::CapturedStream, byte::UInt8) = _write!(io -> write(io, byte), stream)
+Base.flush(stream::CapturedStream) =
+    flush(isopen(stream.pipe.in) ? stream.pipe.in : _current(stream))
 
 # A cell can keep a reference to its stream, as in `saved = stdout`. Once the
 # cell has finished, a write through that reference goes to the stream of the
@@ -74,9 +76,11 @@ function _write!(write_bytes, stream::CapturedStream)
     if isopen(stream.pipe.in)
         return _record!(write_bytes, stream.runs, stream.name)
     else
-        return write_bytes(stream.name == "stdout" ? stdout : stderr)
+        return write_bytes(_current(stream))
     end
 end
+
+_current(stream::CapturedStream) = stream.name == "stdout" ? stdout : stderr
 
 function CapturedStream(name::String, runs::StreamRuns)
     pipe = Pipe()
