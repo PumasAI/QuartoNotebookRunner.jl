@@ -7,30 +7,35 @@
 struct InlineDisplay <: AbstractDisplay
     queue::Vector{Any}
     cell_options::Dict
+    # Shared with the cell's output capture, which reads the queue's length.
+    lock::ReentrantLock
 
     function InlineDisplay(cell_options::Dict)
-        new(Any[], cell_options)
+        new(Any[], cell_options, ReentrantLock())
     end
 end
 
 function Base.display(d::InlineDisplay, mime::MIME, x)
     only = string(mime)
-    push!(d.queue, Base.@invokelatest render_mimetypes(x, d.cell_options; only))
-    return nothing
+    _enqueue!(d, Base.@invokelatest render_mimetypes(x, d.cell_options; only))
 end
 function Base.display(d::InlineDisplay, x)
-    push!(d.queue, Base.@invokelatest render_mimetypes(x, d.cell_options))
-    return nothing
+    _enqueue!(d, Base.@invokelatest render_mimetypes(x, d.cell_options))
 end
 Base.displayable(::InlineDisplay, m::MIME) = true
 
-# `f` receives the queue so that the cell's output capture can place its
+function _enqueue!(d::InlineDisplay, result)
+    lock(() -> push!(d.queue, result), d.lock)
+    return nothing
+end
+
+# `f` receives the display so that the cell's output capture can place its
 # streams relative to the displays.
 function with_inline_display(f, cell_options)
     inline_display = InlineDisplay(cell_options)
     pushdisplay(inline_display)
     try
-        return f(inline_display.queue), inline_display.queue
+        return f(inline_display), inline_display.queue
     finally
         popdisplay(inline_display)
     end

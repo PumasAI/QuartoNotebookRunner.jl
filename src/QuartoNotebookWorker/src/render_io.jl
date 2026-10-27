@@ -1,10 +1,10 @@
 # IO capture and context for cell evaluation.
 
-function io_capture(f; cell_options, displays::Vector{Any}, kws...)
+function io_capture(f; cell_options, inline_display::InlineDisplay, kws...)
     # Extensions append themselves as they load, so anything past this mark
     # loaded while the cell ran.
     mark = length(LOADED_EXTENSIONS)
-    captured = _capture(f, displays; kws...)
+    captured = _capture(f, inline_display; kws...)
     extensions = @view LOADED_EXTENSIONS[mark+1:end]
     warning = get(cell_options, "warning", true)
     return merge(
@@ -34,17 +34,17 @@ end
 
 # What a cell wrote, as runs of consecutive writes to one stream, in the order
 # they were written. Each run notes how many of the cell's `display` calls came
-# before it, so a display between two writes to one stream splits the run.
+# before it, so a display between two writes to one stream splits the run. The
+# display's lock guards the runs too, so the count and the queue agree.
 struct StreamRuns
     runs::Vector{Tuple{String,Int,IOBuffer}}
-    displays::Vector{Any}
-    lock::ReentrantLock
+    inline_display::InlineDisplay
 end
-StreamRuns(displays) = StreamRuns(Tuple{String,Int,IOBuffer}[], displays, ReentrantLock())
+StreamRuns(inline_display) = StreamRuns(Tuple{String,Int,IOBuffer}[], inline_display)
 
 function _record!(write_bytes, runs::StreamRuns, name::String)
-    lock(runs.lock) do
-        run = (name, length(runs.displays))
+    lock(runs.inline_display.lock) do
+        run = (name, length(runs.inline_display.queue))
         if isempty(runs.runs) || runs.runs[end][1:2] != run
             push!(runs.runs, (run..., IOBuffer()))
         end
@@ -116,7 +116,7 @@ end
 # Derived from IOCapture.jl (MIT), which took it from Documenter.jl.
 function _capture(
     f,
-    displays::Vector{Any};
+    inline_display::InlineDisplay;
     rethrow::Type = Any,
     color::Bool = false,
     io_context = (),
@@ -124,7 +124,7 @@ function _capture(
     default_stdout = stdout
     default_stderr = stderr
 
-    runs = StreamRuns(displays)
+    runs = StreamRuns(inline_display)
     captured_stdout = CapturedStream("stdout", runs)
     captured_stderr = CapturedStream("stderr", runs)
     colored = get(default_stdout, :color, false) & color

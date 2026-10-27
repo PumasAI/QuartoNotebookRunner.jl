@@ -3,8 +3,8 @@
 
     QNW.NotebookState.with_test_context() do
         cell_opts = Dict{String,Any}()
-        result, queue = QNW.with_inline_display(cell_opts) do displays
-            @test displays isa Vector{Any}
+        result, queue = QNW.with_inline_display(cell_opts) do inline_display
+            @test inline_display isa QNW.InlineDisplay
             display("first")
             display(42)
             :return_value
