@@ -61,3 +61,15 @@ end
     @test any(l -> contains(l, "#| echo: false"), lines)
     @test lines[end] == "x = 1"
 end
+
+@testitem "raw_script_chunks rejects unparsable markdown cells" tags = [:unit] begin
+    import QuartoNotebookRunner as QNR
+
+    mktempdir() do dir
+        path = joinpath(dir, "script.jl")
+        write(path, "# %% [markdown]\nPlain prose\n")
+        @test_throws ErrorException("invalid markdown block content") QNR.raw_script_chunks(
+            path,
+        )
+    end
+end

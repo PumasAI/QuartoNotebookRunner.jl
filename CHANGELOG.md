@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+### Fixed
+
+- A markdown cell in a `.jl` script that fails to parse now raises the "invalid markdown block content" error instead of a `MethodError` [#456]
+
 ### Changed
 
 - Internal refactors of the most complex functions flagged by a code-quality scan, with no change in behaviour [#454]
@@ -612,3 +616,4 @@ caching is enabled. Delete this folder to clear the cache. [#259]
 [#451]: https://github.com/PumasAI/QuartoNotebookRunner.jl/issues/451
 [#454]: https://github.com/PumasAI/QuartoNotebookRunner.jl/issues/454
 [#455]: https://github.com/PumasAI/QuartoNotebookRunner.jl/issues/455
+[#456]: https://github.com/PumasAI/QuartoNotebookRunner.jl/issues/456
