@@ -151,7 +151,8 @@ mutable struct Worker
             # `stderr` stays inherited: it is the server's own stderr, drained by
             # whoever launched the server, so it cannot fill, and worker startup
             # failures print there before the port file exists.
-            cmd = _get_worker_cmd(; exe, env, exeflags, scratchspace, sandbox_base)
+            cmd_kws = (; exe, env, exeflags, scratchspace, sandbox_base)
+            cmd = _get_worker_cmd(; cmd_kws...)
             proc = run(
                 pipeline(
                     Cmd(cmd; detach = true, windows_hide = true);
@@ -193,32 +194,7 @@ mutable struct Worker
             )
 
             if port === nothing
-                _kill_worker_process(proc)
-                _validate_worker_cmd(exe, exeflags)
-
-                err_output = read(errors_log_file, String)
-                if isnothing(manifest_error)
-                    empty_result = IOCapture.capture(; rethrow = InterruptException) do
-                        run(
-                            _get_worker_cmd(;
-                                exe,
-                                env,
-                                exeflags,
-                                file = String(empty_file),
-                                scratchspace,
-                                sandbox_base,
-                            ),
-                        )
-                    end
-                    if empty_result.error
-                        error("Failed to start worker process.\n\n$(empty_result.output)")
-                    end
-                    error(
-                        "Failed to start worker process. Expected port, got \"$port_str\".\n\nERROR: $err_output",
-                    )
-                else
-                    throw(QuartoNotebookRunner.UserError(manifest_error))
-                end
+                _throw_startup_failure(proc, cmd_kws, errors_log_file, port_str, manifest_error)
             end
 
             return proc, port, manifest_error, manifest_hash
@@ -247,6 +223,26 @@ mutable struct Worker
         _manifest_in_sync_check(w)
 
         return w
+    end
+end
+
+function _throw_startup_failure(proc, cmd_kws, errors_log_file, port_str, manifest_error)
+    _kill_worker_process(proc)
+    _validate_worker_cmd(cmd_kws.exe, cmd_kws.exeflags)
+
+    err_output = read(errors_log_file, String)
+    if isnothing(manifest_error)
+        empty_result = IOCapture.capture(; rethrow = InterruptException) do
+            run(_get_worker_cmd(; cmd_kws..., file = String(empty_file)))
+        end
+        if empty_result.error
+            error("Failed to start worker process.\n\n$(empty_result.output)")
+        end
+        error(
+            "Failed to start worker process. Expected port, got \"$port_str\".\n\nERROR: $err_output",
+        )
+    else
+        throw(QuartoNotebookRunner.UserError(manifest_error))
     end
 end
 
