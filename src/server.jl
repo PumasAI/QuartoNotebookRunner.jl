@@ -48,32 +48,18 @@ function run!(
                 )
 
                 # Eval succeeded but worker may have been killed after last IPC call.
-                if file.force_close_requested[]
-                    transition!(file, FileState.Running, FileState.Closing)
-                    error("File was force-closed during run")
-                end
+                _throw_if_force_closed!(file)
 
                 file.run_finished = Dates.now()
                 transition!(file, FileState.Running, FileState.Ready)
-                if file.timeout > 0
-                    file.timeout_timer = Timer(file.timeout) do _
-                        close!(server, file.path)
-                        @debug "File at $(file.path) timed out after $(file.timeout) seconds of inactivity."
-                    end
-                else
-                    close!(server, file.path)
-                end
+                _arm_timeout!(server, file)
                 return result
             catch err
                 # Reset to Ready so file is reusable after eval errors.
                 # Skip if forceclose already transitioned to Closing.
                 if file.state === FileState.Running
-                    if file.force_close_requested[]
-                        transition!(file, FileState.Running, FileState.Closing)
-                        error("File was force-closed during run")
-                    else
-                        transition!(file, FileState.Running, FileState.Ready)
-                    end
+                    _throw_if_force_closed!(file)
+                    transition!(file, FileState.Running, FileState.Ready)
                 end
                 rethrow(err)
             end
@@ -88,6 +74,24 @@ function run!(
         else
             rethrow(err)
         end
+    end
+end
+
+function _throw_if_force_closed!(file::File)
+    if file.force_close_requested[]
+        transition!(file, FileState.Running, FileState.Closing)
+        error("File was force-closed during run")
+    end
+end
+
+function _arm_timeout!(server::Server, file::File)
+    if file.timeout > 0
+        file.timeout_timer = Timer(file.timeout) do _
+            close!(server, file.path)
+            @debug "File at $(file.path) timed out after $(file.timeout) seconds of inactivity."
+        end
+    else
+        close!(server, file.path)
     end
 end
 
