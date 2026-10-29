@@ -189,66 +189,26 @@ function _serve(;
 
     task = Threads.@spawn _with_logger(logger) do
         while isopen(socket_server)
-            socket = nothing
-            try
-                socket = Sockets.accept(socket_server)
+            socket = try
+                Sockets.accept(socket_server)
             catch error
                 if !closed_deliberately[]
                     @error "Failed to accept connection" error
                 end
                 break
             end
-            if !isnothing(socket)
-                subtask = Threads.@spawn _with_logger(logger) do
-                    while isopen(socket)
-                        @debug "Waiting for request"
-                        data = readline(socket; keep = true)
-                        if isempty(data)
-                            @debug "Connection closed."
-                            break
-                        else
-                            json = try
-                                _read_json(key, data)
-                            catch error
-                                msg = if error isa HMACMismatchError
-                                    "Incorrect HMAC digest"
-                                else
-                                    "Failed to parse json message."
-                                end
-                                @error msg error
-                                _write_json(socket, (; error = msg))
-                                # close connection with clients sending wrong hmacs or invalid json
-                                # (could be other processes mistakingly targeting our port)
-                                close(socket)
-                                break
-                            end
-                            @debug "Received request" type = json.type
-
-                            if json.type == "stop"
-                                @debug "Closing connection."
-                                close!(notebook_server)
-                                _write_json(socket, (; message = "Server stopped."))
-                                close(socket)
-                                # close(socket_server) will cause an exception on the
-                                # Sockets.accept line so we use this flag to swallow the
-                                # error if that happened on purpose
-                                closed_deliberately[] = true
-                                close(socket_server)
-                            elseif json.type == "isready"
-                                _write_json(socket, true)
-                            else
-                                _handle_response(
-                                    socket,
-                                    socket_server_ref[],
-                                    json,
-                                    showprogress,
-                                )
-                            end
-                        end
-                    end
-                end
-                errormonitor(subtask)
+            subtask = Threads.@spawn _with_logger(logger) do
+                _serve_connection(
+                    socket,
+                    key,
+                    notebook_server,
+                    socket_server,
+                    socket_server_ref,
+                    closed_deliberately,
+                    showprogress,
+                )
             end
+            errormonitor(subtask)
         end
         @debug "Server closed."
     end
@@ -266,6 +226,57 @@ function _serve(;
         timeout_started_at,
     )
     return socket_server_ref[]
+end
+
+function _serve_connection(
+    socket,
+    key,
+    notebook_server,
+    socket_server,
+    socket_server_ref,
+    closed_deliberately,
+    showprogress,
+)
+    while isopen(socket)
+        @debug "Waiting for request"
+        data = readline(socket; keep = true)
+        if isempty(data)
+            @debug "Connection closed."
+            break
+        end
+        json = try
+            _read_json(key, data)
+        catch error
+            msg = if error isa HMACMismatchError
+                "Incorrect HMAC digest"
+            else
+                "Failed to parse json message."
+            end
+            @error msg error
+            _write_json(socket, (; error = msg))
+            # close connection with clients sending wrong hmacs or invalid json
+            # (could be other processes mistakingly targeting our port)
+            close(socket)
+            break
+        end
+        @debug "Received request" type = json.type
+
+        if json.type == "stop"
+            @debug "Closing connection."
+            close!(notebook_server)
+            _write_json(socket, (; message = "Server stopped."))
+            close(socket)
+            # close(socket_server) will cause an exception on the
+            # Sockets.accept line so we use this flag to swallow the
+            # error if that happened on purpose
+            closed_deliberately[] = true
+            close(socket_server)
+        elseif json.type == "isready"
+            _write_json(socket, true)
+        else
+            _handle_response(socket, socket_server_ref[], json, showprogress)
+        end
+    end
 end
 
 if Preferences.@load_preference("enable_revise", false)
@@ -341,33 +352,9 @@ function _handle_response_internal(
     isfile(file) ||
         return _write_json(socket, _log_error("File does not exist: $(repr(file))"))
 
-    if type == "close"
-        try
-            close!(notebooks, file)
-            return _write_json(socket, (; status = true))
-        catch error
-            return _write_json(
-                socket,
-                _log_error("Failed to close notebook: $file", error, catch_backtrace()),
-            )
-        end
-    end
-
-    if type == "forceclose"
-        try
-            forceclose!(notebooks, file)
-            return _write_json(socket, (; status = true))
-        catch error
-            return _write_json(
-                socket,
-                _log_error(
-                    "Failed to force close notebook: $file",
-                    error,
-                    catch_backtrace(),
-                ),
-            )
-        end
-    end
+    type == "close" && return _close_notebook(socket, close!, notebooks, file, "close")
+    type == "forceclose" &&
+        return _close_notebook(socket, forceclose!, notebooks, file, "force close")
 
     # Running:
 
@@ -413,6 +400,18 @@ function _handle_response_internal(
 
     # Shouldn't get to this point.
     error("unreachable reached.")
+end
+
+function _close_notebook(socket, close_fn, notebooks, file, description)
+    try
+        close_fn(notebooks, file)
+        return _write_json(socket, (; status = true))
+    catch error
+        return _write_json(
+            socket,
+            _log_error("Failed to $description notebook: $file", error, catch_backtrace()),
+        )
+    end
 end
 
 function _log_error(message, error, backtrace)
