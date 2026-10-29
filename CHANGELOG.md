@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+### Changed
+
+- Internal refactors of the most complex functions flagged by a code-quality scan, with no change in behaviour [#454]
+
 ## [v0.18.6] - 2026-10-27
 
 ### Fixed
@@ -605,3 +609,4 @@ caching is enabled. Delete this folder to clear the cache. [#259]
 [#447]: https://github.com/PumasAI/QuartoNotebookRunner.jl/issues/447
 [#450]: https://github.com/PumasAI/QuartoNotebookRunner.jl/issues/450
 [#451]: https://github.com/PumasAI/QuartoNotebookRunner.jl/issues/451
+[#454]: https://github.com/PumasAI/QuartoNotebookRunner.jl/issues/454

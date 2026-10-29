@@ -273,126 +273,106 @@ function raw_script_chunks(path::String)
         throw(ArgumentError("file is not a julia script file: $(path)"))
     end
 
-    if isfile(path)
-        lines = String[]
-        cell_markers = Tuple{Int,Symbol}[]
+    if !isfile(path)
+        throw(ArgumentError("file does not exist: $(path)"))
+    end
 
-        code_marker = r"^# %%$"
-        markdown_marker = r"^# %% \[markdown\]$"
+    lines = String[]
+    cell_markers = Tuple{Int,Symbol}[]
 
-        for (nth, line) in enumerate(readlines(path; keep = true))
-            push!(lines, line)
-            line = rstrip(line)
-            m = match(code_marker, line)
-            if isnothing(m)
-                m = match(markdown_marker, line)
-                if isnothing(m)
-                    if isempty(cell_markers)
-                        error("first line of script must be a cell marker.")
-                    end
-                else
-                    push!(cell_markers, (nth, :markdown))
+    code_marker = r"^# %%$"
+    markdown_marker = r"^# %% \[markdown\]$"
+
+    for (nth, line) in enumerate(readlines(path; keep = true))
+        push!(lines, line)
+        line = rstrip(line)
+        if occursin(code_marker, line)
+            push!(cell_markers, (nth, :code))
+        elseif occursin(markdown_marker, line)
+            push!(cell_markers, (nth, :markdown))
+        elseif isempty(cell_markers)
+            error("first line of script must be a cell marker.")
+        end
+    end
+
+    if isempty(cell_markers)
+        error("script must contain at least one cell marker.")
+    end
+
+    push!(cell_markers, (length(lines) + 1, :unknown))
+
+    raw_chunks = []
+    source_code_hash = hash(VERSION)
+
+    frontmatter = Dict{String,Any}()
+
+    for (nth, ((this_cell, type), (next_cell, _))) in
+        enumerate(IterTools.partition(cell_markers, 2, 1))
+        if type === :unknown
+            error("last cell marker must be a code or markdown marker.")
+        end
+
+        start_line = clamp(this_cell + 1, 1, length(lines))
+        end_line = clamp(next_cell - 1, 1, length(lines))
+
+        source_lines = lines[start_line:end_line]
+        source = join(source_lines)
+        if type == :code
+
+            cell_options = extract_cell_options(source; file = path, line = start_line)
+            evaluate = get(cell_options, "eval", Unset())
+            if !(evaluate isa Union{Bool,Unset})
+                error(
+                    "Cannot handle an `eval` code cell option with value $(repr(evaluate)), only true or false.",
+                )
+            end
+            push!(
+                raw_chunks,
+                (;
+                    type = :code,
+                    language = :julia,
+                    source,
+                    file = path,
+                    line = start_line,
+                    evaluate,
+                    cell_options,
+                ),
+            )
+            source_code_hash = hash(source, source_code_hash)
+        elseif type == :markdown
+            try
+                text = Meta.parse(rstrip(source))
+                if !isa(text, AbstractString)
+                    text = _uncomment_script_lines(source_lines)
                 end
-            else
-                push!(cell_markers, (nth, :code))
-            end
-        end
-
-        if isempty(cell_markers)
-            error("script must contain at least one cell marker.")
-        end
-
-        push!(cell_markers, (length(lines) + 1, :unknown))
-
-        raw_chunks = []
-        source_code_hash = hash(VERSION)
-
-        frontmatter = Dict{String,Any}()
-
-        for (nth, ((this_cell, type), (next_cell, _))) in
-            enumerate(IterTools.partition(cell_markers, 2, 1))
-            if type === :unknown
-                error("last cell marker must be a code or markdown marker.")
-            end
-
-            start_line = clamp(this_cell + 1, 1, length(lines))
-            end_line = clamp(next_cell - 1, 1, length(lines))
-
-            source_lines = lines[start_line:end_line]
-            source = join(source_lines)
-            if type == :code
-
-                cell_options = extract_cell_options(source; file = path, line = start_line)
-                evaluate = get(cell_options, "eval", Unset())
-                if !(evaluate isa Union{Bool,Unset})
-                    error(
-                        "Cannot handle an `eval` code cell option with value $(repr(evaluate)), only true or false.",
-                    )
+                if nth == 1
+                    frontmatter = CommonMark.frontmatter(Parser()(text))
                 end
                 push!(
                     raw_chunks,
-                    (;
-                        type = :code,
-                        language = :julia,
-                        source,
-                        file = path,
-                        line = start_line,
-                        evaluate,
-                        cell_options,
-                    ),
+                    (type = :markdown, source = text, file = path, line = start_line),
                 )
-                source_code_hash = hash(source, source_code_hash)
-            elseif type == :markdown
-                try
-                    text = Meta.parse(rstrip(source))
-                    if isa(text, AbstractString)
-                        if nth == 1
-                            frontmatter = CommonMark.frontmatter(Parser()(text))
-                        end
-                        push!(
-                            raw_chunks,
-                            (
-                                type = :markdown,
-                                source = text,
-                                file = path,
-                                line = start_line,
-                            ),
-                        )
-                    else
-                        filtered_lines = map(filter(startswith("#"), source_lines)) do line
-                            _, rest = split(line, "#"; limit = 2)
-                            if startswith(rest, " ")
-                                _, rest = split(rest, " "; limit = 2)
-                            end
-                            return rest
-                        end
-                        text = join(filtered_lines)
-                        if nth == 1
-                            frontmatter = CommonMark.frontmatter(Parser()(text))
-                        end
-                        push!(
-                            raw_chunks,
-                            (
-                                type = :markdown,
-                                source = text,
-                                file = path,
-                                line = start_line,
-                            ),
-                        )
-                    end
-                catch error
-                    isa(error, Meta.ParseError) || rethrow()
-                    error("invalid markdown block content")
-                end
-            else
-                error("unreachable reached.")
+            catch error
+                isa(error, Meta.ParseError) || rethrow()
+                error("invalid markdown block content")
             end
+        else
+            error("unreachable reached.")
         end
-
-        frontmatter = _recursive_merge(frontmatter, default_frontmatter())
-
-        return source_code_hash, raw_chunks, frontmatter
-    else
-        throw(ArgumentError("file does not exist: $(path)"))
     end
+
+    frontmatter = _recursive_merge(frontmatter, default_frontmatter())
+
+    return source_code_hash, raw_chunks, frontmatter
+end
+
+function _uncomment_script_lines(source_lines)
+    filtered_lines = map(filter(startswith("#"), source_lines)) do line
+        _, rest = split(line, "#"; limit = 2)
+        if startswith(rest, " ")
+            _, rest = split(rest, " "; limit = 2)
+        end
+        return rest
+    end
+    return join(filtered_lines)
 end
