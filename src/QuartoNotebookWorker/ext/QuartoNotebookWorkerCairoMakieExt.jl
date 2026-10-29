@@ -16,7 +16,8 @@ function configure()
     kwargs[:type] = if fm.fig_format in ("pdf", "svg")
         "svg" # enables both pdf and svg, simpler for backends like typst and latex which prefer one
     else
-        "png"
+        # "png" keeps text/html showable, which Quarto prefers and which inlines the PNG as base64.
+        "image/png"
     end
     CairoMakie.activate!(; kwargs...)
 

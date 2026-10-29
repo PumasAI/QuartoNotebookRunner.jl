@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - A markdown cell in a `.jl` script that fails to parse now raises the "invalid markdown block content" error instead of a `MethodError` [#456]
+- CairoMakie figures in HTML output with `fig-format: png` are now written to image files. CairoMakie also offered a `text/html` rendering, which Quarto prefers for HTML output, so every figure was embedded in the page as a base64 data URI [#457]
 
 ### Changed
 
@@ -617,3 +618,4 @@ caching is enabled. Delete this folder to clear the cache. [#259]
 [#454]: https://github.com/PumasAI/QuartoNotebookRunner.jl/issues/454
 [#455]: https://github.com/PumasAI/QuartoNotebookRunner.jl/issues/455
 [#456]: https://github.com/PumasAI/QuartoNotebookRunner.jl/issues/456
+[#457]: https://github.com/PumasAI/QuartoNotebookRunner.jl/issues/457

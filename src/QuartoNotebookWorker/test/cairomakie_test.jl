@@ -36,6 +36,8 @@ end
         png_data = result["image/png"].data
         @test length(png_data) > 8
         @test png_data[1:8] == UInt8[0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]
+        # Quarto prefers text/html for HTML output, which would inline the PNG as base64.
+        @test !haskey(result, "text/html")
     end
 end
 
