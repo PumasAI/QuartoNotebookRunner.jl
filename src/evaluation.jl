@@ -171,6 +171,17 @@ function evaluate!(
     end
 end
 
+function _source_only_cell(nth, chunk, execution_count)
+    return (;
+        id = string(nth),
+        cell_type = chunk.type,
+        metadata = (;),
+        source = process_cell_source(chunk.source),
+        outputs = [],
+        execution_count,
+    )
+end
+
 """
     evaluate_raw_cells!(f::File, chunks::Vector)
 
@@ -209,17 +220,7 @@ function evaluate_raw_cells!(
     @maybe_progress showprogress "$header" for (nth, chunk) in enumerate(chunks)
         if chunk.type === :code
             if !should_eval(chunk, global_eval)
-                push!(
-                    cells,
-                    (;
-                        id = string(nth),
-                        cell_type = chunk.type,
-                        metadata = (;),
-                        source = process_cell_source(chunk.source),
-                        outputs = [],
-                        execution_count = 0,
-                    ),
-                )
+                push!(cells, _source_only_cell(nth, chunk, 0))
             else
                 chunk_callback(ith_chunk_to_evaluate, chunks_to_evaluate, chunk)
                 ith_chunk_to_evaluate += 1
@@ -336,17 +337,7 @@ function _evaluate_code_cell!(cells, f, chunk, nth, allow_error_global, record_e
     # then we insert the original cell contents before the expanded
     # cells as a mock cell similar to if it has `eval: false` set.
     if expand_cell
-        push!(
-            cells,
-            (;
-                id = string(nth),
-                cell_type = chunk.type,
-                metadata = (;),
-                source = process_cell_source(chunk.source),
-                outputs = [],
-                execution_count = 1,
-            ),
-        )
+        push!(cells, _source_only_cell(nth, chunk, 1))
     end
 
     for (mth, remote) in enumerate(worker_results)
