@@ -10,7 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - Internal refactors of the most complex functions flagged by a code-quality scan, with no change in behaviour [#454]
-- Remove unused internal helpers and share duplicated markdown chunk handling, with no change in behaviour [#455]
+- Remove unused internal helpers, share duplicated markdown chunk handling, and split the long notebook evaluation, run and worker startup functions into smaller helpers, with no change in behaviour [#455]
 
 ## [v0.18.6] - 2026-10-27
 

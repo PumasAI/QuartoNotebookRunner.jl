@@ -80,95 +80,87 @@ function evaluate!(
 
     options = _parsed_options(options)
     path = abspath(f.path)
-    if isfile(path)
-        source_code_hash, raw_chunks, file_frontmatter =
-            raw_text_chunks(f, markdown; source_ranges)
-        merged_options = _extract_relevant_options(file_frontmatter, options)
+    isfile(path) || throw(ArgumentError("file does not exist: $(path)"))
 
-        # A change of metadata, including parameter values, must invalidate the source code hash.
-        source_code_hash = hash(merged_options["format"]["metadata"], source_code_hash)
+    source_code_hash, raw_chunks, file_frontmatter =
+        raw_text_chunks(f, markdown; source_ranges)
+    merged_options = _extract_relevant_options(file_frontmatter, options)
 
-        Logging.@debug "evaluate!" path chunks = length(raw_chunks)
-        refresh!(f, merged_options)
+    # A change of metadata, including parameter values, must invalidate the source code hash.
+    source_code_hash = hash(merged_options["format"]["metadata"], source_code_hash)
 
-        enabled_cache = merged_options["format"]["execute"]["cache"] == true
-        enabled_cache && load_from_file!(f, source_code_hash)
+    Logging.@debug "evaluate!" path chunks = length(raw_chunks)
+    refresh!(f, merged_options)
 
-        # This is the results caching logic. When only the markdown has
-        # changed, e.g. the hash of all executable code blocks is the same as
-        # the previous run then we can reuse the previous cell outputs.
-        # Additionally, if the currently cached chunks is empty then we have a
-        # fresh session that has not yet populated the `output_chunks`.
-        if enabled_cache &&
-           source_code_hash == f.source_code_hash &&
-           !isempty(f.output_chunks)
-            Logging.@debug "Cache hit, reusing cell outputs" path
-            # All the executable code cells are the same as the previous
-            # render, so all we need to do is iterate over the markdown code
-            # (that doesn't contain inline executable code) and update the
-            # markdown cells with the new content.
-            lookup = Dict(string(nth) => chunk for (nth, chunk) in enumerate(raw_chunks))
-            for output_chunk in f.output_chunks
-                id = _chunk_id(output_chunk)
-                if haskey(lookup, id)
-                    new_raw_chunk = lookup[id]
-                    # Skip any markdown chunk if it contains potential inline
-                    # executable code otherwise they would be replaced with
-                    # their unexpanded raw chunk.
-                    if !contains(new_raw_chunk.source, INLINE_CODE_PATTERN)
-                        # Swap out any markdown chunks with their updated content.
-                        new_source = process_cell_source(new_raw_chunk.source)
-                        source = _chunk_source(output_chunk)
-                        empty!(source)
-                        append!(source, new_source)
-                    end
-                end
-            end
-            cells = f.output_chunks
-        else
-            Logging.@debug "Evaluating cells" path
-            # When there has been any kind of change to any executable code
-            # blocks then we perform a complete rerun of the notebook. Further
-            # optimisations can be made to perform source code analysis in the
-            # worker process to determine if which cells need to be
-            # reevaluated.
-            cells = evaluate_raw_cells!(
-                f,
-                raw_chunks,
-                merged_options;
-                showprogress,
-                chunk_callback,
-            )
-            # Update the hash to the latest computed.
-            f.source_code_hash = source_code_hash
-            f.output_chunks = cells
+    enabled_cache = merged_options["format"]["execute"]["cache"] == true
+    enabled_cache && load_from_file!(f, source_code_hash)
 
-            enabled_cache && save_to_file!(f)
-        end
-
-        version = _get_julia_version(f)
-        data = (
-            metadata = (
-                kernelspec = (
-                    display_name = "Julia $(version)",
-                    language = "julia",
-                    name = "julia-$(version)",
-                ),
-                kernel_info = (name = "julia",),
-                language_info = (
-                    name = "julia",
-                    version = version,
-                    codemirror_mode = "julia",
-                ),
-            ),
-            nbformat = 4,
-            nbformat_minor = 5,
-            cells,
-        )
-        write_json(output, data)
+    # This is the results caching logic. When only the markdown has
+    # changed, e.g. the hash of all executable code blocks is the same as
+    # the previous run then we can reuse the previous cell outputs.
+    # Additionally, if the currently cached chunks is empty then we have a
+    # fresh session that has not yet populated the `output_chunks`.
+    if enabled_cache && source_code_hash == f.source_code_hash && !isempty(f.output_chunks)
+        Logging.@debug "Cache hit, reusing cell outputs" path
+        _refresh_cached_markdown!(f.output_chunks, raw_chunks)
+        cells = f.output_chunks
     else
-        throw(ArgumentError("file does not exist: $(path)"))
+        Logging.@debug "Evaluating cells" path
+        # When there has been any kind of change to any executable code
+        # blocks then we perform a complete rerun of the notebook. Further
+        # optimisations can be made to perform source code analysis in the
+        # worker process to determine if which cells need to be
+        # reevaluated.
+        cells =
+            evaluate_raw_cells!(f, raw_chunks, merged_options; showprogress, chunk_callback)
+        # Update the hash to the latest computed.
+        f.source_code_hash = source_code_hash
+        f.output_chunks = cells
+
+        enabled_cache && save_to_file!(f)
     end
+
+    write_json(output, _notebook_json(_get_julia_version(f), cells))
+end
+
+function _refresh_cached_markdown!(output_chunks, raw_chunks)
+    # All the executable code cells are the same as the previous
+    # render, so all we need to do is iterate over the markdown code
+    # (that doesn't contain inline executable code) and update the
+    # markdown cells with the new content.
+    lookup = Dict(string(nth) => chunk for (nth, chunk) in enumerate(raw_chunks))
+    for output_chunk in output_chunks
+        id = _chunk_id(output_chunk)
+        haskey(lookup, id) || continue
+        new_raw_chunk = lookup[id]
+        # Skip any markdown chunk if it contains potential inline
+        # executable code otherwise they would be replaced with
+        # their unexpanded raw chunk.
+        contains(new_raw_chunk.source, INLINE_CODE_PATTERN) && continue
+        # Swap out any markdown chunks with their updated content.
+        new_source = process_cell_source(new_raw_chunk.source)
+        source = _chunk_source(output_chunk)
+        empty!(source)
+        append!(source, new_source)
+    end
+    return nothing
+end
+
+function _notebook_json(version, cells)
+    return (
+        metadata = (
+            kernelspec = (
+                display_name = "Julia $(version)",
+                language = "julia",
+                name = "julia-$(version)",
+            ),
+            kernel_info = (name = "julia",),
+            language_info = (name = "julia", version = version, codemirror_mode = "julia"),
+        ),
+        nbformat = 4,
+        nbformat_minor = 5,
+        cells,
+    )
 end
 
 function _source_only_cell(nth, chunk, execution_count)
