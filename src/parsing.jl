@@ -338,8 +338,8 @@ function raw_script_chunks(path::String)
                     raw_chunks,
                     (type = :markdown, source = text, file = path, line = start_line),
                 )
-            catch error
-                isa(error, Meta.ParseError) || rethrow()
+            catch err
+                isa(err, Meta.ParseError) || rethrow()
                 error("invalid markdown block content")
             end
         else
