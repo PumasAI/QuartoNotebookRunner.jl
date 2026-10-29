@@ -352,33 +352,9 @@ function _handle_response_internal(
     isfile(file) ||
         return _write_json(socket, _log_error("File does not exist: $(repr(file))"))
 
-    if type == "close"
-        try
-            close!(notebooks, file)
-            return _write_json(socket, (; status = true))
-        catch error
-            return _write_json(
-                socket,
-                _log_error("Failed to close notebook: $file", error, catch_backtrace()),
-            )
-        end
-    end
-
-    if type == "forceclose"
-        try
-            forceclose!(notebooks, file)
-            return _write_json(socket, (; status = true))
-        catch error
-            return _write_json(
-                socket,
-                _log_error(
-                    "Failed to force close notebook: $file",
-                    error,
-                    catch_backtrace(),
-                ),
-            )
-        end
-    end
+    type == "close" && return _close_notebook(socket, close!, notebooks, file, "close")
+    type == "forceclose" &&
+        return _close_notebook(socket, forceclose!, notebooks, file, "force close")
 
     # Running:
 
@@ -424,6 +400,18 @@ function _handle_response_internal(
 
     # Shouldn't get to this point.
     error("unreachable reached.")
+end
+
+function _close_notebook(socket, close_fn, notebooks, file, description)
+    try
+        close_fn(notebooks, file)
+        return _write_json(socket, (; status = true))
+    catch error
+        return _write_json(
+            socket,
+            _log_error("Failed to $description notebook: $file", error, catch_backtrace()),
+        )
+    end
 end
 
 function _log_error(message, error, backtrace)
