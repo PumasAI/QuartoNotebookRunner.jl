@@ -21,26 +21,6 @@ function Parser()
 end
 
 """
-    is_julia_toplevel(node::CommonMark.Node)
-
-Return `true` if `node` is a Julia toplevel code block.
-"""
-is_julia_toplevel(node) =
-    node.t isa CommonMark.CodeBlock &&
-    node.t.info == "{julia}" &&
-    node.parent.t isa CommonMark.Document
-
-is_python_toplevel(node) =
-    node.t isa CommonMark.CodeBlock &&
-    node.t.info == "{python}" &&
-    node.parent.t isa CommonMark.Document
-
-is_r_toplevel(node) =
-    node.t isa CommonMark.CodeBlock &&
-    node.t.info == "{r}" &&
-    node.parent.t isa CommonMark.Document
-
-"""
     toplevel_language(node)
 
 Return the language symbol (:julia, :python, :r) for toplevel code blocks, or nothing.

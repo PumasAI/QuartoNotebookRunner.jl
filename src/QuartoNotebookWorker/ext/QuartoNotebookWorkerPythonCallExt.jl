@@ -286,17 +286,6 @@ function QuartoNotebookWorker._py_expr(
     end
 end
 
-# Checks whether the Python token is a variable beginning with a `$`.
-function is_dollar(token, key)
-    type = PC.pyconvert(Int, token.type)
-    if type == 1
-        string = PC.pyconvert(String, token.string)
-        return startswith(string, key)
-    else
-        return false
-    end
-end
-
 # Unpacks the row and column from the Python token. The column is 0-based so
 # adjust it to be 1-based for use in Julia.
 function row_column(token)
