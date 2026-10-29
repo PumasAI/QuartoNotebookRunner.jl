@@ -21,26 +21,6 @@ function Parser()
 end
 
 """
-    is_julia_toplevel(node::CommonMark.Node)
-
-Return `true` if `node` is a Julia toplevel code block.
-"""
-is_julia_toplevel(node) =
-    node.t isa CommonMark.CodeBlock &&
-    node.t.info == "{julia}" &&
-    node.parent.t isa CommonMark.Document
-
-is_python_toplevel(node) =
-    node.t isa CommonMark.CodeBlock &&
-    node.t.info == "{python}" &&
-    node.parent.t isa CommonMark.Document
-
-is_r_toplevel(node) =
-    node.t isa CommonMark.CodeBlock &&
-    node.t.info == "{r}" &&
-    node.parent.t isa CommonMark.Document
-
-"""
     toplevel_language(node)
 
 Return the language symbol (:julia, :python, :r) for toplevel code blocks, or nothing.
@@ -182,13 +162,12 @@ function raw_markdown_chunks_from_string(
             code_cells = true
             line = node.sourcepos[1][1]
             md = join(lines[terminal_line:(line-1)], "\n")
-            push!(
+            source_code_hash = _push_markdown_chunk!(
                 raw_chunks,
-                (; type = :markdown, source = md, line_file_lookup[terminal_line]...),
+                md,
+                line_file_lookup[terminal_line],
+                source_code_hash,
             )
-            if contains(md, INLINE_CODE_PATTERN)
-                source_code_hash = hash(md, source_code_hash)
-            end
             terminal_line = node.sourcepos[2][1] + 1
 
             # currently, the only execution-relevant cell option is `eval` which controls if a code block is executed or not.
@@ -218,21 +197,22 @@ function raw_markdown_chunks_from_string(
     end
     if terminal_line <= length(lines)
         md = join(lines[terminal_line:end], "\n")
-        push!(
+        source_code_hash = _push_markdown_chunk!(
             raw_chunks,
-            (; type = :markdown, source = md, line_file_lookup[terminal_line]...),
+            md,
+            line_file_lookup[terminal_line],
+            source_code_hash,
         )
-        if contains(md, INLINE_CODE_PATTERN)
-            source_code_hash = hash(md, source_code_hash)
-        end
     end
 
     # The case where the notebook has no code cells.
     if isempty(raw_chunks) && !code_cells
-        push!(raw_chunks, (type = :markdown, source = markdown, file = path, line = 1))
-        if contains(markdown, INLINE_CODE_PATTERN)
-            source_code_hash = hash(markdown, source_code_hash)
-        end
+        source_code_hash = _push_markdown_chunk!(
+            raw_chunks,
+            markdown,
+            (; file = path, line = 1),
+            source_code_hash,
+        )
     end
 
     # When there is a code block at the very end of the notebook we normalise
@@ -251,6 +231,12 @@ function raw_markdown_chunks_from_string(
     frontmatter = _recursive_merge(default_frontmatter(), file_fromtmatter)
 
     return source_code_hash, raw_chunks, frontmatter
+end
+
+function _push_markdown_chunk!(raw_chunks, source, location, source_code_hash)
+    push!(raw_chunks, (; type = :markdown, source, location...))
+    return contains(source, INLINE_CODE_PATTERN) ? hash(source, source_code_hash) :
+           source_code_hash
 end
 
 """
