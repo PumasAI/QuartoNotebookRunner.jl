@@ -484,54 +484,9 @@ end
 Evaluate inline code in a markdown cell and push the result.
 """
 function _evaluate_markdown_cell!(cells, f, chunk, nth, record_error!)
-    marker = r"{(?:julia|python|r)} "
-    source = chunk.source
-    if contains(chunk.source, INLINE_CODE_PATTERN)
-        parser = Parser()
-        for (node, enter) in parser(chunk.source)
-            if enter && node.t isa CommonMark.Code
-                if startswith(node.literal, marker)
-                    source_code = replace(node.literal, marker => "")
-                    if startswith(node.literal, "{r}")
-                        source_code = wrap_with_r_boilerplate(source_code)
-                    end
-                    if startswith(node.literal, "{python}")
-                        source_code = wrap_with_python_boilerplate(source_code)
-                    end
-                    # There should only ever be a single result from an
-                    # inline evaluation since you can't pass cell
-                    # options and so `expand` will always be `false`.
-                    render_response = WorkerIPC.call(
-                        f.worker,
-                        WorkerIPC.RenderRequest(
-                            code = source_code,
-                            file = chunk.file,
-                            notebook = f.path,
-                            line = chunk.line,
-                            cell_options = Dict{String,Any}(),
-                            inline = true,
-                        ),
-                    )
-                    render_response.is_expansion &&
-                        error("inline code cells cannot be expanded")
-                    remote = only(render_response.cells)
-                    if !isnothing(remote.error)
-                        # file location is not straightforward to determine with inline literals, but just printing the (presumably short)
-                        # code back instead of a location should be quite helpful
-                        record_error!(
-                            :inline,
-                            "inline: `$(node.literal)`",
-                            join(remote.backtrace, "\n"),
-                        )
-                    else
-                        processed = process_inline_results(remote.results)
-                        source =
-                            replace(source, "`$(node.literal)`" => "$processed"; count = 1)
-                    end
-                end
-            end
-        end
-    end
+    source =
+        contains(chunk.source, INLINE_CODE_PATTERN) ?
+        _evaluate_inline_code(f, chunk, record_error!) : chunk.source
     push!(
         cells,
         (;
@@ -541,4 +496,52 @@ function _evaluate_markdown_cell!(cells, f, chunk, nth, record_error!)
             source = process_cell_source(source),
         ),
     )
+end
+
+function _evaluate_inline_code(f, chunk, record_error!)
+    marker = r"{(?:julia|python|r)} "
+    source = chunk.source
+    parser = Parser()
+    for (node, enter) in parser(chunk.source)
+        (enter && node.t isa CommonMark.Code && startswith(node.literal, marker)) ||
+            continue
+        source_code = _inline_source_code(node.literal, marker)
+        source =
+            _render_inline_code(source, source_code, node.literal, f, chunk, record_error!)
+    end
+    return source
+end
+
+function _inline_source_code(literal, marker)
+    source_code = replace(literal, marker => "")
+    startswith(literal, "{r}") && return wrap_with_r_boilerplate(source_code)
+    startswith(literal, "{python}") && return wrap_with_python_boilerplate(source_code)
+    return source_code
+end
+
+function _render_inline_code(source, source_code, literal, f, chunk, record_error!)
+    # There should only ever be a single result from an
+    # inline evaluation since you can't pass cell
+    # options and so `expand` will always be `false`.
+    render_response = WorkerIPC.call(
+        f.worker,
+        WorkerIPC.RenderRequest(
+            code = source_code,
+            file = chunk.file,
+            notebook = f.path,
+            line = chunk.line,
+            cell_options = Dict{String,Any}(),
+            inline = true,
+        ),
+    )
+    render_response.is_expansion && error("inline code cells cannot be expanded")
+    remote = only(render_response.cells)
+    if !isnothing(remote.error)
+        # file location is not straightforward to determine with inline literals, but just printing the (presumably short)
+        # code back instead of a location should be quite helpful
+        record_error!(:inline, "inline: `$(literal)`", join(remote.backtrace, "\n"))
+        return source
+    end
+    processed = process_inline_results(remote.results)
+    return replace(source, "`$(literal)`" => "$processed"; count = 1)
 end
