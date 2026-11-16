@@ -41,6 +41,9 @@ jobs:
     timeout-minutes: 90
     env:
       JULIA_NUM_PRECOMPILE_TASKS: 2
+      # The pinned 1.9.4/1.10.7/1.11.2 builds ship libraries marked as needing
+      # an executable stack, which newer glibc refuses to load unless allowed.
+      GLIBC_TUNABLES: glibc.rtld.execstack=2
     strategy:
       fail-fast: false
       matrix:
